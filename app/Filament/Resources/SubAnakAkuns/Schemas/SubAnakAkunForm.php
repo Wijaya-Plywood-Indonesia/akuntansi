@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\SubAnakAkuns\Schemas;
 
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
@@ -12,21 +13,35 @@ class SubAnakAkunForm
     {
         return $schema
             ->components([
-                TextInput::make('id_anak_akun')
-                    ->required()
-                    ->numeric(),
-                TextInput::make('kode_sub_anak_akun')
+                Select::make('id_anak_akun')
+                    ->relationship('anakAkun', 'nama_anak_akun')
+                    ->searchable()
                     ->required(),
+
+                TextInput::make('kode_sub_anak_akun')
+                    ->required()
+                    ->unique(ignoreRecord: true),
+
                 TextInput::make('nama_sub_anak_akun')
-                    ->default('Tidak Punya Nama Akun'),
+                    ->required(),
+
+                Select::make('saldo_normal')
+                    ->options([
+                        'debet' => 'Debet',
+                        'kredit' => 'Kredit',
+                    ])
+                    ->required(),
+
+                Select::make('status')
+                    ->options([
+                        'aktif' => 'Aktif',
+                        'nonaktif' => 'Nonaktif',
+                    ])
+                    ->default('aktif')
+                    ->required(),
+
                 Textarea::make('keterangan')
                     ->columnSpanFull(),
-                TextInput::make('status')
-                    ->required()
-                    ->default('aktif'),
-                TextInput::make('saldo normal'),
-                TextInput::make('created_by')
-                    ->numeric(),
             ]);
     }
 }

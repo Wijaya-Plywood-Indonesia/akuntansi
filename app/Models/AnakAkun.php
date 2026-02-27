@@ -42,6 +42,13 @@ class AnakAkun extends Model
     {
         return $this->hasMany(SubAnakAkun::class, 'id_anak_akun');
     }
+    /**
+     * Parent Self Reference
+     */
+    public function parentAkun()
+    {
+        return $this->belongsTo(self::class, 'parent');
+    }
 
     public function creator()
     {

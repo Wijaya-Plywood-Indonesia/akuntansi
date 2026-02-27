@@ -5,6 +5,7 @@ namespace App\Filament\Resources\SubAnakAkuns\Tables;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -14,20 +15,53 @@ class SubAnakAkunsTable
     {
         return $table
             ->columns([
-                TextColumn::make('id_anak_akun')
-                    ->numeric()
-                    ->sortable(),
                 TextColumn::make('kode_sub_anak_akun')
-                    ->searchable(),
-                TextColumn::make('nama_sub_anak_akun')
-                    ->searchable(),
-                TextColumn::make('status')
-                    ->searchable(),
-                TextColumn::make('saldo normal')
-                    ->searchable(),
-                TextColumn::make('created_by')
-                    ->numeric()
+                    ->label('Kode')
+                    ->searchable()
                     ->sortable(),
+
+                TextColumn::make('nama_sub_anak_akun')
+                    ->label('Nama Sub Akun')
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('anakAkun.kode_anak_akun')
+                    ->label('Kode Anak')
+                    ->sortable(),
+
+                TextColumn::make('anakAkun.nama_anak_akun')
+                    ->label('Nama Anak Akun')
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('anakAkun.indukAkun.nama_induk_akun')
+                    ->label('Induk Akun')
+                    ->sortable(),
+
+                BadgeColumn::make('saldo_normal')
+                    ->label('Saldo Normal')
+                    ->colors([
+                        'success' => 'debet',
+                        'danger' => 'kredit',
+                    ])
+                    ->sortable(),
+
+                BadgeColumn::make('status')
+                    ->colors([
+                        'success' => 'aktif',
+                        'danger' => 'nonaktif',
+                    ])
+                    ->sortable(),
+
+                TextColumn::make('creator.name')
+                    ->label('Dibuat Oleh')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('created_at')
+                    ->dateTime('d M Y H:i')
+                    ->label('Tanggal Dibuat')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
