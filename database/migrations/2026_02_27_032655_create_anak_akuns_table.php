@@ -30,7 +30,7 @@ return new class extends Migration {
                 ->nullable()
                 ->constrained('users')
                 ->nullOnDelete();
-            $table->string('saldo normal')->nullable();
+            $table->string('saldo_normal')->nullable();
             $table->string('status')->default('aktif');
             $table->timestamps();
         });
