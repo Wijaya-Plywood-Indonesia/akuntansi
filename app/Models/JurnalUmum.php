@@ -10,32 +10,23 @@ class JurnalUmum extends Model
     protected $guarded = [];
 
     protected $fillable = [
-        'tanggal',
-        'nomor_jurnal',
-        'nomor_akun',
+        'tgl',
+        'jurnal',
+        'no_akun',
         'nama_akun',
         'keterangan',
         'banyak',
         'harga',
-        'created_by',
-        'status',
-        'synced_at',
-        'synced_by',
+        'map'
     ];
-
-    public function syncedBy()
-    {
-        return $this->belongsTo(User::class, 'synced_by');
-    }
 
     // Database Casting
     protected $casts = [
-        'tanggal' => 'date',
-        'nomor_jurnal' => 'integer',
+        'tgl' => 'date',
+        'jurnal' => 'integer',
         'no_akun' => 'string',
         'banyak' => 'decimal:4',
         'harga' => 'decimal:2',
-        'synced_at' => 'datetime',
     ];
 
     // RelationShip
