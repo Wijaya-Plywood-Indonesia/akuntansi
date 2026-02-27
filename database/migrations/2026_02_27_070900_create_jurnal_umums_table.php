@@ -14,20 +14,15 @@ return new class extends Migration
         Schema::create('jurnal_umums', function (Blueprint $table) {
             $table->id();
             // Header
-            $table->date('tanggal');
-            $table->integer('nomor_jurnal')->nullable();
+            $table->date('tgl');
+            $table->integer('jurnal')->nullable();
             // Form
-            $table->string('nomor_akun');
+            $table->string('no_akun');
             $table->string('nama_akun')->nullable();
             $table->string('keterangan')->nullable();
             $table->decimal('banyak', 15, 4)->nullable()->default(1);
             $table->decimal('harga', 20, 2)->nullable();
-            // Tracking for journaling
-            $table->string('created_by')->nullable();
-            $table->string('status')->default('belum sinkron');
-            $table->dateTime('synced_at')->nullable();
-            $table->string('synced_by')->nullable();
-
+            $table->string('map', 5)->nullable();
             $table->timestamps();
         });
     }
