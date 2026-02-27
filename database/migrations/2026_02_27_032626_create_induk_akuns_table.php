@@ -17,6 +17,11 @@ return new class extends Migration {
             $table->text('keterangan')->nullable();
             $table->text('saldo_normal')->nullable();
             $table->string('status')->default('aktif');
+            // kolom created_by (biasanya refer ke users)
+            $table->foreignId('created_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
             $table->timestamps();
         });
     }
