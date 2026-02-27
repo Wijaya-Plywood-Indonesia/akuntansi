@@ -19,7 +19,7 @@ return new class extends Migration {
             $table->string('nama_sub_anak_akun')->nullable()->default('Tidak Punya Nama Akun');
             $table->text('keterangan')->nullable();
             $table->string('status')->default('aktif');
-            $table->string('saldo normal')->nullable();
+            $table->string('saldo_normal')->nullable();
             // kolom created_by (biasanya refer ke users)
             $table->foreignId('created_by')
                 ->nullable()

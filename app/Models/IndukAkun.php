@@ -14,6 +14,7 @@ class IndukAkun extends Model
         'keterangan',
         'saldo_normal',
         'status',
+        'created_by'
     ];
 
     /**
