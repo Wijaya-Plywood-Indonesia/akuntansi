@@ -16,7 +16,7 @@ return new class extends Migration
             $table->date('tgl')->nullable();
             $table->string('no_akun')->nullable();
             $table->string('nama_akun')->nullable();
-            $table->decimal('saldo', 18, 2)->nullable();
+            $table->decimal('saldo', 20, 2)->nullable();
             $table->timestamps();
         });
     }
