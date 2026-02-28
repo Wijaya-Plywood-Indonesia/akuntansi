@@ -50,6 +50,11 @@ class AnakAkun extends Model
         return $this->belongsTo(self::class, 'parent');
     }
 
+    public function children(): HasMany
+{
+    return $this->hasMany(self::class, 'parent');
+}
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
