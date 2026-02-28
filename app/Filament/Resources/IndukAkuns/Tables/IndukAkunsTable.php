@@ -25,6 +25,7 @@ class IndukAkunsTable
                 TextColumn::make('nama_induk_akun')
                     ->label('Nama Induk Akun')
                     ->searchable()
+                    ->wrap()
                     ->sortable(),
 
                 BadgeColumn::make('saldo_normal')

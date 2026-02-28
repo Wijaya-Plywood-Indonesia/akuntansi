@@ -21,7 +21,7 @@ class AnakAkun extends Model
     ];
 
     protected $casts = [
-        'status' => 'boolean',
+
         'saldo_normal',
         'status',
         'created_by',
@@ -32,7 +32,12 @@ class AnakAkun extends Model
     | Relationships
     |--------------------------------------------------------------------------
     */
-
+    // Anak akun yang menjadi sub-parent (children rekursif)
+    public function children()
+    {
+        return $this->hasMany(AnakAkun::class, 'parent')
+            ->orderBy('kode_anak_akun');
+    }
     public function indukAkun(): BelongsTo
     {
         return $this->belongsTo(IndukAkun::class, 'id_induk_akun');
