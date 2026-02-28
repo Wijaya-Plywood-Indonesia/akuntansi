@@ -355,8 +355,8 @@
                                 <th class="px-4 py-4 text-center w-[110px]">No Jurnal</th>
                                 <th class="px-4 py-4 text-right w-[110px]">Qty</th>
                                 <th class="px-4 py-4 text-right w-[140px]">Harga</th>
-                                <th class="px-4 py-4 text-right w-[150px] text-emerald-600 bg-emerald-50/10 italic font-black">Debit (Rp)</th>
-                                <th class="px-4 py-4 text-right w-[150px] text-rose-600 bg-rose-50/10 italic font-black">Kredit (Rp)</th>
+                                <th class="px-4 py-4 text-right w-[150px] text-green-400 bg-green-50/10 italic font-black">Debit (Rp)</th>
+                                <th class="px-4 py-4 text-right w-[150px] text-red-400 bg-red-50/10 italic font-black">Kredit (Rp)</th>
                                 <th class="px-4 py-4 w-10"></th>
                             </tr>
                         </thead>
@@ -369,8 +369,8 @@
                                     <td class="px-4 py-4 text-center text-gray-400 font-medium" x-text="row.jurnal"></td>
                                     <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500" x-text="new Intl.NumberFormat('id-ID').format(row.banyak)"></td>
                                     <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono" x-text="new Intl.NumberFormat('id-ID').format(row.harga)"></td>
-                                    <td class="px-4 py-4 text-right font-bold text-emerald-600 bg-emerald-50/5" x-text="['D','d','Debit','debit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
-                                    <td class="px-4 py-4 text-right font-bold text-rose-600 bg-rose-50/5" x-text="['K','k','Kredit','kredit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
+                                    <td class="px-4 py-4 text-right font-bold text-green-400 bg-green-50/5" x-text="['D','d','Debit','debit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
+                                    <td class="px-4 py-4 text-right font-bold text-red-400 bg-red-50/5" x-text="['K','k','Kredit','kredit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
                                     <td class="px-4 py-4 text-center">
                                         <button type="button" @click="$wire.removeItem(i)" class="text-gray-300 hover:text-rose-600 transition-none">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -384,8 +384,8 @@
                         <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
                             <tr class="font-black text-[10px] uppercase">
                                 <td colspan="6" class="px-4 py-5 text-right text-gray-400 tracking-widest">Total Mutasi Draft</td>
-                                <td class="px-4 py-5 text-right text-emerald-600 bg-emerald-100/10 text-base" x-text="new Intl.NumberFormat('id-ID').format(totalDebit)"></td>
-                                <td class="px-4 py-5 text-right text-rose-600 bg-rose-100/10 text-base" x-text="new Intl.NumberFormat('id-ID').format(totalKredit)"></td>
+                                <td class="px-4 py-5 text-right text-green-400 bg-green-100/10 text-base" x-text="new Intl.NumberFormat('id-ID').format(totalDebit)"></td>
+                                <td class="px-4 py-5 text-right text-red-400 bg-red-100/10 text-base" x-text="new Intl.NumberFormat('id-ID').format(totalKredit)"></td>
                                 <td></td>
                             </tr>
                         </tfoot>
