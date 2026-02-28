@@ -14,21 +14,21 @@ $tampilkan = ($saldoAwal != 0) || ($saldoAkhir != 0) || ($jumlahTransaksi > 0);
 
 
 @if($tampilkan)
-<div x-data="{ open: true }" class="mt-2 ml-6">
+<div x-data="{ open: true }" class="mt-3 ml-4 md:ml-8 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
 
     {{-- HEADER AKUN --}}
-    <div
-        class="flex justify-between px-4 py-2 bg-gray-100 rounded-t-lg dark:bg-gray-800 border-x border-t border-gray-200 dark:border-gray-700">
-        <span class="font-semibold text-gray-900 dark:text-white text-xs">
-            no akun: {{ $kodeAkun }} - {{ $akun->nama_anak_akun ?? $akun->nama_sub_anak_akun }}
-        </span>
+<div
+    class="flex justify-between items-center px-4 py-2 bg-gray-100/80 dark:bg-gray-800 rounded-t-lg border-x border-t border-gray-200 dark:border-gray-700">
+    <span class="font-semibold text-gray-500 dark:text-gray-400 font-bold">
+        no akun: {{ $kodeAkun }} - {{ $akun->nama_anak_akun ?? $akun->nama_sub_anak_akun }}
+    </span>
 
-        <span class="font-bold text-gray-900 dark:text-white text-xs">
-            Rp {{ number_format($saldoAkhir, 0, ',', '.') }}
-        </span>
-    </div>
+    <span class="font-bold text-gray-500 dark:text-gray-400 font-bold">
+        Rp {{ number_format($saldoAkhir, 0, ',', '.') }}
+    </span>
+</div>
 
-    <div class="p-3 border border-gray-200 dark:border-gray-700 rounded-b-lg bg-white dark:bg-transparent shadow-inner">
+    <div class="p-3 border border-gray-200 dark:border-gray-700 rounded-b-lg bg-white/50 dark:bg-gray-900/30 shadow-sm">
 
         @php
         $children = collect();

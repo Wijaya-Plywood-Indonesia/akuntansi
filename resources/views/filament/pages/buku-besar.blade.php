@@ -13,7 +13,8 @@
     @else
     <div class="space-y-6">
         {{-- FILTER PERIODE --}}
-        <div class="flex justify-end p-4 bg-white border border-gray-200 shadow-sm rounded-xl dark:bg-gray-800 dark:border-gray-700">
+        <div
+            class="flex justify-end p-4 bg-white border border-gray-200 shadow-sm rounded-xl dark:bg-gray-800 dark:border-gray-700">
             <div class="flex items-center gap-3">
                 <label class="text-sm font-medium">Periode:</label>
                 <input type="month" wire:model.live="filterBulan"
@@ -21,43 +22,47 @@
             </div>
         </div>
 
-@foreach($indukAkuns as $induk)
-
-    @php
+        @foreach($indukAkuns as $induk)
+        @php
         $totalInduk = $induk->anakAkuns
-            ->whereNull('parent')
-            ->sum(fn($a) => $this->getTotalRecursive($a));
+        ->whereNull('parent')
+        ->sum(fn($a) => $this->getTotalRecursive($a));
 
         $hasActivity = $totalInduk != 0;
-    @endphp
+        @endphp
 
-    @if($hasActivity)
-        <div x-data="{ open: true }" 
-             class="overflow-hidden bg-white border border-gray-200 shadow-sm rounded-xl">
+        @if($hasActivity)
+        {{-- Menambahkan dark:bg-gray-900 dan dark:border-gray-700 --}}
+        <div x-data="{ open: true }"
+            class="overflow-hidden bg-white border border-gray-200 shadow-sm rounded-xl dark:bg-gray-900 dark:border-gray-700">
 
+            {{-- HEADER INDUK: Menambahkan dark:bg-gray-800/50 dan dark:text-white --}}
             {{-- HEADER INDUK --}}
             <div @click="open = !open"
-                 class="flex justify-between px-6 py-4 cursor-pointer bg-gray-50 border-b">
-
-                <div class="text-lg font-bold">
+                class="flex flex-col justify-between px-6 py-4 cursor-pointer md:flex-row md:items-center bg-gray-50/50 dark:bg-gray-800/50 border-b dark:border-gray-700">
+                <div class="text-lg font-bold dark:text-white">
+                    <span class="text-primary-600 dark:text-primary-400">Akun Induk:</span>
                     {{ $induk->kode_induk_akun }} - {{ $induk->nama_induk_akun }}
                 </div>
 
-                <div class="text-lg font-extrabold text-primary-600">
-                    Rp {{ number_format($totalInduk, 0, ',', '.') }}
+                <div class="flex items-center gap-2 mt-2 md:mt-0">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">Saldo Akhir:</span>
+                    <span class="text-lg font-extrabold text-primary-600 dark:text-primary-500">
+                        Rp {{ number_format($induk->anakAkuns->whereNull('parent')->sum(fn($a) =>
+                        $this->getTotalRecursive($a)), 0, ',', '.') }}
+                    </span>
                 </div>
             </div>
 
             {{-- LIST ANAK --}}
             <div x-show="open" x-collapse class="p-4 space-y-4">
                 @foreach($induk->anakAkuns->whereNull('parent') as $anak)
-                    @include('filament.pages.partials.buku-besar-anak', ['akun' => $anak])
+                @include('filament.pages.partials.buku-besar-anak', ['akun' => $anak])
                 @endforeach
             </div>
         </div>
-    @endif
-
-@endforeach
+        @endif
+        @endforeach
     </div>
     @endif
 </x-filament-panels::page>
