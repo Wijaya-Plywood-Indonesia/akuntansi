@@ -17,10 +17,17 @@ class TreeAkunPage extends Page
     public function getViewData(): array
     {
         $indukAkuns = IndukAkun::with([
-            'anakAkuns.children.children.subAnakAkuns',
-            'anakAkuns.children.children.children.subAnakAkuns',
-            'anakAkuns.children.subAnakAkuns',
+            'anakAkuns',
             'anakAkuns.subAnakAkuns',
+            'anakAkuns.children',
+            'anakAkuns.children.subAnakAkuns',
+            'anakAkuns.children.children',
+            'anakAkuns.children.children.subAnakAkuns',
+            'anakAkuns.children.children.children',
+            'anakAkuns.children.children.children.subAnakAkuns',
+            'anakAkuns.children.children.children.children',
+            'anakAkuns.children.children.children.children.subAnakAkuns',
+            'allAnakAkuns',
         ])
             ->where('status', 'aktif')
             ->orderBy('kode_induk_akun')

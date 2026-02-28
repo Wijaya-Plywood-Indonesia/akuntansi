@@ -42,4 +42,9 @@ class IndukAkun extends Model
     {
         return $query->where('status', 'aktif');
     }
+    /** Semua anak (untuk count) */
+    public function allAnakAkuns()
+    {
+        return $this->hasMany(AnakAkun::class, 'id_induk_akun');
+    }
 }
