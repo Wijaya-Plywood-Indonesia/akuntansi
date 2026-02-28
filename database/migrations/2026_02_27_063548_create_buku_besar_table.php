@@ -13,10 +13,12 @@ return new class extends Migration
     {
         Schema::create('buku_besar', function (Blueprint $table) {
             $table->id();
-            $table->date('tgl')->nullable();
+            $table->year('tahun');
+            $table->tinyInteger('bulan');
             $table->string('no_akun')->nullable();
             $table->string('nama_akun')->nullable();
             $table->decimal('saldo', 20, 2)->nullable();
+            $table->unique(['tahun', 'bulan', 'no_akun']);
             $table->timestamps();
         });
     }
