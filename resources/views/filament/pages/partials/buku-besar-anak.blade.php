@@ -1,147 +1,67 @@
 @php
-// Definisikan kode unik berdasarkan level akun
-$kodeAkun = $akun->kode_anak_akun ?? $akun->kode_sub_anak_akun;
-
-// Ambil data pendukung untuk validasi
-$saldoAwal = $this->getSaldoAwal($kodeAkun);
+$kodeAkun   = $akun->kode_anak_akun ?? $akun->kode_sub_anak_akun;
+$namaAkun   = $akun->nama_anak_akun ?? $akun->nama_sub_anak_akun;
+$saldoAwal  = $this->getSaldoAwal($kodeAkun);
 $saldoAkhir = $this->getTotalRecursive($akun);
 $transaksis = $this->getTransaksiByKode($kodeAkun);
-$jumlahTransaksi = $transaksis->count();
+$jumlahTrx  = $transaksis->count();
+$tampilkan  = ($saldoAwal != 0) || ($saldoAkhir != 0) || ($jumlahTrx > 0);
+$depth      = $depth ?? 0;
 
-// Logika 3 Validasi: Tampilkan hanya jika salah satu terpenuhi
-$tampilkan = ($saldoAwal != 0) || ($saldoAkhir != 0) || ($jumlahTransaksi > 0);
+$children = collect();
+if (isset($akun->children))     $children = $children->merge($akun->children);
+if (isset($akun->subAnakAkuns)) $children = $children->merge($akun->subAnakAkuns);
+
+$saldoClass = $saldoAkhir < 0 ? 'neg' : '';
 @endphp
 
-
 @if($tampilkan)
-<div x-data="{ open: true }" class="mt-3 ml-4 md:ml-8 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
 
-    {{-- HEADER AKUN --}}
-<div
-    class="flex justify-between items-center px-4 py-2 bg-gray-100/80 dark:bg-gray-800 rounded-t-lg border-x border-t border-gray-200 dark:border-gray-700">
-    <span class="font-semibold text-gray-500 dark:text-gray-400 font-bold">
-        no akun: {{ $kodeAkun }} - {{ $akun->nama_anak_akun ?? $akun->nama_sub_anak_akun }}
-    </span>
+<style>
+/* Hanya di-load sekali, aman karena CSS idempotent */
+.bb-anak { background:var(--bb-surface); border:1px solid var(--bb-border-soft); border-radius:var(--bb-r-md); overflow:hidden; box-shadow:var(--bb-shadow-sm); }
+.bb-anak-head { display:flex; align-items:center; justify-content:space-between; padding:.6rem 1rem; background:var(--bb-surface-3); border-bottom:1px solid var(--bb-border-soft); }
+.bb-anak-left { display:flex; align-items:center; gap:.5rem; }
+.bb-anak-dot { width:7px; height:7px; border-radius:50%; background:var(--bb-accent-mid); flex-shrink:0; }
+.bb-anak-code { font-family:'JetBrains Mono',monospace; font-size:.68rem; font-weight:500; color:var(--bb-text-3); background:var(--bb-surface-2); border:1px solid var(--bb-border); padding:2px 7px; border-radius:5px; }
+.bb-anak-name { font-size:.82rem; font-weight:700; color:var(--bb-text-1); }
+.bb-anak-saldo { font-family:'JetBrains Mono',monospace; font-size:.82rem; font-weight:600; color:var(--bb-text-2); }
+.bb-anak-saldo.neg { color:var(--bb-neg); }
+.bb-sub-wrap { padding:.5rem 0 .5rem 1.25rem; border-left:2.5px solid var(--bb-border); margin:.5rem .75rem; display:flex; flex-direction:column; gap:.5rem; }
+</style>
 
-    <span class="font-bold text-gray-500 dark:text-gray-400 font-bold">
-        Rp {{ number_format($saldoAkhir, 0, ',', '.') }}
-    </span>
-</div>
+<div class="bb-anak">
 
-    <div class="p-3 border border-gray-200 dark:border-gray-700 rounded-b-lg bg-white/50 dark:bg-gray-900/30 shadow-sm">
-
-        @php
-        $children = collect();
-
-        if (isset($akun->children)) {
-        $children = $children->merge($akun->children);
-        }
-
-        if (isset($akun->subAnakAkuns)) {
-        $children = $children->merge($akun->subAnakAkuns);
-        }
-        @endphp
-
-        @if($children->count())
-    @foreach($children as $child)
-        @include('filament.pages.partials.buku-besar-anak', ['akun' => $child])
-    @endforeach
-@endif
-
-        {{-- TAMPILKAN TABEL HANYA DI LEVEL TERAKHIR (SUB ANAK atau AKUN TANPA CHILD) --}}
-        @if($jumlahTransaksi > 0 || $saldoAwal != 0)
-        <div class="overflow-x-auto mt-2">
-            @php
-            $saldoBerjalan = $saldoAwal;
-            $totalDebit = 0;
-            $totalKredit = 0;
-            $tglAwalan = \Carbon\Carbon::parse($this->filterBulan)->startOfMonth()->subDay()->format('d-m-Y');
-            @endphp
-
-            <table class="w-full text-[10px] border-collapse border border-gray-300 dark:border-gray-600">
-                <thead>
-                    <tr class="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                        <th class="px-2 py-1 border border-gray-300 dark:border-gray-600">Tgl</th>
-                        <th class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-left">Jurnal</th>
-                        <th class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-left">Keterangan</th>
-                        <th class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right">Debit</th>
-                        <th class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right">Kredit</th>
-                        <th class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right">Saldo</th>
-                    </tr>
-                </thead>
-                <tbody class="text-gray-700 dark:text-gray-200">
-                    {{-- Baris Awalan --}}
-                    <tr class="bg-gray-50/50 dark:bg-gray-800/30 italic">
-                        <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-center">{{ $tglAwalan }}
-                        </td>
-                        <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-center">-</td>
-                        <td
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 font-bold text-center uppercase">
-                            Saldo Awalan</td>
-                        <td class="px-2 py-1 border border-gray-300 dark:border-gray-600"></td>
-                        <td class="px-2 py-1 border border-gray-300 dark:border-gray-600"></td>
-                        <td
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right font-bold text-blue-600 dark:text-blue-400">
-                            {{ number_format($saldoAwal, 0, ',', '.') }}
-                        </td>
-                    </tr>
-
-                    @foreach($transaksis as $trx)
-                    @php
-                    $mode = strtolower($trx->hit_kbk ?? '');
-
-                    if($mode === '' || $mode === null) {
-                    $nominal = $trx->harga ?? 0;
-                    } elseif($mode === 'b' || $mode === 'banyak') {
-                    $nominal = ($trx->banyak ?? 0) * ($trx->harga ?? 0);
-                    } else {
-                    $nominal = ($trx->m3 ?? 0) * ($trx->harga ?? 0);
-                    }
-
-                    if(strtolower($trx->map) === 'd') {
-                    $saldoBerjalan += $nominal;
-                    $totalDebit += $nominal;
-                    } else {
-                    $saldoBerjalan -= $nominal;
-                    $totalKredit += $nominal;
-                    }
-                    @endphp
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                        <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-center">{{
-                            \Carbon\Carbon::parse($trx->tgl)->format('d-m-Y') }}</td>
-                        <td class="px-2 py-1 border border-gray-300 dark:border-gray-600">{{ $trx->jurnal ?? '-' }}</td>
-                        <td class="px-2 py-1 border border-gray-300 dark:border-gray-600">{{ $trx->keterangan }}</td>
-                        <td
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right text-green-600 dark:text-green-400">
-                            {{ strtolower($trx->map) === 'd' ? number_format($nominal, 0, ',', '.') : '' }}</td>
-                        <td
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right text-red-600 dark:text-red-400">
-                            {{ strtolower($trx->map) === 'k' ? number_format($nominal, 0, ',', '.') : '' }}</td>
-                        <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right">{{
-                            number_format($saldoBerjalan, 0, ',', '.') }}</td>
-                    </tr>
-                    @endforeach
-
-                    {{-- Footer --}}
-                    <tr class="font-bold bg-gray-100 dark:bg-gray-800">
-                        <td colspan="3"
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-center text-amber-600 dark:text-yellow-500 uppercase">
-                            Sisa Saldo</td>
-                        <td
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right text-green-600 dark:text-green-500">
-                            {{ number_format($totalDebit, 0, ',', '.') }}</td>
-                        <td
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right text-red-600 dark:text-red-500">
-                            {{ number_format($totalKredit, 0, ',', '.') }}</td>
-                        <td
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right bg-gray-200 dark:bg-gray-700 text-amber-700 dark:text-yellow-500">
-                            {{ number_format($saldoBerjalan, 0, ',', '.') }}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+    {{-- Header --}}
+    <div class="bb-anak-head">
+        <div class="bb-anak-left">
+            <span class="bb-anak-dot" @if($depth > 0) style="background:var(--bb-amber-border)" @endif></span>
+            <span class="bb-anak-code">{{ $kodeAkun }}</span>
+            <span class="bb-anak-name">{{ $namaAkun }}</span>
         </div>
-        @endif
+        <span class="bb-anak-saldo {{ $saldoClass }}">
+            @if($saldoAkhir < 0)–@endif
+            Rp {{ number_format(abs($saldoAkhir), 0, ',', '.') }}
+        </span>
     </div>
+
+    {{-- Children rekursif --}}
+    @if($children->count())
+    <div class="bb-sub-wrap">
+        @foreach($children as $child)
+            @include('filament.pages.partials.buku-besar-anak', ['akun' => $child, 'depth' => $depth + 1])
+        @endforeach
+    </div>
+    @endif
+
+    {{-- Ledger table --}}
+    @if($jumlahTrx > 0 || $saldoAwal != 0)
+        @include('filament.pages.partials.ledger-table', [
+            'transaksis' => $transaksis,
+            'saldoAwal'  => $saldoAwal,
+        ])
+    @endif
+
 </div>
+
 @endif
