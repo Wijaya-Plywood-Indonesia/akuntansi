@@ -33,7 +33,6 @@ class IndukAkunForm
                         'aktif' => 'Aktif',
                         'nonaktif' => 'Nonaktif',
                     ])
-                    ->default('aktif')
                     ->required(),
 
                 Textarea::make('keterangan')

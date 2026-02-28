@@ -44,7 +44,7 @@ class AnakAkunForm
                         'aktif' => 'Aktif',
                         'nonaktif' => 'Nonaktif',
                     ])
-                    ->default('aktif')
+
                     ->required(),
 
                 Textarea::make('keterangan')
