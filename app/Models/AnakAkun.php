@@ -17,15 +17,11 @@ class AnakAkun extends Model
         'keterangan',
         'parent',
         'status',
-        'created_by',
-    ];
-
-    protected $casts = [
-
         'saldo_normal',
-        'status',
         'created_by',
     ];
+
+
 
     /*
     |--------------------------------------------------------------------------
@@ -72,4 +68,41 @@ class AnakAkun extends Model
     {
         return $query->where('status', 'aktif');
     }
+
+    /**
+     * Many to Many - Akun Group
+     */
+    public function akunGroups()
+    {
+        return $this->belongsToMany(
+            AkunGroup::class,
+            'akun_group_anak_akun'
+        )->withTimestamps();
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | HELPERS
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Check if akun is leaf (tidak punya children)
+     */
+    public function isLeaf(): bool
+    {
+        return !$this->children()->exists();
+    }
+
+    /**
+     * Check if akun punya children
+     */
+    public function hasChildren(): bool
+    {
+        return $this->children()->exists();
+    }
+    public function getLabelAttribute(): string
+    {
+        return "{$this->kode_anak_akun} - {$this->nama_anak_akun}";
+    }
 }
+
