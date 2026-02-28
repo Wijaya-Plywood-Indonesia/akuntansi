@@ -16,17 +16,22 @@ class AnakAkunsTable
         return $table
             ->columns([
                 TextColumn::make('kode_anak_akun')
+                    ->label('Kode')
                     ->searchable()
                     ->sortable(),
 
                 TextColumn::make('nama_anak_akun')
+                    ->label('nama')
+                    ->wrap()
                     ->searchable(),
 
                 TextColumn::make('indukAkun.nama_induk_akun')
+                    ->wrap()
                     ->label('Induk Akun')
                     ->sortable(),
 
                 TextColumn::make('parentAkun.nama_anak_akun')
+                    ->wrap()
                     ->label('Parent')
                     ->placeholder('-'),
 
