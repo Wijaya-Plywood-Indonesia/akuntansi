@@ -62,8 +62,13 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->navigationGroups([
-                NavigationGroup::make('jurnal')
-                    ->icon('heroicon-o-document-chart-bar')
+
+                NavigationGroup::make('Master')
+                    ->icon('heroicon-o-circle-stack')
+                    ->collapsed(),
+
+                NavigationGroup::make('Jurnal')
+                    ->icon('heroicon-o-book-open')
                     ->collapsed(),
             ])
         ;

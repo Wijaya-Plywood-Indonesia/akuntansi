@@ -5,11 +5,11 @@ namespace App\Filament\Pages;
 use App\Models\IndukAkun;
 
 use Filament\Pages\Page;
-use BackedEnum;
+use UnitEnum;
 
 class TreeAkunPage extends Page
 {
-    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
+    protected static string|UnitEnum|null $navigationGroup = 'Master';
     protected string $view = 'filament.pages.tree-akun-page';
     protected static ?string $navigationLabel = 'Chart of Accounts';
     protected static ?string $title = 'Chart of Accounts';

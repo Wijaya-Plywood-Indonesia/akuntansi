@@ -1,4 +1,5 @@
 <x-filament-panels::page>
+
     {{-- Flatpickr Styles & Custom Amber Theme --}}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_orange.css">
@@ -43,132 +44,198 @@
         .dark .custom-scroll::-webkit-scrollbar-thumb {
             background: #374151;
         }
+
+        /* ── LOADING DOTS ANIMATION ── */
+        @keyframes blink {
+
+            0%,
+            80%,
+            100% {
+                opacity: 0.15;
+                transform: scale(0.8);
+            }
+
+            40% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+        }
+
+        .loading-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d97706;
+            animation: blink 1.4s infinite ease-in-out;
+        }
+
+        .loading-dot:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .loading-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .loading-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        /* ── LEDGER SKELETON ── */
+        @keyframes shimmer {
+            0% {
+                background-position: -600px 0;
+            }
+
+            100% {
+                background-position: 600px 0;
+            }
+        }
+
+        .skeleton-row td {
+            background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+            background-size: 600px 100%;
+            animation: shimmer 1.5s infinite linear;
+            border-radius: 3px;
+            height: 18px;
+        }
+
+        .dark .skeleton-row td {
+            background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+            background-size: 600px 100%;
+        }
+
+        /* ── COIN BOUNCE (end of list) ── */
+        @keyframes coinSpin {
+            0% {
+                transform: rotateY(0deg) scale(1);
+            }
+
+            50% {
+                transform: rotateY(180deg) scale(1.2);
+            }
+
+            100% {
+                transform: rotateY(360deg) scale(1);
+            }
+        }
+
+        .coin-spin {
+            animation: coinSpin 1.2s ease-in-out infinite;
+            display: inline-block;
+        }
+
+        /* ── ROW FADE IN ── */
+        @keyframes fadeInRow {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .row-fadein {
+            animation: fadeInRow 0.25s ease-out forwards;
+        }
+
+        /* ── FILTER BADGE ── */
+        .filter-badge {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border: 1px solid #f59e0b;
+            color: #92400e;
+        }
+
+        .dark .filter-badge {
+            background: linear-gradient(135deg, #451a03, #78350f);
+            border-color: #b45309;
+            color: #fcd34d;
+        }
     </style>
 
+    {{-- ══════════════════════════════════════════════════════════════ --}}
+    {{-- FORM INPUT UTAMA (tidak ada perubahan dari kode asli)          --}}
+    {{-- ══════════════════════════════════════════════════════════════ --}}
     <div class="w-full mx-auto no-transition"
         x-cloak
-        x-data="{ 
+        x-data="{
             tgl: @entangle('tgl'),
             jurnal: @entangle('jurnal'),
             no_akun: @entangle('no_akun'),
             nama_akun: @entangle('nama_akun'),
             keterangan: @entangle('keterangan'),
             banyak: @entangle('banyak'),
-
-            {{-- 
-                harga_raw   : nilai numerik murni, disinkronkan ke Livewire ($harga)
-                harga_display : tampilan dengan pemisah ribuan di input field 
-            --}}
             harga_display: '',
             harga_raw: @entangle('harga'),
-
             map: @entangle('map'),
             searchTerm: '',
             isDropdownOpen: false,
-            accounts: @js($accounts ?? []), 
+            accounts: @js($accounts ?? []),
             items: @entangle('items'),
 
             get filteredAccounts() {
                 if (this.searchTerm === '') return this.accounts;
-                return this.accounts.filter(acc => 
-                    acc.no.toLowerCase().includes(this.searchTerm.toLowerCase()) || 
+                return this.accounts.filter(acc =>
+                    acc.no.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
                     acc.nama.toLowerCase().includes(this.searchTerm.toLowerCase())
                 );
             },
-
             selectAccount(acc) {
                 this.no_akun = acc.no;
                 this.nama_akun = acc.nama;
                 this.searchTerm = acc.no;
                 this.isDropdownOpen = false;
-                {{-- 
-                    Saat akun dipilih, Livewire akan memproses updatedNoAkun() di backend
-                    yang akan mengupdate harga_raw & map via auto-balance.
-                    Watcher di bawah akan menyinkronkan harga_display secara otomatis.
-                --}}
             },
-
             clearAccount() {
                 this.no_akun = '';
                 this.nama_akun = '';
                 this.searchTerm = '';
                 this.isDropdownOpen = false;
             },
-
-            {{-- Fungsi Format Ribuan --}}
             formatRupiah(val) {
                 if (val === null || val === undefined || val === '') return '';
                 let numberString = val.toString().replace(/[^0-9]/g, '');
                 return numberString.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
             },
-
             initFlatpickr() {
                 flatpickr(this.$refs.dateInput, {
                     dateFormat: 'Y-m-d',
                     defaultDate: this.tgl,
-                    onChange: (selectedDates, dateStr) => {
-                        this.tgl = dateStr;
-                    }
+                    onChange: (selectedDates, dateStr) => { this.tgl = dateStr; }
                 });
             },
-
             get totalDebit() {
-                return this.items.reduce((acc, curr) => 
-                    (['D', 'd', 'Debit', 'debit'].includes(curr.map)) 
-                        ? acc + parseFloat(curr.total) 
-                        : acc, 
-                0);
+                return this.items.reduce((acc, curr) =>
+                    (['D','d','Debit','debit'].includes(curr.map)) ? acc + parseFloat(curr.total) : acc, 0);
             },
-
             get totalKredit() {
-                return this.items.reduce((acc, curr) => 
-                    (['K', 'k', 'Kredit', 'kredit'].includes(curr.map)) 
-                        ? acc + parseFloat(curr.total) 
-                        : acc, 
-                0);
+                return this.items.reduce((acc, curr) =>
+                    (['K','k','Kredit','kredit'].includes(curr.map)) ? acc + parseFloat(curr.total) : acc, 0);
             },
-
             get isBalanced() {
                 return Math.abs(this.totalDebit - this.totalKredit) < 0.01 && this.items.length > 0;
             }
-         }"
+        }"
         x-init="
             initFlatpickr();
-
-            {{-- 
-                Watcher utama: setiap kali harga_raw berubah dari Livewire (auto-balance backend),
-                update tampilan harga_display secara otomatis.
-                Ini yang membuat auto-balance terlihat di UI tanpa user mengetik manual.
-            --}}
-            $watch('harga_raw', value => {
-                harga_display = formatRupiah(value);
-            });
-
-            {{-- 
-                Watcher untuk no_akun: setiap kali user memilih akun baru dan Livewire
-                selesai memproses updatedNoAkun(), synckan searchTerm dengan no_akun
-                agar search box menampilkan nomor akun yang dipilih.
-            --}}
+            $watch('harga_raw', value => { harga_display = formatRupiah(value); });
             $watch('no_akun', value => {
-                if (!value) {
-                    searchTerm = '';
-                } else if (searchTerm !== value) {
-                    searchTerm = value;
-                }
+                if (!value) { searchTerm = ''; }
+                else if (searchTerm !== value) { searchTerm = value; }
             });
-
-            {{-- Sinkronisasi nilai awal --}}
             harga_display = formatRupiah(harga_raw);
         ">
 
-        {{-- ============================================================ --}}
-        {{-- FORM INPUT UTAMA                                              --}}
-        {{-- ============================================================ --}}
+        {{-- Form Input Utama --}}
         <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] shadow-sm overflow-hidden mb-6">
             <div class="bg-amber-600 dark:bg-amber-700 px-6 py-4 text-white">
                 <h2 class="text-sm font-bold tracking-tight flex items-center gap-2 uppercase tracking-widest leading-none">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Masukkan detail transaksi.
                 </h2>
@@ -196,16 +263,13 @@
                         <div class="relative flex items-center">
                             <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true" placeholder="Ketik no/nama..."
                                 class="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-900 rounded-[4px] font-bold text-amber-700 dark:text-amber-500 outline-none pr-10 focus:ring-1 focus:ring-amber-500 placeholder:text-sm">
-
-                            {{-- Tombol X (Hapus) --}}
                             <button type="button" x-show="searchTerm.length > 0 || no_akun" @click="clearAccount()"
                                 class="absolute right-3 text-gray-400 hover:text-rose-500 transition-colors">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
-
                         <div x-show="isDropdownOpen" x-cloak class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-[4px] shadow-lg max-h-60 overflow-y-auto p-1 custom-scroll">
                             <template x-for="acc in filteredAccounts" :key="acc.no">
                                 <button type="button" @click="selectAccount(acc)" class="w-full text-left px-3 py-2 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-[2px] flex flex-col group transition-none">
@@ -219,7 +283,7 @@
                     {{-- Nama Akun --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama Akun</label>
-                        <div class="px-3 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-[4px] text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center placeholder:text-sm" x-text="nama_akun || 'Pilih akun...'"></div>
+                        <div class="px-3 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-[4px] text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center" x-text="nama_akun || 'Pilih akun...'"></div>
                     </div>
 
                     {{-- Keterangan --}}
@@ -239,12 +303,8 @@
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Harga</label>
                         <div class="relative">
                             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
-                            <input type="text"
-                                x-model="harga_display"
-                                @input="
-                                    harga_display = formatRupiah($event.target.value); 
-                                    harga_raw = $event.target.value.replace(/[^0-9]/g, '')
-                                "
+                            <input type="text" x-model="harga_display"
+                                @input="harga_display = formatRupiah($event.target.value); harga_raw = $event.target.value.replace(/[^0-9]/g, '')"
                                 placeholder="0"
                                 class="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
                         </div>
@@ -261,15 +321,10 @@
                 </div>
 
                 <div class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-6">
-                    {{--
-                        Tombol Batal: hanya reset form input, draft tetap ada.
-                        Sesuai permintaan: "Reset form input saja (draft tetap)"
-                    --}}
                     <button type="button" wire:click="resetForm" class="px-6 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-none">Batal</button>
-
                     <button type="submit" class="px-10 py-2.5 bg-amber-600 dark:bg-amber-700 text-white rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-none flex items-center gap-2 shadow-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
                         Masukkan Draft
                     </button>
@@ -277,9 +332,9 @@
             </form>
         </div>
 
-        {{-- ============================================================ --}}
-        {{-- TABLE DRAFT JURNAL SEMENTARA                                  --}}
-        {{-- ============================================================ --}}
+        {{-- ══════════════════════════════════════════════════════════════ --}}
+        {{-- TABLE DRAFT                                                    --}}
+        {{-- ══════════════════════════════════════════════════════════════ --}}
         <div x-show="items.length > 0" x-cloak class="space-y-4 mb-10">
             <div class="flex items-center justify-between px-1">
                 <div :class="isBalanced ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20' : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20'" class="px-4 py-2.5 rounded-[4px] border flex items-center gap-3 font-black text-xs uppercase tracking-[0.2em] shadow-sm">
@@ -314,22 +369,12 @@
                                     <td class="px-4 py-4 text-center text-gray-400 font-medium" x-text="row.jurnal"></td>
                                     <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500" x-text="new Intl.NumberFormat('id-ID').format(row.banyak)"></td>
                                     <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono" x-text="new Intl.NumberFormat('id-ID').format(row.harga)"></td>
-                                    <td class="px-4 py-4 text-right font-bold text-emerald-600 bg-emerald-50/5"
-                                        x-text="['D','d','Debit','debit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'">
-                                    </td>
-                                    <td class="px-4 py-4 text-right font-bold text-rose-600 bg-rose-50/5"
-                                        x-text="['K','k','Kredit','kredit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'">
-                                    </td>
+                                    <td class="px-4 py-4 text-right font-bold text-emerald-600 bg-emerald-50/5" x-text="['D','d','Debit','debit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
+                                    <td class="px-4 py-4 text-right font-bold text-rose-600 bg-rose-50/5" x-text="['K','k','Kredit','kredit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
                                     <td class="px-4 py-4 text-center">
-                                        {{--
-                                            Perbaikan: gunakan wire:click dengan method removeItem(i)
-                                            yang sudah ditambahkan di PHP.
-                                        --}}
-                                        <button type="button"
-                                            @click="$wire.removeItem(i)"
-                                            class="text-gray-300 hover:text-rose-600 transition-none">
+                                        <button type="button" @click="$wire.removeItem(i)" class="text-gray-300 hover:text-rose-600 transition-none">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
                                         </button>
                                     </td>
@@ -347,12 +392,8 @@
                     </table>
                 </div>
                 <div class="p-4 bg-amber-50 dark:bg-amber-900/10 border-t border-amber-100 dark:border-gray-800 flex justify-end">
-                    <button type="button"
-                        wire:click="saveJurnal"
-                        :disabled="!isBalanced"
-                        :class="isBalanced 
-                            ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-md cursor-pointer' 
-                            : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-transparent shadow-none'"
+                    <button type="button" wire:click="saveJurnal" :disabled="!isBalanced"
+                        :class="isBalanced ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-md cursor-pointer' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-transparent shadow-none'"
                         class="px-12 py-3 rounded-[4px] font-black text-[10px] uppercase tracking-[0.2em] transition-none">
                         Posting Jurnal
                     </button>
@@ -360,20 +401,175 @@
             </div>
         </div>
 
-        {{-- ============================================================ --}}
-        {{-- TABLE HISTORY JURNAL UMUM (FINAL DATA)                       --}}
-        {{-- ============================================================ --}}
-        <div class="space-y-4">
-            <div class="flex items-center gap-2 px-1">
-                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <h2 class="text-sm font-black uppercase tracking-widest text-gray-500">Jurnal Umum</h2>
+        {{-- ══════════════════════════════════════════════════════════════ --}}
+        {{-- TABLE HISTORY JURNAL UMUM                                     --}}
+        {{-- ══════════════════════════════════════════════════════════════ --}}
+        <div class="space-y-4"
+            x-data="{
+                isFiltering: false,
+                fpDari: null,
+                fpSampai: null,
+                filterDari:   @entangle('filterTglDariInput'),
+                filterSampai: @entangle('filterTglSampaiInput'),
+                activeFilterDari:   @entangle('filterTglDari'),
+                activeFilterSampai: @entangle('filterTglSampai'),
+                hasMorePages: @entangle('hasMorePages'),
+
+                get hasActiveFilter() {
+                    return this.activeFilterDari !== '' || this.activeFilterSampai !== '';
+                },
+
+                formatDateDisplay(val) {
+                    if (!val) return '';
+                    const [y, m, d] = val.split('-');
+                    return d + '-' + m + '-' + y;
+                },
+
+                async applyFilter() {
+                    this.isFiltering = true;
+                    await this.$wire.applyFilter();
+                    this.isFiltering = false;
+                },
+
+                async resetFilter() {
+                    this.isFiltering = true;
+                    // Bersihkan visual flatpickr — ini yang menyebabkan tanggal tidak hilang saat reset
+                    if (this.fpDari)   this.fpDari.clear();
+                    if (this.fpSampai) this.fpSampai.clear();
+                    this.filterDari   = '';
+                    this.filterSampai = '';
+                    await this.$wire.resetFilter();
+                    this.isFiltering = false;
+                },
+
+                initFilterDatepickers() {
+                    // Simpan instance flatpickr agar bisa dipanggil .clear() saat reset
+                    this.fpDari = flatpickr(this.$refs.filterDariInput, {
+                        dateFormat: 'Y-m-d',
+                        onChange: (selectedDates, dateStr) => {
+                            this.filterDari = dateStr;
+                        }
+                    });
+                    this.fpSampai = flatpickr(this.$refs.filterSampaiInput, {
+                        dateFormat: 'Y-m-d',
+                        onChange: (selectedDates, dateStr) => {
+                            this.filterSampai = dateStr;
+                        }
+                    });
+                },
+
+                initInfiniteScroll() {
+                    {{-- Observer pada sentinel element di bawah tabel --}}
+                    const sentinel = this.$refs.scrollSentinel;
+                    if (!sentinel) return;
+
+                    const observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting && this.hasMorePages && !this.isFiltering) {
+                                this.$wire.loadMore();
+                            }
+                        });
+                    }, { rootMargin: '200px' }); {{-- trigger 200px sebelum sentinel terlihat --}}
+
+                    observer.observe(sentinel);
+                }
+            }"
+            x-init="
+                initFilterDatepickers();
+                initInfiniteScroll();
+            ">
+
+            {{-- Header + Filter Bar --}}
+            <div class="flex flex-col gap-3 px-1">
+
+                {{-- Judul --}}
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <h2 class="text-sm font-black uppercase tracking-widest text-gray-500">Jurnal Umum</h2>
+                    </div>
+
+                    {{-- Badge filter aktif --}}
+                    <div x-show="hasActiveFilter" x-cloak
+                        class="filter-badge px-3 py-1.5 rounded-[4px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 4h18M7 8h10M11 12h2" />
+                        </svg>
+                        <span x-text="'Filter: ' + (activeFilterDari ? formatDateDisplay(activeFilterDari) : '...') + ' → ' + (activeFilterSampai ? formatDateDisplay(activeFilterSampai) : '...')"></span>
+                    </div>
+                </div>
+
+                {{-- Filter Form --}}
+                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] p-4 shadow-sm">
+                    <div class="flex flex-wrap items-end gap-3">
+
+                        {{-- Label --}}
+                        <div class="flex items-center gap-2 mr-1">
+                            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Filter Tanggal</span>
+                        </div>
+
+                        {{-- Input Dari --}}
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dari</label>
+                            <input type="text" x-ref="filterDariInput" readonly placeholder="Pilih tanggal..."
+                                class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer w-40 outline-none focus:border-amber-400">
+                        </div>
+
+                        {{-- Separator --}}
+                        <div class="pb-2 text-gray-300 dark:text-gray-600 font-black text-lg">→</div>
+
+                        {{-- Input Sampai --}}
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sampai</label>
+                            <input type="text" x-ref="filterSampaiInput" readonly placeholder="Pilih tanggal..."
+                                class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer w-40 outline-none focus:border-amber-400">
+                        </div>
+
+                        {{-- Tombol Apply --}}
+                        <button type="button" @click="applyFilter()"
+                            :disabled="isFiltering"
+                            class="flex items-center gap-2 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none shadow-sm disabled:opacity-60 disabled:cursor-wait">
+
+                            {{-- Loading dots saat filtering --}}
+                            <span x-show="isFiltering" class="flex items-center gap-1">
+                                <span class="loading-dot"></span>
+                                <span class="loading-dot"></span>
+                                <span class="loading-dot"></span>
+                            </span>
+
+                            {{-- Icon normal --}}
+                            <span x-show="!isFiltering" class="flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                Apply
+                            </span>
+                        </button>
+
+                        {{-- Tombol Reset --}}
+                        <button type="button" @click="resetFilter()"
+                            x-show="hasActiveFilter || filterDari || filterSampai"
+                            :disabled="isFiltering"
+                            class="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-rose-500 hover:border-rose-300 rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none disabled:opacity-60">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Reset
+                        </button>
+                    </div>
+                </div>
             </div>
+
+            {{-- Tabel History --}}
             <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] shadow-sm overflow-hidden custom-scroll">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1500px]">
-                        <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 sticky top-0">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
                             <tr class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest">
                                 <th class="px-4 py-4 w-[110px]">Tanggal</th>
                                 <th class="px-4 py-4 w-[110px]">No Akun</th>
@@ -387,9 +583,51 @@
                                 <th class="px-4 py-4 text-center w-[100px]">Aksi</th>
                             </tr>
                         </thead>
+
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                            @forelse($historyJurnals as $hj)
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top transition-none">
+
+                            {{-- Loading skeleton saat filtering --}}
+                            <template x-if="isFiltering">
+                                <template x-for="n in 8" :key="n">
+                                    <tr class="skeleton-row">
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-28 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-12 mx-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-36 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-10 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-16 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </template>
+
+                            {{-- Data aktual — selalu dirender PHP, skeleton Alpine yang sembunyikan sementara --}}
+                            @forelse($historyJurnals as $index => $hj)
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top transition-none row-fadein"
+                                style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
                                 <td class="px-4 py-4 text-gray-500 font-medium whitespace-nowrap">{{ $hj->tgl->format('d-m-Y') }}</td>
                                 <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500">{{ $hj->no_akun }}</td>
                                 <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100">{{ $hj->nama_akun }}</td>
@@ -408,13 +646,13 @@
                                         <button type="button" wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
                                             class="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded transition-colors" title="Edit">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                             </svg>
                                         </button>
                                         <button type="button" wire:click="mountAction('deleteHistory', { id: {{ $hj->id }} })"
                                             class="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded transition-colors" title="Hapus">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
                                         </button>
                                     </div>
@@ -422,10 +660,20 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="10" class="px-6 py-10 text-center text-gray-400 italic text-xs">Belum ada riwayat transaksi yang diposting.</td>
+                                <td colspan="10" class="px-6 py-16 text-center">
+                                    <div class="flex flex-col items-center gap-3 text-gray-400">
+                                        <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span class="text-xs italic font-medium">
+                                            {{ ($filterTglDari || $filterTglSampai) ? 'Tidak ada data untuk rentang tanggal yang dipilih.' : 'Belum ada riwayat transaksi yang diposting.' }}
+                                        </span>
+                                    </div>
+                                </td>
                             </tr>
                             @endforelse
                         </tbody>
+
                         <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                             <tr>
                                 <td colspan="7" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
@@ -440,11 +688,38 @@
                         </tfoot>
                     </table>
                 </div>
+
+                {{-- ── INFINITE SCROLL ZONE ── --}}
+                <div x-ref="scrollSentinel" class="w-full">
+
+                    {{-- Loading more indicator --}}
+                    <div wire:loading wire:target="loadMore"
+                        class="flex items-center justify-center gap-4 py-6 border-t border-gray-100 dark:border-gray-800">
+                        <div class="flex items-center gap-2">
+                            <span class="loading-dot"></span>
+                            <span class="loading-dot"></span>
+                            <span class="loading-dot"></span>
+                        </div>
+                        <span class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Memuat lebih banyak data...</span>
+                        <div class="flex items-center gap-2">
+                            <span class="loading-dot"></span>
+                            <span class="loading-dot"></span>
+                            <span class="loading-dot"></span>
+                        </div>
+                    </div>
+
+                    {{-- End of list indicator --}}
+                    @if(!$hasMorePages && $historyJurnals->count() > 0)
+                    <div class="flex items-center justify-center gap-3 py-5 border-t border-gray-100 dark:border-gray-800">
+                        <span class="text-[10px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-[0.3em]">Semua data sudah dimuat</span>
+                    </div>
+                    @endif
+                </div>
             </div>
         </div>
     </div>
 
     <x-filament-actions::modals />
-
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
 </x-filament-panels::page>

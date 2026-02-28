@@ -13,7 +13,6 @@ use Throwable;
 
 class BukuBesar extends Page
 {
-    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-book-open';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
     protected string $view = 'filament.pages.buku-besar';
     protected static ?string $navigationLabel = 'Buku Besar';
