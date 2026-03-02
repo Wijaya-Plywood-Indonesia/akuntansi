@@ -43,10 +43,16 @@ jobs:
           path: ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
 
-      - name: Install Dependencies
+- name: Install Dependencies
         run: |
-          # Memastikan paratest terinstall untuk mendukung flag --parallel
-          composer require brianium/paratest --dev --no-update
+          # Tambahkan paratest ke composer.json
+          composer require brianium/paratest --dev --no-update --no-interaction
+          
+          # Install dengan update agar lock file sinkron di dalam CI
+          # Menggunakan --with-all-dependencies untuk memastikan stabilitas
+          composer update brianium/paratest --no-ansi --no-interaction --no-progress --prefer-dist
+          
+          # Jalankan install sisa dependensi lainnya
           composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
       - name: Prepare Environment
@@ -73,5 +79,5 @@ jobs:
           DB_DATABASE: laravel_testing
           DB_USERNAME: root
           DB_PASSWORD: password
-        # Menambahkan --recreate-databases agar setiap proses parallel punya DB sendiri
+        # Paksa pembuatan database parallel untuk MySQL
         run: php artisan test --parallel --recreate-databases
