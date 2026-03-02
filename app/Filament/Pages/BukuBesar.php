@@ -40,6 +40,11 @@ class BukuBesar extends Page
 
     public function updatedFilterBulan()
 {
+    $this->saldoAwalMap = [];
+    $this->saldoMap = [];
+
+    $this->preloadSaldoAwal();
+    $this->preloadSaldo();
     $this->loadData();
 }
 
