@@ -66,6 +66,20 @@ jobs:
       - name: 🔐 Set Permissions
         run: chmod -R 777 storage bootstrap/cache
 
+      - name: ⏳ Wait for MariaDB to be ready
+        run: |
+          echo "Waiting for MariaDB..."
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -ppassword --silent 2>/dev/null; then
+              echo "✅ MariaDB is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/30 - MariaDB not ready yet, retrying in 2s..."
+            sleep 2
+          done
+          echo "❌ MariaDB did not become ready in time!"
+          exit 1
+
       - name: ✅ Run Fresh Migration
         run: php artisan migrate:fresh --force --no-interaction
 
