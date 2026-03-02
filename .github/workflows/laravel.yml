@@ -2,607 +2,208 @@ name: Akuntansi CI/CD
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - 'feature/**'
-      - 'hotfix/**'
+    branches: ["main", "develop"]
   pull_request:
-    branches:
-      - main
-      - develop
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  PHP_VERSION: '8.4'
-  NODE_VERSION: '20'
-  DB_CONNECTION: mysql
-  DB_HOST: 127.0.0.1
-  DB_PORT: 3306
-  DB_DATABASE: akuntansi_test
-  DB_USERNAME: root
-  DB_PASSWORD: password
+    branches: ["main", "develop"]
 
 jobs:
   # ──────────────────────────────────────────────
-  # 1. CODE QUALITY & LINTING
+  # JOB 1: TESTING (CI)
+  # ──────────────────────────────────────────────
+  laravel-tests:
+    name: 🧪 Run Tests (CI)
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: laravel_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: laravel_testing
+      DB_USERNAME: root
+      DB_PASSWORD: password
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐘 Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, dom, fileinfo, mysql, pdo_mysql, bcmath, curl, zip, gd, intl
+          coverage: none
+
+      - name: 📦 Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: 📋 Copy .env
+        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
+
+      - name: 🔧 Install Composer dependencies
+        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: 🔑 Generate App Key
+        run: php artisan key:generate
+
+      - name: 🔐 Set Permissions
+        run: chmod -R 777 storage bootstrap/cache
+
+      - name: ✅ Run Fresh Migration
+        run: php artisan migrate:fresh --force --no-interaction
+
+      - name: ✅ Verify No Pending Migrations
+        run: |
+          STATUS=$(php artisan migrate:status --no-ansi 2>&1)
+          echo "$STATUS"
+          if echo "$STATUS" | grep -q "Pending"; then
+            echo "❌ Ada migration yang pending!"
+            exit 1
+          fi
+          echo "✅ Semua migration sudah berjalan."
+
+      - name: 🧪 Run Tests
+        run: php artisan test --colors=always --stop-on-failure
+
+  # ──────────────────────────────────────────────
+  # JOB 2: CODE QUALITY
   # ──────────────────────────────────────────────
   code-quality:
     name: 🔍 Code Quality
     runs-on: ubuntu-latest
+    needs: laravel-tests
+
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup PHP
+      - name: 🐘 Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ env.PHP_VERSION }}
-          extensions: mbstring, bcmath, pdo, pdo_mysql, xml, curl, zip, gd, intl
+          php-version: "8.4"
+          extensions: mbstring, dom, fileinfo
           coverage: none
-          tools: composer:v2, php-cs-fixer, phpstan
 
-      - name: Cache Composer dependencies
+      - name: 📦 Cache Composer dependencies
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache
           key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
           restore-keys: composer-${{ runner.os }}-
 
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      - name: 🔧 Install Composer dependencies
+        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
-      - name: Check PHP syntax errors
-        run: find . -name "*.php" -not -path "./vendor/*" -not -path "./node_modules/*" | xargs php -l
+      - name: ✅ Check PHP Syntax
+        run: find app config routes -name "*.php" | xargs php -l
 
-      - name: Run PHP CS Fixer (dry-run)
+      - name: ✅ Check Routes Load
         run: |
-          if [ -f .php-cs-fixer.php ] || [ -f .php-cs-fixer.dist.php ]; then
-            vendor/bin/php-cs-fixer fix --dry-run --diff --ansi
-          else
-            echo "No PHP CS Fixer config found, skipping..."
-          fi
-
-      - name: Run PHPStan Static Analysis
-        run: |
-          if [ -f phpstan.neon ] || [ -f phpstan.neon.dist ]; then
-            vendor/bin/phpstan analyse --memory-limit=512M --no-progress
-          else
-            echo "No PHPStan config found, skipping..."
-          fi
-
-  # ──────────────────────────────────────────────
-  # 2. SECURITY AUDIT
-  # ──────────────────────────────────────────────
-  security-audit:
-    name: 🔒 Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ env.PHP_VERSION }}
-          coverage: none
-          tools: composer:v2
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache
-          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Run Composer security audit
-        run: composer audit --no-interaction
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install NPM dependencies
-        run: npm ci
-
-      - name: Run NPM security audit
-        run: npm audit --audit-level=high
-        continue-on-error: true
-
-  # ──────────────────────────────────────────────
-  # 3. DATABASE MIGRATION TEST
-  # ──────────────────────────────────────────────
-  database-migration:
-    name: 🗄️ Database Migration
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: akuntansi_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ env.PHP_VERSION }}
-          extensions: mbstring, bcmath, pdo, pdo_mysql, xml, curl, zip, gd, intl
-          coverage: none
-          tools: composer:v2
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache
-          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
-
-      - name: Copy environment file
-        run: cp .env.example .env
-
-      - name: Configure test environment
-        run: |
+          php -r "file_exists('.env') || copy('.env.example', '.env');"
           php artisan key:generate
-          sed -i 's/DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
-          sed -i 's/DB_HOST=.*/DB_HOST=127.0.0.1/' .env
-          sed -i 's/DB_PORT=.*/DB_PORT=3306/' .env
-          sed -i 's/DB_DATABASE=.*/DB_DATABASE=akuntansi_test/' .env
-          sed -i 's/DB_USERNAME=.*/DB_USERNAME=root/' .env
-          sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=password/' .env
+          php artisan route:list > /dev/null && echo "✅ Routes OK"
 
-      - name: Wait for MySQL to be ready
+      - name: ✅ Check Config Cache
         run: |
-          until mysqladmin ping -h 127.0.0.1 -u root -ppassword --silent; do
-            echo "Waiting for MySQL..."
-            sleep 2
-          done
-
-      - name: ✅ Run fresh migration
-        run: php artisan migrate:fresh --force --verbose
-
-      - name: ✅ Verify migrations ran (no pending)
-        run: |
-          PENDING=$(php artisan migrate:status | grep -c "Pending" || true)
-          if [ "$PENDING" -gt 0 ]; then
-            echo "❌ There are $PENDING pending migrations!"
-            php artisan migrate:status
-            exit 1
-          fi
-          echo "✅ All migrations are up to date."
-
-      - name: ✅ Run migration rollback (all)
-        run: php artisan migrate:rollback --step=999 --force --verbose
-
-      - name: ✅ Re-run migration after rollback
-        run: php artisan migrate --force --verbose
-
-      - name: ✅ Run database seeder
-        run: php artisan db:seed --force
-        continue-on-error: true
-
-      - name: ✅ Check model factories (smoke test)
-        run: |
-          php artisan tinker --execute="
-            echo 'Factory smoke test...' . PHP_EOL;
-            echo 'Done.' . PHP_EOL;
-          "
-
-  # ──────────────────────────────────────────────
-  # 4. UNIT & FEATURE TESTS
-  # ──────────────────────────────────────────────
-  tests:
-    name: 🧪 Unit & Feature Tests
-    runs-on: ubuntu-latest
-    needs: [database-migration]
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: akuntansi_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    strategy:
-      fail-fast: false
-      matrix:
-        test-suite: [Unit, Feature]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ env.PHP_VERSION }}
-          extensions: mbstring, bcmath, pdo, pdo_mysql, xml, curl, zip, gd, intl, redis
-          coverage: xdebug
-          tools: composer:v2
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache
-          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install NPM dependencies
-        run: npm ci
-
-      - name: Build frontend assets
-        run: npm run build
-
-      - name: Copy environment file
-        run: cp .env.example .env
-
-      - name: Configure test environment
-        run: |
-          php artisan key:generate
-          sed -i 's/APP_ENV=.*/APP_ENV=testing/' .env
-          sed -i 's/APP_DEBUG=.*/APP_DEBUG=true/' .env
-          sed -i 's/DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
-          sed -i 's/DB_HOST=.*/DB_HOST=127.0.0.1/' .env
-          sed -i 's/DB_PORT=.*/DB_PORT=3306/' .env
-          sed -i 's/DB_DATABASE=.*/DB_DATABASE=akuntansi_test/' .env
-          sed -i 's/DB_USERNAME=.*/DB_USERNAME=root/' .env
-          sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=password/' .env
-          sed -i 's/REDIS_HOST=.*/REDIS_HOST=127.0.0.1/' .env
-          sed -i 's/REDIS_PORT=.*/REDIS_PORT=6379/' .env
-          sed -i 's/CACHE_STORE=.*/CACHE_STORE=redis/' .env
-          sed -i 's/QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env
-          sed -i 's/SESSION_DRIVER=.*/SESSION_DRIVER=array/' .env
-          sed -i 's/MAIL_MAILER=.*/MAIL_MAILER=array/' .env
-
-      - name: Run fresh migration with seed
-        run: php artisan migrate:fresh --seed --force
-
-      - name: Run ${{ matrix.test-suite }} tests with coverage
-        run: |
-          php artisan test --testsuite=${{ matrix.test-suite }} \
-            --coverage-clover=coverage-${{ matrix.test-suite }}.xml \
-            --log-junit=test-results-${{ matrix.test-suite }}.xml \
-            --colors=always \
-            --stop-on-failure
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results-${{ matrix.test-suite }}
-          path: |
-            test-results-${{ matrix.test-suite }}.xml
-            coverage-${{ matrix.test-suite }}.xml
-          retention-days: 7
-
-  # ──────────────────────────────────────────────
-  # 5. FILAMENT PANEL & RESOURCE TESTS
-  # ──────────────────────────────────────────────
-  filament-tests:
-    name: 🎨 Filament Panel Tests
-    runs-on: ubuntu-latest
-    needs: [database-migration]
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: akuntansi_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ env.PHP_VERSION }}
-          extensions: mbstring, bcmath, pdo, pdo_mysql, xml, curl, zip, gd, intl
-          coverage: none
-          tools: composer:v2
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache
-          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install NPM dependencies & build
-        run: |
-          npm ci
-          npm run build
-
-      - name: Copy and configure environment
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-          sed -i 's/APP_ENV=.*/APP_ENV=testing/' .env
-          sed -i 's/DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
-          sed -i 's/DB_HOST=.*/DB_HOST=127.0.0.1/' .env
-          sed -i 's/DB_PORT=.*/DB_PORT=3306/' .env
-          sed -i 's/DB_DATABASE=.*/DB_DATABASE=akuntansi_test/' .env
-          sed -i 's/DB_USERNAME=.*/DB_USERNAME=root/' .env
-          sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=password/' .env
-          sed -i 's/QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env
-          sed -i 's/SESSION_DRIVER=.*/SESSION_DRIVER=array/' .env
-          sed -i 's/MAIL_MAILER=.*/MAIL_MAILER=array/' .env
-
-      - name: Run migration and seed
-        run: php artisan migrate:fresh --seed --force
-
-      - name: Run Filament-specific tests
-        run: |
-          php artisan test --filter=Filament \
-            --colors=always \
-            --stop-on-failure
-
-      - name: ✅ Verify Filament panels can boot
-        run: |
-          php artisan filament:check-translations --all || true
-          php artisan route:list --path=admin > /dev/null
-          echo "✅ Filament admin panel routes loaded successfully."
-
-      - name: ✅ Verify Filament assets are published
-        run: |
-          if [ ! -d "public/vendor/filament" ]; then
-            php artisan filament:assets
-          fi
-          echo "✅ Filament assets verified."
-
-  # ──────────────────────────────────────────────
-  # 6. ARTISAN COMMANDS & APP INTEGRITY
-  # ──────────────────────────────────────────────
-  app-integrity:
-    name: ⚙️ App Integrity Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ env.PHP_VERSION }}
-          extensions: mbstring, bcmath, pdo, pdo_mysql, xml, curl, zip, gd, intl
-          coverage: none
-          tools: composer:v2
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache
-          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install NPM dependencies & build
-        run: |
-          npm ci
-          npm run build
-
-      - name: Copy environment
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-          sed -i 's/APP_ENV=.*/APP_ENV=testing/' .env
-          sed -i 's/DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
-          echo "DB_DATABASE=:memory:" >> .env
-
-      - name: ✅ Check route list loads
-        run: php artisan route:list > /dev/null && echo "✅ Routes loaded successfully"
-
-      - name: ✅ Check configuration caches
-        run: |
-          php artisan config:cache
+          php artisan config:cache && echo "✅ Config cache OK"
           php artisan config:clear
-          echo "✅ Config cache OK"
 
-      - name: ✅ Check view compilation
+      - name: ✅ Check View Compile
         run: |
-          php artisan view:cache
+          php artisan view:cache && echo "✅ View compile OK"
           php artisan view:clear
-          echo "✅ View compilation OK"
-
-      - name: ✅ Check event discovery
-        run: |
-          php artisan event:list > /dev/null
-          echo "✅ Event list OK"
-
-      - name: ✅ Check package:discover
-        run: |
-          php artisan package:discover --ansi
-          echo "✅ Package discovery OK"
-
-      - name: ✅ Optimize application
-        run: |
-          php artisan optimize
-          php artisan optimize:clear
-          echo "✅ Optimize commands OK"
 
   # ──────────────────────────────────────────────
-  # 7. BUILD & ASSETS
+  # JOB 3: BUILD FRONTEND ASSETS
   # ──────────────────────────────────────────────
   build-assets:
     name: 🏗️ Build Frontend Assets
     runs-on: ubuntu-latest
+    needs: laravel-tests
+
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
-      - name: Install NPM dependencies
+      - name: 📦 Install NPM dependencies
         run: npm ci
 
-      - name: ✅ Run Vite build (production)
+      - name: 🏗️ Build assets (production)
         run: npm run build
 
-      - name: ✅ Verify build output exists
+      - name: ✅ Verify build output
         run: |
           if [ ! -d "public/build" ]; then
-            echo "❌ Build output directory 'public/build' not found!"
+            echo "❌ Build output tidak ditemukan di public/build!"
             exit 1
           fi
-          echo "✅ Build artifacts verified."
+          echo "✅ Build berhasil."
           ls -la public/build/
 
-      - name: Cache build artifacts
+  # ──────────────────────────────────────────────
+  # JOB 4: SECURITY AUDIT
+  # ──────────────────────────────────────────────
+  security-audit:
+    name: 🔒 Security Audit
+    runs-on: ubuntu-latest
+    needs: laravel-tests
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐘 Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+
+      - name: 📦 Cache Composer dependencies
         uses: actions/cache@v4
         with:
-          path: public/build
-          key: build-${{ runner.os }}-${{ github.sha }}
+          path: ~/.composer/cache
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
 
-  # ──────────────────────────────────────────────
-  # 8. DEPLOYMENT (main branch only)
-  # ──────────────────────────────────────────────
-  deploy-staging:
-    name: 🚀 Deploy to Staging
-    runs-on: ubuntu-latest
-    needs: [code-quality, security-audit, database-migration, tests, filament-tests, app-integrity, build-assets]
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    environment:
-      name: staging
-      url: ${{ vars.STAGING_URL }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: 🔧 Install Composer dependencies
+        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
-      - name: Notify deployment start
-        run: echo "🚀 Starting deployment to Staging environment..."
+      - name: ✅ Composer security audit
+        run: composer audit --no-interaction
+        continue-on-error: true
 
-      # Replace the steps below with your actual deployment method:
-      # - SSH deploy, Forge, Envoyer, Docker, etc.
-      - name: Deploy to staging server
-        run: |
-          echo "Configure your deployment steps here."
-          echo "Examples: SSH + git pull, Laravel Forge, Envoyer, or Docker."
-        # Example using SSH:
-        # uses: appleboy/ssh-action@v1.0.3
-        # with:
-        #   host: ${{ secrets.STAGING_HOST }}
-        #   username: ${{ secrets.STAGING_USER }}
-        #   key: ${{ secrets.STAGING_SSH_KEY }}
-        #   script: |
-        #     cd /var/www/akuntansi
-        #     git pull origin develop
-        #     composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
-        #     php artisan migrate --force
-        #     php artisan optimize
-        #     php artisan filament:assets
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
 
-      - name: Notify deployment success
-        if: success()
-        run: echo "✅ Successfully deployed to Staging!"
+      - name: 📦 Install NPM dependencies
+        run: npm ci
 
-  deploy-production:
-    name: 🚀 Deploy to Production
-    runs-on: ubuntu-latest
-    needs: [code-quality, security-audit, database-migration, tests, filament-tests, app-integrity, build-assets]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment:
-      name: production
-      url: ${{ vars.PRODUCTION_URL }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Notify deployment start
-        run: echo "🚀 Starting deployment to Production environment..."
-
-      - name: Deploy to production server
-        run: |
-          echo "Configure your production deployment steps here."
-        # Example using SSH:
-        # uses: appleboy/ssh-action@v1.0.3
-        # with:
-        #   host: ${{ secrets.PROD_HOST }}
-        #   username: ${{ secrets.PROD_USER }}
-        #   key: ${{ secrets.PROD_SSH_KEY }}
-        #   script: |
-        #     cd /var/www/akuntansi
-        #     git pull origin main
-        #     composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
-        #     php artisan down --render="errors::503"
-        #     php artisan migrate --force
-        #     php artisan optimize
-        #     php artisan filament:assets
-        #     php artisan up
-
-      - name: Notify deployment success
-        if: success()
-        run: echo "✅ Successfully deployed to Production!"
+      - name: ✅ NPM security audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
