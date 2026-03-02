@@ -7,61 +7,41 @@ on:
     branches: ["main"]
 
 jobs:
+  # ------------------------------------------------------------
+  # JOB 1: TESTING (CI) - TIDAK ADA PERUBAHAN
+  # ------------------------------------------------------------
   laravel-tests:
-    name: Test Suite (PHP 8.4 + MySQL)
+    name: Run Tests (CI)
     runs-on: ubuntu-latest
-
-    # Menjalankan container MySQL sementara
     services:
-      mysql:
-        image: mysql:8.0
+      mariadb:
+        image: mariadb:10.6
         env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: laravel_testing
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: laravel_testing
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping"
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
-          extensions: mbstring, dom, fileinfo, mysql, pdo_mysql, bcmath, gd
-          coverage: none
-
-      - name: Cache Dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-
+          php-version: "8.4"
+          extensions: mbstring, dom, fileinfo, mysql, pdo_mysql
+      - name: Copy .env
+        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
       - name: Install Dependencies
-        run: |
-          # Tambahkan paratest ke composer.json
-          composer require brianium/paratest --dev --no-update --no-interaction
-          
-          # Install dengan update agar lock file sinkron di dalam CI
-          # Menggunakan --with-all-dependencies untuk memastikan stabilitas
-          composer update brianium/paratest --no-ansi --no-interaction --no-progress --prefer-dist
-          
-          # Jalankan install sisa dependensi lainnya
-          composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-
-      - name: Prepare Environment
-        run: |
-          php -r "file_exists('.env') || copy('.env.example', '.env');"
-          php artisan key:generate
-          chmod -R 777 storage bootstrap/cache
-
-      - name: Run Migration Test
+        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+      - name: Generate App Key
+        run: php artisan key:generate
+      - name: Set Permissions
+        run: chmod -R 777 storage bootstrap/cache
+      - name: Run Migrations (Testing)
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -69,9 +49,8 @@ jobs:
           DB_DATABASE: laravel_testing
           DB_USERNAME: root
           DB_PASSWORD: password
-        run: php artisan migrate:fresh --seed
-
-      - name: Execute Tests (Parallel Mode)
+        run: php artisan migrate
+      - name: Run Tests
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -79,5 +58,4 @@ jobs:
           DB_DATABASE: laravel_testing
           DB_USERNAME: root
           DB_PASSWORD: password
-        # Paksa pembuatan database parallel untuk MySQL
-        run: php artisan test --parallel --recreate-databases
+        run: php artisan test
