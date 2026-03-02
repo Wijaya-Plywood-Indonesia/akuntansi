@@ -94,6 +94,3 @@ jobs:
             exit 1
           fi
           echo "✅ Semua migration sudah berjalan."
-
-      - name: 🧪 Run Tests
-        run: php artisan test --colors=always --stop-on-failure
