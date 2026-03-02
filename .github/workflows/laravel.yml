@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PHP_VERSION: '8.3'
+  PHP_VERSION: '8.4'
   NODE_VERSION: '20'
   DB_CONNECTION: mysql
   DB_HOST: 127.0.0.1
