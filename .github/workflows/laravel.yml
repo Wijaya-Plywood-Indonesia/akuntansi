@@ -6,10 +6,18 @@ on:
   pull_request:
     branches: ["main"]
 
+# ── ENV di JOB LEVEL — berlaku untuk SEMUA step ──────────────────────
+# FIX: DB_HOST=127.0.0.1 (TCP), BUKAN localhost (Unix socket)
+# Unix socket tidak tersedia di GitHub Actions runner
+env:
+  DB_CONNECTION: mysql
+  DB_HOST: 127.0.0.1
+  DB_PORT: 3306
+  DB_DATABASE: laravel_testing
+  DB_USERNAME: root
+  DB_PASSWORD: password
+
 jobs:
-  # ------------------------------------------------------------
-  # JOB 1: TESTING (CI)
-  # ------------------------------------------------------------
   laravel-tests:
     name: Run Tests (CI)
     runs-on: ubuntu-latest
@@ -26,7 +34,7 @@ jobs:
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
 
     steps:
       - name: Checkout Code
@@ -37,11 +45,24 @@ jobs:
         with:
           php-version: "8.4"
           extensions: mbstring, dom, fileinfo, mysql, pdo_mysql, bcmath, gd
-          # Cache composer dependencies
           coverage: none
 
-      # ── Cache composer vendor ──────────────────────────────────
-      # Jika composer.lock tidak berubah, skip install = CI lebih cepat
+      # ── FIX SKENARIO E ────────────────────────────────────────────
+      # ubuntu-latest sudah punya MySQL 8.0 running di port 3306.
+      # Ini conflict dengan MariaDB container → mysqladmin ping
+      # berhasil tapi connect ke MySQL runner, bukan MariaDB container.
+      - name: Stop MySQL bawaan Runner (cegah port conflict)
+        run: |
+          sudo systemctl stop mysql || true
+          sudo systemctl disable mysql || true
+          echo "✅ MySQL runner dihentikan"
+
+      # ── Install mysql-client (FIX SKENARIO D) ────────────────────
+      # Pastikan mysqladmin & mysql tersedia di runner
+      - name: Install MySQL Client
+        run: sudo apt-get install -y mysql-client
+
+      # ── Cache vendor ──────────────────────────────────────────────
       - name: Cache Composer Dependencies
         id: composer-cache
         uses: actions/cache@v4
@@ -50,48 +71,59 @@ jobs:
           key: composer-${{ hashFiles('composer.lock') }}
           restore-keys: composer-
 
-      # ── Install Dependencies ───────────────────────────────────
-      # FIX: Gunakan `composer update` untuk paratest agar lock file ikut terupdate.
-      # Tidak pakai --no-update karena itu yang menyebabkan lock file tidak sinkron.
+      # ── Install Dependencies ──────────────────────────────────────
       - name: Install Dependencies
-        if: steps.composer-cache.outputs.cache-hit != 'true'
         run: |
           composer require brianium/paratest --dev --no-interaction
           composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
-      # ── Prepare Environment ────────────────────────────────────
+      # ── Prepare Environment (FIX SKENARIO B) ─────────────────────
+      # key:generate SEBELUM wait DB — hindari artisan boot DB prematur.
+      # sed override .env agar tidak bergantung pada .env.example.
       - name: Prepare Environment
         run: |
           php -r "file_exists('.env') || copy('.env.example', '.env');"
-          php artisan key:generate
+          php artisan key:generate --force
+
+          sed -i "s|DB_HOST=.*|DB_HOST=127.0.0.1|g"              .env
+          sed -i "s|DB_PORT=.*|DB_PORT=3306|g"                    .env
+          sed -i "s|DB_DATABASE=.*|DB_DATABASE=laravel_testing|g" .env
+          sed -i "s|DB_USERNAME=.*|DB_USERNAME=root|g"            .env
+          sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=password|g"        .env
+
+          echo "── DB config aktif di .env ──"
+          grep "^DB_" .env
+
           chmod -R 777 storage bootstrap/cache
 
-      # ── Wait for Database ──────────────────────────────────────
-      # FIX: nc hanya cek port TCP terbuka, tapi MariaDB belum tentu
-      # siap terima query. mysqladmin ping memastikan koneksi benar-benar ready.
+      # ── Wait for Database (FIX SKENARIO A + F) ───────────────────
+      # sleep 5 di awal = buffer setelah MySQL runner stop + MariaDB init.
+      # mysqladmin ping = verifikasi koneksi nyata, bukan hanya port TCP.
+      # mysql SELECT = double-check bisa kirim query sebelum migrate.
       - name: Wait for Database
         run: |
-          echo "Menunggu MariaDB benar-benar siap..."
+          echo "⏳ Buffer awal 5 detik..."
+          sleep 5
+
+          echo "🔍 Menunggu MariaDB siap..."
           for i in $(seq 1 30); do
             if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -ppassword --silent 2>/dev/null; then
-              echo "MariaDB siap di percobaan ke-$i"
+              echo "✅ MariaDB ping OK di percobaan ke-$i"
               break
             fi
-            echo "Percobaan $i/30 — belum siap, tunggu 2 detik..."
-            sleep 2
+            echo "   Percobaan $i/30 — tunggu 3 detik..."
+            sleep 3
           done
-          # Verifikasi final — pastikan bisa query sebelum migrate
-          mysql -h 127.0.0.1 -P 3306 -u root -ppassword -e "SELECT 1;" laravel_testing
 
-      # ── Run Migrations & Tests ─────────────────────────────────
+          echo "🔍 Verifikasi koneksi dengan actual query..."
+          mysql -h 127.0.0.1 -P 3306 -u root -ppassword \
+            -e "SELECT VERSION() AS mariadb_version; SHOW DATABASES;" \
+            laravel_testing
+
+          echo "✅ Database siap"
+
+      # ── Migrate & Test ────────────────────────────────────────────
       - name: Run Migrations & Tests
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: laravel_testing
-          DB_USERNAME: root
-          DB_PASSWORD: password
         run: |
-          php artisan migrate:fresh --seed
+          php artisan migrate:fresh --seed --force
           php artisan test --parallel --recreate-databases
