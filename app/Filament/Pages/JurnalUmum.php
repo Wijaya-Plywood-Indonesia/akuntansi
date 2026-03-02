@@ -27,7 +27,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     use InteractsWithForms;
 
     protected string $view = 'filament.pages.jurnal-umum';
-    protected static UnitEnum|string|null $navigationGroup = 'Jurnal';
+    protected static UnitEnum|string|null $navigationGroup = 'jurnal';
     protected static ?string $title = 'Jurnal Umum';
 
     public $tgl, $jurnal, $no_akun, $nama_akun, $keterangan, $harga, $banyak = 1, $map = 'D';
@@ -123,9 +123,29 @@ class JurnalUmum extends Page implements HasActions, HasForms
         // Potong ke perPage saja untuk ditampilkan
         $historyJurnals = $data->take($this->perPage);
 
+        // ── Total dari SEMUA data sesuai filter (bukan hanya perPage) ──
+        // Query ulang tanpa limit untuk akurasi balance check akuntan
+        $totalsQuery = JurnalModel::query();
+        if (!empty($this->filterTglDari)) {
+            $totalsQuery->whereDate('tgl', '>=', $this->filterTglDari);
+        }
+        if (!empty($this->filterTglSampai)) {
+            $totalsQuery->whereDate('tgl', '<=', $this->filterTglSampai);
+        }
+        $allForTotals = $totalsQuery->get(['map', 'banyak', 'harga']);
+
+        $totalDebitDB  = $allForTotals->whereIn('map', ['D', 'debit', 'd', 'Debit'])->sum(fn($j) => $j->banyak * $j->harga);
+        $totalKreditDB = $allForTotals->whereIn('map', ['K', 'kredit', 'k', 'Kredit'])->sum(fn($j) => $j->banyak * $j->harga);
+        $isHistoryBalanced = abs($totalDebitDB - $totalKreditDB) < 0.01;
+        $selisihDB = abs($totalDebitDB - $totalKreditDB);
+
         return [
-            'accounts'       => $sub->unionAll($anak)->get(),
-            'historyJurnals' => $historyJurnals,
+            'accounts'          => $sub->unionAll($anak)->get(),
+            'historyJurnals'    => $historyJurnals,
+            'totalDebitDB'      => $totalDebitDB,
+            'totalKreditDB'     => $totalKreditDB,
+            'isHistoryBalanced' => $isHistoryBalanced,
+            'selisihDB'         => $selisihDB,
         ];
     }
 
