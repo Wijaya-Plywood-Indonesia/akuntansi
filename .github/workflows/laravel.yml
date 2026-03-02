@@ -67,12 +67,21 @@ jobs:
           chmod -R 777 storage bootstrap/cache
 
       # ── Wait for Database ──────────────────────────────────────
+      # FIX: nc hanya cek port TCP terbuka, tapi MariaDB belum tentu
+      # siap terima query. mysqladmin ping memastikan koneksi benar-benar ready.
       - name: Wait for Database
         run: |
-          until nc -z -v -w30 127.0.0.1 3306; do
-            echo "Menunggu MariaDB siap..."
+          echo "Menunggu MariaDB benar-benar siap..."
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -ppassword --silent 2>/dev/null; then
+              echo "MariaDB siap di percobaan ke-$i"
+              break
+            fi
+            echo "Percobaan $i/30 — belum siap, tunggu 2 detik..."
             sleep 2
           done
+          # Verifikasi final — pastikan bisa query sebelum migrate
+          mysql -h 127.0.0.1 -P 3306 -u root -ppassword -e "SELECT 1;" laravel_testing
 
       # ── Run Migrations & Tests ─────────────────────────────────
       - name: Run Migrations & Tests
