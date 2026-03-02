@@ -8,21 +8,22 @@ on:
 
 jobs:
   # ------------------------------------------------------------
-  # JOB 1: TESTING (CI) - TIDAK ADA PERUBAHAN
+  # JOB 1: TESTING (CI) - VERSI OPTIMASI MARIADB
   # ------------------------------------------------------------
   laravel-tests:
     name: Run Tests (CI)
     runs-on: ubuntu-latest
+    
     services:
-      mysql:
-        image: mysql:8.0
+      mariadb:
+        image: mariadb:10.6
         env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: laravel_testing
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: laravel_testing
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping"
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -34,23 +35,8 @@ jobs:
       - name: Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: "8.4"
           extensions: mbstring, dom, fileinfo, mysql, pdo_mysql, bcmath, gd
-
-      # Menunggu MySQL Benar-benar Siap
-      - name: Wait for MySQL
-        run: |
-          until nc -z -v -w30 127.0.0.1 3306; do
-            echo "Waiting for MySQL database connection..."
-            sleep 5
-          done
-          echo "MySQL is up and running!"
-
-      - name: Install Dependencies
-        run: |
-          composer require brianium/paratest --dev --no-update
-          composer update brianium/paratest --no-ansi --no-interaction --no-progress --prefer-dist
-          composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
       - name: Prepare Environment
         run: |
@@ -58,7 +44,20 @@ jobs:
           php artisan key:generate
           chmod -R 777 storage bootstrap/cache
 
-      - name: Run Migration Test
+      - name: Install Dependencies
+        run: |
+          # Perbaikan: Tambahkan paratest otomatis agar tidak error --parallel
+          composer require brianium/paratest --dev --no-update --no-interaction
+          composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: Wait for Database
+        run: |
+          until nc -z -v -w30 127.0.0.1 3306; do
+            echo "Menunggu MariaDB siap..."
+            sleep 2
+          done
+
+      - name: Run Migrations (Testing)
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -68,7 +67,7 @@ jobs:
           DB_PASSWORD: password
         run: php artisan migrate:fresh --seed
 
-      - name: Execute Tests (Parallel)
+      - name: Run Tests
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -76,4 +75,5 @@ jobs:
           DB_DATABASE: laravel_testing
           DB_USERNAME: root
           DB_PASSWORD: password
+        # Pakai --parallel jika paratest sudah terinstall, atau hapus jika ingin standar
         run: php artisan test --parallel --recreate-databases
