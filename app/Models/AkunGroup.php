@@ -117,6 +117,7 @@ class AkunGroup extends Model
     {
         return $query->orderBy('order');
     }
+
     public function getTotalAnakAkunsAttribute(): int
     {
         // Kalau leaf → hitung langsung
