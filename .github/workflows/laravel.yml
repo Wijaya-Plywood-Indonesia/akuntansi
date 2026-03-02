@@ -44,7 +44,10 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
 
       - name: Install Dependencies
-        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+        run: |
+          # Memastikan paratest terinstall untuk mendukung flag --parallel
+          composer require brianium/paratest --dev --no-update
+          composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
       - name: Prepare Environment
         run: |
@@ -52,7 +55,6 @@ jobs:
           php artisan key:generate
           chmod -R 777 storage bootstrap/cache
 
-      # --- BAGIAN TESTING MIGRASI ---
       - name: Run Migration Test
         env:
           DB_CONNECTION: mysql
@@ -61,15 +63,9 @@ jobs:
           DB_DATABASE: laravel_testing
           DB_USERNAME: root
           DB_PASSWORD: password
-        run: |
-          echo "Checking database connection..."
-          php artisan db:monitor || exit 1
-          echo "Running migrations fresh..."
-          php artisan migrate:fresh --seed
-          echo "Migrations and Seeding passed!"
+        run: php artisan migrate:fresh --seed
 
-      # --- RUN UNIT & FEATURE TESTS ---
-      - name: Execute Tests
+      - name: Execute Tests (Parallel Mode)
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -77,4 +73,5 @@ jobs:
           DB_DATABASE: laravel_testing
           DB_USERNAME: root
           DB_PASSWORD: password
-        run: php artisan test --parallel
+        # Menambahkan --recreate-databases agar setiap proses parallel punya DB sendiri
+        run: php artisan test --parallel --recreate-databases
