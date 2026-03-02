@@ -27,6 +27,7 @@ class BukuBesar extends Page
     public function mount()
     {
         $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
+        $this->loadData();
     }
 
     public function initLoad()
@@ -36,6 +37,11 @@ class BukuBesar extends Page
         $this->preloadSaldo();
         $this->isLoading = false;
     }
+
+    public function updatedFilterBulan()
+{
+    $this->loadData();
+}
 
     private function preloadSaldoAwal()
     {
@@ -102,34 +108,14 @@ class BukuBesar extends Page
 
     // Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
     public function getSaldoAwal($kode)
-    {
-        $date = Carbon::parse($this->filterBulan)->subMonth();
-
-        return DB::table('buku_besar')
-            ->where('tahun', $date->year)
-            ->where('bulan', $date->month)
-            ->where('no_akun', $kode)
-            ->value('saldo') ?? 0;
-    }
+{
+    return $this->saldoAwalMap[$kode] ?? 0;
+}
 
     public function getSaldoBulan($kode)
-    {
-        $start = Carbon::parse($this->filterBulan)->startOfMonth();
-        $end   = Carbon::parse($this->filterBulan)->endOfMonth();
-
-        return JurnalUmum::where('no_akun', $kode)
-            ->whereBetween('tgl', [$start, $end])
-            ->selectRaw("
-            SUM(
-                CASE 
-                    WHEN LOWER(map) = 'd'
-                    THEN COALESCE(banyak * harga, harga, 0)
-                    ELSE -COALESCE(banyak * harga, harga, 0)
-                END
-            ) as total
-        ")
-            ->value('total') ?? 0;
-    }
+{
+    return $this->saldoMap[$kode] ?? 0;
+}
 
     // Transaksi hanya di bulan terpilih
     public function getTransaksiByKode($kode)
