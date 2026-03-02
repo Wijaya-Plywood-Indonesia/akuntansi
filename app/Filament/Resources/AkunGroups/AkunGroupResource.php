@@ -16,12 +16,15 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class AkunGroupResource extends Resource
 {
     protected static ?string $model = AkunGroup::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    // protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Master';
 
     protected static ?string $recordTitleAttribute = 'nama';
 
@@ -43,7 +46,7 @@ class AkunGroupResource extends Resource
     public static function getRelations(): array
     {
         return [
-                //
+            //
             AnakAkunsRelationManager::class,
         ];
     }
