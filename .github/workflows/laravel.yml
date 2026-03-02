@@ -6,9 +6,7 @@ on:
   pull_request:
     branches: ["main"]
 
-# ── ENV di JOB LEVEL — berlaku untuk SEMUA step ──────────────────────
-# FIX: DB_HOST=127.0.0.1 (TCP), BUKAN localhost (Unix socket)
-# Unix socket tidak tersedia di GitHub Actions runner
+# ── ENV di JOB LEVEL ─────────────────────────────────────────────────
 env:
   DB_CONNECTION: mysql
   DB_HOST: 127.0.0.1
@@ -47,22 +45,14 @@ jobs:
           extensions: mbstring, dom, fileinfo, mysql, pdo_mysql, bcmath, gd
           coverage: none
 
-      # ── FIX SKENARIO E ────────────────────────────────────────────
-      # ubuntu-latest sudah punya MySQL 8.0 running di port 3306.
-      # Ini conflict dengan MariaDB container → mysqladmin ping
-      # berhasil tapi connect ke MySQL runner, bukan MariaDB container.
-      - name: Stop MySQL bawaan Runner (cegah port conflict)
+      - name: Stop MySQL bawaan Runner
         run: |
           sudo systemctl stop mysql || true
           sudo systemctl disable mysql || true
-          echo "✅ MySQL runner dihentikan"
 
-      # ── Install mysql-client (FIX SKENARIO D) ────────────────────
-      # Pastikan mysqladmin & mysql tersedia di runner
       - name: Install MySQL Client
-        run: sudo apt-get install -y mysql-client
+        run: sudo apt-get install -y mysql-client -qq
 
-      # ── Cache vendor ──────────────────────────────────────────────
       - name: Cache Composer Dependencies
         id: composer-cache
         uses: actions/cache@v4
@@ -71,58 +61,75 @@ jobs:
           key: composer-${{ hashFiles('composer.lock') }}
           restore-keys: composer-
 
-      # ── Install Dependencies ──────────────────────────────────────
       - name: Install Dependencies
         run: |
           composer require brianium/paratest --dev --no-interaction
           composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
-      # ── Prepare Environment (FIX SKENARIO B) ─────────────────────
-      # key:generate SEBELUM wait DB — hindari artisan boot DB prematur.
-      # sed override .env agar tidak bergantung pada .env.example.
+      # ── FIX UTAMA ─────────────────────────────────────────────────
+      # JANGAN pakai sed — format .env.example bisa berbeda (spasi, quotes)
+      # sehingga sed gagal silent tanpa error → DB_HOST tetap 'localhost'
+      # 
+      # Solusi: tulis ulang blok DB di .env dengan php -r
+      # sehingga 100% pasti nilainya benar terlepas format asal
       - name: Prepare Environment
         run: |
           php -r "file_exists('.env') || copy('.env.example', '.env');"
           php artisan key:generate --force
 
-          sed -i "s|DB_HOST=.*|DB_HOST=127.0.0.1|g"              .env
-          sed -i "s|DB_PORT=.*|DB_PORT=3306|g"                    .env
-          sed -i "s|DB_DATABASE=.*|DB_DATABASE=laravel_testing|g" .env
-          sed -i "s|DB_USERNAME=.*|DB_USERNAME=root|g"            .env
-          sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=password|g"        .env
+          # Tulis ulang DB config via PHP — tidak bergantung format .env.example
+          php -r "
+            \$env = file_get_contents('.env');
+            \$keys = [
+              'DB_CONNECTION' => 'mysql',
+              'DB_HOST'       => '127.0.0.1',
+              'DB_PORT'       => '3306',
+              'DB_DATABASE'   => 'laravel_testing',
+              'DB_USERNAME'   => 'root',
+              'DB_PASSWORD'   => 'password',
+            ];
+            foreach (\$keys as \$key => \$val) {
+              if (preg_match('/^'.\$key.'=/m', \$env)) {
+                \$env = preg_replace('/^'.\$key.'=.*/m', \$key.'='.\$val, \$env);
+              } else {
+                \$env .= PHP_EOL.\$key.'='.\$val;
+              }
+            }
+            file_put_contents('.env', \$env);
+          "
 
-          echo "── DB config aktif di .env ──"
+          # Hapus config cache agar Laravel tidak pakai nilai lama
+          php artisan config:clear
+
+          # ── DEBUG: print nilai DB yang BENAR-BENAR akan dipakai Laravel ──
+          echo "── Isi .env (hanya baris DB_*) ──"
           grep "^DB_" .env
+
+          echo "── Nilai yang dibaca php artisan ──"
+          php artisan tinker --execute="
+            echo 'DB_HOST: ' . config('database.connections.mysql.host') . PHP_EOL;
+            echo 'DB_PORT: ' . config('database.connections.mysql.port') . PHP_EOL;
+            echo 'DB_DATABASE: ' . config('database.connections.mysql.database') . PHP_EOL;
+            echo 'DB_USERNAME: ' . config('database.connections.mysql.username') . PHP_EOL;
+          "
 
           chmod -R 777 storage bootstrap/cache
 
-      # ── Wait for Database (FIX SKENARIO A + F) ───────────────────
-      # sleep 5 di awal = buffer setelah MySQL runner stop + MariaDB init.
-      # mysqladmin ping = verifikasi koneksi nyata, bukan hanya port TCP.
-      # mysql SELECT = double-check bisa kirim query sebelum migrate.
       - name: Wait for Database
         run: |
-          echo "⏳ Buffer awal 5 detik..."
           sleep 5
-
-          echo "🔍 Menunggu MariaDB siap..."
+          echo "🔍 Menunggu MariaDB..."
           for i in $(seq 1 30); do
             if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -ppassword --silent 2>/dev/null; then
-              echo "✅ MariaDB ping OK di percobaan ke-$i"
+              echo "✅ MariaDB siap di percobaan ke-$i"
               break
             fi
-            echo "   Percobaan $i/30 — tunggu 3 detik..."
+            echo "   Percobaan $i/30..."
             sleep 3
           done
-
-          echo "🔍 Verifikasi koneksi dengan actual query..."
           mysql -h 127.0.0.1 -P 3306 -u root -ppassword \
-            -e "SELECT VERSION() AS mariadb_version; SHOW DATABASES;" \
-            laravel_testing
+            -e "SELECT VERSION(); SHOW DATABASES;" laravel_testing
 
-          echo "✅ Database siap"
-
-      # ── Migrate & Test ────────────────────────────────────────────
       - name: Run Migrations & Tests
         run: |
           php artisan migrate:fresh --seed --force
