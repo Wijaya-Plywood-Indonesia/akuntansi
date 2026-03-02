@@ -8,12 +8,12 @@ on:
 
 jobs:
   # ------------------------------------------------------------
-  # JOB 1: TESTING (CI) - VERSI OPTIMASI MARIADB
+  # JOB 1: TESTING (CI)
   # ------------------------------------------------------------
   laravel-tests:
     name: Run Tests (CI)
     runs-on: ubuntu-latest
-    
+
     services:
       mariadb:
         image: mariadb:10.6
@@ -37,21 +37,36 @@ jobs:
         with:
           php-version: "8.4"
           extensions: mbstring, dom, fileinfo, mysql, pdo_mysql, bcmath, gd
+          # Cache composer dependencies
+          coverage: none
 
-      # 1. INSTALL DEPENDENCIES DULU (Agar folder 'vendor' dan 'autoload.php' ada)
+      # ── Cache composer vendor ──────────────────────────────────
+      # Jika composer.lock tidak berubah, skip install = CI lebih cepat
+      - name: Cache Composer Dependencies
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      # ── Install Dependencies ───────────────────────────────────
+      # FIX: Gunakan `composer update` untuk paratest agar lock file ikut terupdate.
+      # Tidak pakai --no-update karena itu yang menyebabkan lock file tidak sinkron.
       - name: Install Dependencies
+        if: steps.composer-cache.outputs.cache-hit != 'true'
         run: |
-          composer require brianium/paratest --dev --no-update --no-interaction
+          composer require brianium/paratest --dev --no-interaction
           composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
-      # 2. BARU PREPARE ENVIRONMENT (Key generate butuh autoload.php)
+      # ── Prepare Environment ────────────────────────────────────
       - name: Prepare Environment
         run: |
           php -r "file_exists('.env') || copy('.env.example', '.env');"
           php artisan key:generate
           chmod -R 777 storage bootstrap/cache
 
-      # 3. TUNGGU DATABASE & RUN TEST
+      # ── Wait for Database ──────────────────────────────────────
       - name: Wait for Database
         run: |
           until nc -z -v -w30 127.0.0.1 3306; do
@@ -59,6 +74,7 @@ jobs:
             sleep 2
           done
 
+      # ── Run Migrations & Tests ─────────────────────────────────
       - name: Run Migrations & Tests
         env:
           DB_CONNECTION: mysql
