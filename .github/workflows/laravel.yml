@@ -43,7 +43,7 @@ jobs:
           path: ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
 
-- name: Install Dependencies
+      - name: Install Dependencies
         run: |
           # Tambahkan paratest ke composer.json
           composer require brianium/paratest --dev --no-update --no-interaction
