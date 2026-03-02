@@ -309,7 +309,6 @@ jobs:
             --coverage-clover=coverage-${{ matrix.test-suite }}.xml \
             --log-junit=test-results-${{ matrix.test-suite }}.xml \
             --colors=always \
-            --parallel \
             --stop-on-failure
 
       - name: Upload test results
@@ -527,3 +526,83 @@ jobs:
         with:
           path: public/build
           key: build-${{ runner.os }}-${{ github.sha }}
+
+  # ──────────────────────────────────────────────
+  # 8. DEPLOYMENT (main branch only)
+  # ──────────────────────────────────────────────
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [code-quality, security-audit, database-migration, tests, filament-tests, app-integrity, build-assets]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Notify deployment start
+        run: echo "🚀 Starting deployment to Staging environment..."
+
+      # Replace the steps below with your actual deployment method:
+      # - SSH deploy, Forge, Envoyer, Docker, etc.
+      - name: Deploy to staging server
+        run: |
+          echo "Configure your deployment steps here."
+          echo "Examples: SSH + git pull, Laravel Forge, Envoyer, or Docker."
+        # Example using SSH:
+        # uses: appleboy/ssh-action@v1.0.3
+        # with:
+        #   host: ${{ secrets.STAGING_HOST }}
+        #   username: ${{ secrets.STAGING_USER }}
+        #   key: ${{ secrets.STAGING_SSH_KEY }}
+        #   script: |
+        #     cd /var/www/akuntansi
+        #     git pull origin develop
+        #     composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+        #     php artisan migrate --force
+        #     php artisan optimize
+        #     php artisan filament:assets
+
+      - name: Notify deployment success
+        if: success()
+        run: echo "✅ Successfully deployed to Staging!"
+
+  deploy-production:
+    name: 🚀 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [code-quality, security-audit, database-migration, tests, filament-tests, app-integrity, build-assets]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Notify deployment start
+        run: echo "🚀 Starting deployment to Production environment..."
+
+      - name: Deploy to production server
+        run: |
+          echo "Configure your production deployment steps here."
+        # Example using SSH:
+        # uses: appleboy/ssh-action@v1.0.3
+        # with:
+        #   host: ${{ secrets.PROD_HOST }}
+        #   username: ${{ secrets.PROD_USER }}
+        #   key: ${{ secrets.PROD_SSH_KEY }}
+        #   script: |
+        #     cd /var/www/akuntansi
+        #     git pull origin main
+        #     composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+        #     php artisan down --render="errors::503"
+        #     php artisan migrate --force
+        #     php artisan optimize
+        #     php artisan filament:assets
+        #     php artisan up
+
+      - name: Notify deployment success
+        if: success()
+        run: echo "✅ Successfully deployed to Production!"
