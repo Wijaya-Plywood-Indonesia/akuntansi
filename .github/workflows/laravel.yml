@@ -38,18 +38,20 @@ jobs:
           php-version: "8.4"
           extensions: mbstring, dom, fileinfo, mysql, pdo_mysql, bcmath, gd
 
+      # 1. INSTALL DEPENDENCIES DULU (Agar folder 'vendor' dan 'autoload.php' ada)
+      - name: Install Dependencies
+        run: |
+          composer require brianium/paratest --dev --no-update --no-interaction
+          composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      # 2. BARU PREPARE ENVIRONMENT (Key generate butuh autoload.php)
       - name: Prepare Environment
         run: |
           php -r "file_exists('.env') || copy('.env.example', '.env');"
           php artisan key:generate
           chmod -R 777 storage bootstrap/cache
 
-      - name: Install Dependencies
-        run: |
-          # Perbaikan: Tambahkan paratest otomatis agar tidak error --parallel
-          composer require brianium/paratest --dev --no-update --no-interaction
-          composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-
+      # 3. TUNGGU DATABASE & RUN TEST
       - name: Wait for Database
         run: |
           until nc -z -v -w30 127.0.0.1 3306; do
@@ -57,7 +59,7 @@ jobs:
             sleep 2
           done
 
-      - name: Run Migrations (Testing)
+      - name: Run Migrations & Tests
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -65,15 +67,6 @@ jobs:
           DB_DATABASE: laravel_testing
           DB_USERNAME: root
           DB_PASSWORD: password
-        run: php artisan migrate:fresh --seed
-
-      - name: Run Tests
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: laravel_testing
-          DB_USERNAME: root
-          DB_PASSWORD: password
-        # Pakai --parallel jika paratest sudah terinstall, atau hapus jika ingin standar
-        run: php artisan test --parallel --recreate-databases
+        run: |
+          php artisan migrate:fresh --seed
+          php artisan test --parallel --recreate-databases
