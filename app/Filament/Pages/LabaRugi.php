@@ -75,14 +75,22 @@ class LabaRugi extends Page
     public function schema(Schema $schema): Schema
     {
         $bulanOptions = [
-            1  => 'Januari',  2  => 'Februari', 3  => 'Maret',
-            4  => 'April',    5  => 'Mei',       6  => 'Juni',
-            7  => 'Juli',     8  => 'Agustus',   9  => 'September',
-            10 => 'Oktober',  11 => 'November',  12 => 'Desember',
+            1  => 'Januari',
+            2  => 'Februari',
+            3  => 'Maret',
+            4  => 'April',
+            5  => 'Mei',
+            6  => 'Juni',
+            7  => 'Juli',
+            8  => 'Agustus',
+            9  => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember',
         ];
 
         $tahunOptions = collect(range(now()->year, now()->year - 5))
-            ->mapWithKeys(fn ($y) => [$y => (string) $y])
+            ->mapWithKeys(fn($y) => [$y => (string) $y])
             ->toArray();
 
         return $schema
@@ -212,7 +220,7 @@ class LabaRugi extends Page
         $this->laporanData = $sections;
         $this->ringkasan   = [
             'total_pendapatan'    => $totalPendapatan,
-            'total_retur_potongan'=> $totalReturPotongan,
+            'total_retur_potongan' => $totalReturPotongan,
             'penjualan_bersih'    => $penjualanBersih,
             'total_hpp'           => $totalHPP,
             'laba_kotor'          => $labaKotor,
@@ -318,53 +326,51 @@ class LabaRugi extends Page
      * jadi cukup sum saldo untuk range bulan yang dipilih.
      */
     private function getSaldoMap(): array
-{
-    $tahun       = (int) $this->tahun;
-    $bulanDari   = (int) $this->bulan_dari;
-    $bulanSampai = (int) $this->bulan_sampai;
+    {
+        $tahun       = (int) $this->tahun;
+        $bulanDari   = (int) $this->bulan_dari;
+        $bulanSampai = (int) $this->bulan_sampai;
 
-    $start = Carbon::create($tahun, $bulanDari, 1)->startOfMonth();
-    $end   = Carbon::create($tahun, $bulanSampai, 1)->endOfMonth();
+        $start = Carbon::create($tahun, $bulanDari, 1)->startOfMonth();
+        $end   = Carbon::create($tahun, $bulanSampai, 1)->endOfMonth();
 
-    $map = [];
+        $map = [];
 
-    // 🔹 Ambil saldo normal semua akun
-    $saldoNormalMap =
-        AnakAkun::pluck('saldo_normal', 'kode_anak_akun')->toArray()
-        + SubAnakAkun::pluck('saldo_normal', 'kode_sub_anak_akun')->toArray();
+        // 🔹 Ambil saldo normal semua akun
+        $saldoNormalMap =
+            AnakAkun::pluck('saldo_normal', 'kode_anak_akun')->toArray()
+            + SubAnakAkun::pluck('saldo_normal', 'kode_sub_anak_akun')->toArray();
 
-    // 🔹 Ambil transaksi jurnal
-    $jurnals = JurnalUmum::whereBetween('tgl', [$start, $end])->get();
+        // 🔹 Ambil transaksi jurnal
+        $jurnals = JurnalUmum::whereBetween('tgl', [$start, $end])->get();
 
-    foreach ($jurnals as $jurnal) {
+        foreach ($jurnals as $jurnal) {
 
-        $kode  = $jurnal->no_akun;
-        $nilai = ($jurnal->banyak ?? 0) * ($jurnal->harga ?? 0);
+            $kode  = $jurnal->no_akun;
+            $nilai = ($jurnal->banyak ?? 0) * ($jurnal->harga ?? 0);
 
-        $saldoNormal = strtolower($saldoNormalMap[$kode] ?? 'debit');
-        $isDebit     = strtolower($jurnal->map) === 'd';
+            $saldoNormal = strtolower($saldoNormalMap[$kode] ?? 'debit');
+            $isDebit     = strtolower($jurnal->map) === 'd';
 
-        if ($saldoNormal === 'kredit') {
+            if ($saldoNormal === 'kredit') {
 
-            if ($isDebit) {
-                $map[$kode] = ($map[$kode] ?? 0) - $nilai;
+                if ($isDebit) {
+                    $map[$kode] = ($map[$kode] ?? 0) - $nilai;
+                } else {
+                    $map[$kode] = ($map[$kode] ?? 0) + $nilai;
+                }
             } else {
-                $map[$kode] = ($map[$kode] ?? 0) + $nilai;
+
+                if ($isDebit) {
+                    $map[$kode] = ($map[$kode] ?? 0) + $nilai;
+                } else {
+                    $map[$kode] = ($map[$kode] ?? 0) - $nilai;
+                }
             }
-
-        } else {
-
-            if ($isDebit) {
-                $map[$kode] = ($map[$kode] ?? 0) + $nilai;
-            } else {
-                $map[$kode] = ($map[$kode] ?? 0) - $nilai;
-            }
-
         }
-    }
 
-    return $map;
-}
+        return $map;
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -375,10 +381,18 @@ class LabaRugi extends Page
     public function getNamaBulan(int $bulan): string
     {
         return [
-            1  => 'Januari',  2  => 'Februari', 3  => 'Maret',
-            4  => 'April',    5  => 'Mei',       6  => 'Juni',
-            7  => 'Juli',     8  => 'Agustus',   9  => 'September',
-            10 => 'Oktober',  11 => 'November',  12 => 'Desember',
+            1  => 'Januari',
+            2  => 'Februari',
+            3  => 'Maret',
+            4  => 'April',
+            5  => 'Mei',
+            6  => 'Juni',
+            7  => 'Juli',
+            8  => 'Agustus',
+            9  => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember',
         ][$bulan] ?? '';
     }
 
