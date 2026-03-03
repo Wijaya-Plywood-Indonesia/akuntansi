@@ -68,7 +68,7 @@ class AdminPanelProvider extends PanelProvider
                     ->collapsed(),
 
                 NavigationGroup::make('Jurnal')
-                    ->icon('heroicon-o-book-open')
+                    // ->icon('heroicon-o-book-open')
                     ->collapsed(),
             ])
         ;
