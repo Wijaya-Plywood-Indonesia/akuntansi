@@ -27,7 +27,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     use InteractsWithForms;
 
     protected string $view = 'filament.pages.jurnal-umum';
-    protected static UnitEnum|string|null $navigationGroup = 'jurnal';
+    protected static UnitEnum|string|null $navigationGroup = 'Jurnal';
     protected static ?string $title = 'Jurnal Umum';
 
     public $tgl, $jurnal, $no_akun, $nama_akun, $keterangan, $harga, $banyak = 1, $map = 'D';
@@ -134,8 +134,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         }
         $allForTotals = $totalsQuery->get(['map', 'banyak', 'harga']);
 
-        $totalDebitDB  = $allForTotals->whereIn('map', ['D', 'debit', 'd', 'Debit'])->sum(fn($j) => $j->banyak * $j->harga);
-        $totalKreditDB = $allForTotals->whereIn('map', ['K', 'kredit', 'k', 'Kredit'])->sum(fn($j) => $j->banyak * $j->harga);
+        $totalDebitDB  = $allForTotals->filter(fn($j) => strtolower($j->map) === 'd')->sum(fn($j) => $j->banyak * $j->harga);
+        $totalKreditDB = $allForTotals->filter(fn($j) => strtolower($j->map) === 'k')->sum(fn($j) => $j->banyak * $j->harga);
         $isHistoryBalanced = abs($totalDebitDB - $totalKreditDB) < 0.01;
         $selisihDB = abs($totalDebitDB - $totalKreditDB);
 
@@ -193,8 +193,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         if (empty($this->items)) return false;
 
         $data        = collect($this->items);
-        $totalDebit  = (float) $data->whereIn('map', ['D', 'debit', 'd'])->sum('total');
-        $totalKredit = (float) $data->whereIn('map', ['K', 'kredit', 'k'])->sum('total');
+        $totalDebit  = (float) $data->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
+        $totalKredit = (float) $data->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
 
         return abs($totalDebit - $totalKredit) < 0.01;
     }
@@ -206,8 +206,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         }
 
         $data        = collect($this->items);
-        $totalDebit  = (float) $data->whereIn('map', ['D', 'debit', 'd'])->sum('total');
-        $totalKredit = (float) $data->whereIn('map', ['K', 'kredit', 'k'])->sum('total');
+        $totalDebit  = (float) $data->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
+        $totalKredit = (float) $data->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
         $selisih     = $totalDebit - $totalKredit;
 
         if (abs($selisih) > 0.01) {
