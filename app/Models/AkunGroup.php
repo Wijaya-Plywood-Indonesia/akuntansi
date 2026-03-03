@@ -16,6 +16,7 @@ class AkunGroup extends Model
         'parent_id',
         'order',
         'hidden',
+        'tipe',
     ];
 
     protected $casts = [
