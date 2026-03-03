@@ -348,8 +348,8 @@
                     <div class="space-y-3 pt-1">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider block text-center">Tipe Mutasi</label>
                         <div class="grid grid-cols-2 gap-3">
-                            <button type="button" @click="map = 'D'" :class="map === 'D' ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'" class="py-2.5 rounded-[4px] border font-black text-xs tracking-widest transition-none">DEBIT</button>
-                            <button type="button" @click="map = 'K'" :class="map === 'K' ? 'bg-rose-600 border-rose-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'" class="py-2.5 rounded-[4px] border font-black text-xs tracking-widest transition-none">KREDIT</button>
+                            <button type="button" @click="map = 'd'" :class="map === 'd' ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'" class="py-2.5 rounded-[4px] border font-black text-xs tracking-widest transition-none">DEBIT</button>
+                            <button type="button" @click="map = 'k'" :class="map === 'k' ? 'bg-rose-600 border-rose-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'" class="py-2.5 rounded-[4px] border font-black text-xs tracking-widest transition-none">KREDIT</button>
                         </div>
                     </div>
                 </div>
