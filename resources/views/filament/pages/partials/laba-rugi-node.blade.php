@@ -94,10 +94,76 @@
     @endif
 
 {{-- ================================================================
-     ANAK AKUN
+     ANAK AKUN — collapsible jika punya sub
 ================================================================ --}}
 @elseif($isAnak)
 
+    @if($hasChildren)
+    {{-- AnakAkun DENGAN sub: bisa collapse --}}
+    <tbody x-data="{ open: true }">
+        {{-- Header AnakAkun — bisa diklik --}}
+        <tr class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors"
+            @click="open = !open">
+            <td class="py-2.5 text-xs font-mono text-gray-400 dark:text-gray-500"
+                style="padding-left:{{ $paddingLeft }}px; padding-right:16px;">
+                <span class="inline-flex items-center gap-1">
+                    {{-- Arrow icon --}}
+                    <svg x-show="open"
+                        class="w-3 h-3 text-gray-400 flex-shrink-0"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <svg x-show="!open"
+                        class="w-3 h-3 text-gray-400 flex-shrink-0"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                    </svg>
+                    {{ $node['kode'] }}
+                </span>
+            </td>
+            <td class="py-2.5 pr-6 text-sm font-medium text-gray-700 dark:text-gray-300"
+                style="padding-left:{{ $paddingLeft }}px">
+                {{ $node['nama'] }}
+            </td>
+            <td class="py-2.5 px-6 text-right text-sm">
+                {{-- Saat collapsed: tampilkan total. Saat open: kosong (sub akan tampil) --}}
+                <span x-show="!open"
+                    class="{{ $nilai != 0 ? 'text-gray-800 dark:text-gray-100 font-medium' : 'text-gray-400' }}">
+                    {{ $nilai != 0 ? $this->formatRupiah($nilai) : '–' }}
+                </span>
+                <span x-show="open" class="text-gray-300 dark:text-gray-600 text-xs">▾</span>
+            </td>
+        </tr>
+
+        {{-- Sub rows — collapsible --}}
+        <tr x-show="open" x-collapse style="display: none;">
+            <td colspan="3" class="p-0">
+                <table class="w-full">
+                    @foreach($node['children'] as $child)
+                        @include('filament.pages.partials.laba-rugi-node', [
+                            'node'  => $child,
+                            'depth' => $depth + 1,
+                        ])
+                    @endforeach
+                    {{-- Subtotal AnakAkun --}}
+                    <tr class="border-t border-dashed border-gray-200 dark:border-gray-700">
+                        <td style="padding-left:{{ ($depth+1)*20+24 }}px; padding-right:16px;"></td>
+                        <td class="py-2 pr-6 text-xs italic font-semibold text-gray-500 dark:text-gray-400"
+                            style="padding-left:{{ ($depth+1)*20+24 }}px">
+                            Jumlah {{ $node['nama'] }}
+                        </td>
+                        <td class="py-2 px-6 text-right text-sm font-semibold
+                            {{ $nilai >= 0 ? 'text-gray-700 dark:text-gray-200' : 'text-red-500' }}">
+                            {{ $this->formatRupiah($nilai) }}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </tbody>
+
+    @else
+    {{-- AnakAkun TANPA sub: plain row biasa --}}
     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
         <td class="py-2.5 text-xs font-mono text-gray-400 dark:text-gray-500"
             style="padding-left:{{ $paddingLeft }}px; padding-right:16px;">
@@ -114,26 +180,6 @@
             @endif
         </td>
     </tr>
-
-    {{-- SubAnakAkun jika ada --}}
-    @if($hasChildren)
-        @foreach($node['children'] as $child)
-            @include('filament.pages.partials.laba-rugi-node', [
-                'node'  => $child,
-                'depth' => $depth + 1,
-            ])
-        @endforeach
-        <tr class="border-t border-dashed border-gray-200 dark:border-gray-700">
-            <td style="padding-left:{{ ($depth+1)*20+24 }}px; padding-right:16px;"></td>
-            <td class="py-2 pr-6 text-xs italic font-semibold text-gray-500 dark:text-gray-400"
-                style="padding-left:{{ ($depth+1)*20+24 }}px">
-                Jumlah {{ $node['nama'] }}
-            </td>
-            <td class="py-2 px-6 text-right text-sm font-semibold
-                {{ $nilai >= 0 ? 'text-gray-700 dark:text-gray-200' : 'text-red-500' }}">
-                {{ $this->formatRupiah($nilai) }}
-            </td>
-        </tr>
     @endif
 
 {{-- ================================================================

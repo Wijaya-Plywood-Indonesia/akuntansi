@@ -18,7 +18,6 @@ class LabaRugi extends Page
 {
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
-    // protected static ?string $navigationLabel = 'Laba Rugi';
     protected static ?string $title = 'Laporan Laba Rugi';
 
     protected string $view = 'filament.pages.laba-rugi';
@@ -28,23 +27,10 @@ class LabaRugi extends Page
     public ?int $bulan_sampai = null;
     public array $data        = [];
 
-    // Hasil build — array siap render
     public array $laporanData  = [];
-    public array $ringkasan    = [];   // subtotal per tipe untuk rumus
+    public array $ringkasan    = [];
     public bool  $sudahFilter  = false;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Tipe → apakah nilai POSITIF atau NEGATIF dalam laporan
-    |--------------------------------------------------------------------------
-    | pendapatan      : + (menambah laba)
-    | pendapatan_lain : + (menambah laba)
-    | hpp             : - (mengurangi laba)
-    | beban_produksi  : - (mengurangi laba, bagian dari HPP)
-    | beban_usaha     : - (mengurangi laba)
-    | beban_lain      : - (mengurangi laba)
-    | lainnya         : ditampilkan apa adanya, tidak masuk rumus
-    */
     private const TIPE_POSITIF = ['pendapatan', 'pendapatan_lain'];
     private const TIPE_NEGATIF = ['hpp', 'beban_produksi', 'beban_usaha', 'beban_lain'];
 
@@ -56,8 +42,9 @@ class LabaRugi extends Page
 
     public function mount(): void
     {
+        // FIX: default bulan sekarang (bukan Januari)
         $this->tahun        = now()->year;
-        $this->bulan_dari   = 1;
+        $this->bulan_dari   = now()->month;
         $this->bulan_sampai = now()->month;
 
         $this->schema->fill([
@@ -125,9 +112,10 @@ class LabaRugi extends Page
             'data.bulan_sampai' => 'required|integer|min:1|max:12',
         ]);
 
-        $this->tahun        = (int) $this->data['tahun'];
-        $this->bulan_dari   = (int) $this->data['bulan_dari'];
-        $this->bulan_sampai = (int) $this->data['bulan_sampai'];
+        // FIX: cast eksplisit ke int, jaga-jaga kalau Filament return string
+        $this->tahun        = (int) ($this->data['tahun'] ?? now()->year);
+        $this->bulan_dari   = (int) ($this->data['bulan_dari'] ?? now()->month);
+        $this->bulan_sampai = (int) ($this->data['bulan_sampai'] ?? now()->month);
 
         $this->generateLaporan();
     }
@@ -142,13 +130,11 @@ class LabaRugi extends Page
     {
         $saldoMap = $this->getSaldoMap();
 
-        // Cari parent root bernama "Laba Rugi" (case-insensitive)
         $rootLabaRugi = AkunGroup::whereNull('parent_id')
             ->whereRaw('LOWER(nama) = ?', ['laba rugi'])
             ->first();
 
         if (!$rootLabaRugi) {
-            // Fallback: coba cari yang mengandung kata "laba rugi"
             $rootLabaRugi = AkunGroup::whereNull('parent_id')
                 ->whereRaw('LOWER(nama) LIKE ?', ['%laba rugi%'])
                 ->first();
@@ -161,7 +147,6 @@ class LabaRugi extends Page
             return;
         }
 
-        // Ambil child groups dari root "Laba Rugi", urut by order
         $childGroups = AkunGroup::where('parent_id', $rootLabaRugi->id)
             ->visible()
             ->ordered()
@@ -171,9 +156,8 @@ class LabaRugi extends Page
             ])
             ->get();
 
-        // Build setiap section
-        $sections   = [];
-        $ringkasan  = [
+        $sections  = [];
+        $ringkasan = [
             'pendapatan'      => 0,
             'hpp'             => 0,
             'beban_produksi'  => 0,
@@ -184,41 +168,37 @@ class LabaRugi extends Page
         ];
 
         foreach ($childGroups as $group) {
-            $node = $this->buildGroupNode($group, $saldoMap);
+            $node       = $this->buildGroupNode($group, $saldoMap);
             $sections[] = $node;
 
-            // Akumulasi ringkasan per tipe
             $tipe = $group->tipe ?? 'lainnya';
             if (array_key_exists($tipe, $ringkasan)) {
                 $ringkasan[$tipe] += $node['total_nilai'];
             }
         }
 
-        // Hitung subtotal rumus
-        $totalPendapatan = $ringkasan['pendapatan'];
-        $totalHPP        = $ringkasan['hpp'] + $ringkasan['beban_produksi'];
-        $labaKotor       = $totalPendapatan - $totalHPP;
-        $totalBebanUsaha = $ringkasan['beban_usaha'];
-        $labaUsaha       = $labaKotor - $totalBebanUsaha;
-        $pendapatanLain  = $ringkasan['pendapatan_lain'];
-        $bebanLain       = $ringkasan['beban_lain'];
+        $totalPendapatan  = $ringkasan['pendapatan'];
+        $totalHPP         = $ringkasan['hpp'] + $ringkasan['beban_produksi'];
+        $labaKotor        = $totalPendapatan - $totalHPP;
+        $totalBebanUsaha  = $ringkasan['beban_usaha'];
+        $labaUsaha        = $labaKotor - $totalBebanUsaha;
+        $pendapatanLain   = $ringkasan['pendapatan_lain'];
+        $bebanLain        = $ringkasan['beban_lain'];
         $labaSebelumPajak = $labaUsaha + $pendapatanLain - $bebanLain;
 
         $this->laporanData = $sections;
         $this->ringkasan   = [
-            'total_pendapatan'    => $totalPendapatan,
-            'total_hpp'           => $totalHPP,
-            'laba_kotor'          => $labaKotor,
-            'total_beban_usaha'   => $totalBebanUsaha,
-            'laba_usaha'          => $labaUsaha,
-            'pendapatan_lain'     => $pendapatanLain,
-            'beban_lain'          => $bebanLain,
-            'laba_sebelum_pajak'  => $labaSebelumPajak,
-
-            // Flag untuk blade: tipe mana yang sudah melewati titik subtotal
-            'ada_hpp'             => $totalHPP != 0 || $ringkasan['hpp'] != 0 || $ringkasan['beban_produksi'] != 0,
-            'ada_beban_usaha'     => $totalBebanUsaha != 0,
-            'ada_lain'            => ($pendapatanLain + $bebanLain) != 0,
+            'total_pendapatan'   => $totalPendapatan,
+            'total_hpp'          => $totalHPP,
+            'laba_kotor'         => $labaKotor,
+            'total_beban_usaha'  => $totalBebanUsaha,
+            'laba_usaha'         => $labaUsaha,
+            'pendapatan_lain'    => $pendapatanLain,
+            'beban_lain'         => $bebanLain,
+            'laba_sebelum_pajak' => $labaSebelumPajak,
+            'ada_hpp'            => $totalHPP != 0 || $ringkasan['hpp'] != 0 || $ringkasan['beban_produksi'] != 0,
+            'ada_beban_usaha'    => $totalBebanUsaha != 0,
+            'ada_lain'           => ($pendapatanLain + $bebanLain) != 0,
         ];
         $this->sudahFilter = true;
     }
@@ -306,14 +286,19 @@ class LabaRugi extends Page
 
     private function getSaldoMap(): array
     {
-        $rows = BukuBesar::where('tahun', $this->tahun)
-            ->whereBetween('bulan', [$this->bulan_dari, $this->bulan_sampai])
+        // FIX: pastikan tahun & bulan sudah berupa int sebelum query
+        $tahun       = (int) $this->tahun;
+        $bulanDari   = (int) $this->bulan_dari;
+        $bulanSampai = (int) $this->bulan_sampai;
+
+        $rows = BukuBesar::where('tahun', $tahun)
+            ->whereBetween('bulan', [$bulanDari, $bulanSampai])
             ->get(['no_akun', 'saldo']);
 
         $map = [];
         foreach ($rows as $row) {
-            $kode        = $row->no_akun;
-            $map[$kode]  = ($map[$kode] ?? 0) + (float) $row->saldo;
+            $kode       = $row->no_akun;
+            $map[$kode] = ($map[$kode] ?? 0) + (float) $row->saldo;
         }
 
         return $map;
@@ -340,28 +325,21 @@ class LabaRugi extends Page
         return 'Rp ' . number_format(abs($nilai), 0, ',', '.');
     }
 
-    /**
-     * Apakah section ini adalah titik di mana subtotal perlu disisipkan?
-     * Dipanggil dari blade setelah render setiap section.
-     */
     public function getSubtotalSetelahTipe(string $tipe): ?array
     {
         $r = $this->ringkasan;
 
         return match($tipe) {
-            // Setelah semua grup HPP/beban_produksi → tampilkan Laba Kotor
             'hpp', 'beban_produksi' => [
                 'label' => 'Laba Kotor',
                 'nilai' => $r['laba_kotor'],
                 'style' => 'laba_kotor',
             ],
-            // Setelah semua grup beban_usaha → tampilkan Laba Usaha
             'beban_usaha' => [
                 'label' => 'Laba (Rugi) Usaha',
                 'nilai' => $r['laba_usaha'],
                 'style' => 'laba_usaha',
             ],
-            // Setelah beban_lain → tampilkan Laba Sebelum Pajak
             'beban_lain' => [
                 'label' => 'Laba (Rugi) Sebelum Pajak',
                 'nilai' => $r['laba_sebelum_pajak'],
