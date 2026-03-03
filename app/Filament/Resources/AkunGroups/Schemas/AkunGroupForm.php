@@ -27,6 +27,18 @@ class AkunGroupForm
                 TextInput::make('order')
                     ->required()
                     ->numeric(),
+                Select::make('tipe')
+                    ->label('Tipe (untuk Laba Rugi)')
+                    ->placeholder('Kosongkan jika hanya grouping')
+                    ->options([
+                        'pendapatan'      => 'Pendapatan',
+                        'hpp'             => 'Harga Pokok Penjualan (HPP)',
+                        'beban_produksi'  => 'Beban Produksi',
+                        'beban_usaha'     => 'Beban Usaha',
+                        'pendapatan_lain' => 'Pendapatan Lain-lain',
+                        'beban_lain'      => 'Beban Lain-lain',
+                    ])
+                    ->nullable(),
 
                 Toggle::make('hidden')
                     ->label('Sembunyikan')
