@@ -30,7 +30,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     protected static UnitEnum|string|null $navigationGroup = 'Jurnal';
     protected static ?string $title = 'Jurnal Umum';
 
-    public $tgl, $jurnal, $no_akun, $nama_akun, $keterangan, $harga, $banyak = 1, $map = 'D';
+    public $tgl, $jurnal, $no_akun, $nama_akun, $keterangan, $harga, $banyak = 1, $map = 'd';
     public $items = [];
 
     public bool $wasBalanced = false;
@@ -39,23 +39,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // FILTER & PAGINATION PROPERTIES
     // ─────────────────────────────────────────────────────────────
 
-    /** Filter tanggal dari (input sementara, belum diapply) */
     public $filterTglDariInput  = '';
-
-    /** Filter tanggal sampai (input sementara, belum diapply) */
     public $filterTglSampaiInput = '';
-
-    /** Filter yang sudah diapply — ini yang dipakai query */
     public $filterTglDari  = '';
     public $filterTglSampai = '';
-
-    /** Jumlah baris yang ditampilkan saat ini (bertambah tiap load more) */
     public int $perPage = 50;
-
-    /** Apakah masih ada data yang bisa diload */
     public bool $hasMorePages = true;
-
-    /** Apakah sedang loading (untuk animasi) */
     public bool $isLoadingMore = false;
 
     // ─────────────────────────────────────────────────────────────
@@ -65,24 +54,45 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         $this->tgl    = session()->get('jurnal_draft_tgl', now()->format('Y-m-d'));
         $this->items  = session()->get('jurnal_draft_items', []);
-        $this->map    = session()->get('jurnal_draft_map', 'D');
+        $this->map    = session()->get('jurnal_draft_map', 'd');
         $this->banyak = session()->get('jurnal_draft_banyak', 1);
         $this->harga  = session()->get('jurnal_draft_harga', '');
 
-        if (session()->has('jurnal_draft_kode')) {
-            $this->jurnal = session()->get('jurnal_draft_kode');
-        } else {
-            $this->generateKodeJurnal();
-        }
+        $this->syncJurnalNumber();
+        $this->updateAutoBalanceSuggestion(false);
+    }
 
-        $this->updateAutoBalanceSuggestion();
+    /**
+     * Logika sinkronisasi nomor jurnal secara cerdas.
+     * Jika draf kosong atau tidak balance, gunakan nomor jurnal yang sedang dikerjakan.
+     * Jika draf sudah balance, siapkan nomor jurnal berikutnya.
+     */
+    protected function syncJurnalNumber()
+    {
+        if (empty($this->items)) {
+            $last = JurnalModel::max('jurnal');
+            $this->jurnal = $last ? $last + 1 : 1;
+        } else {
+            $draft = collect($this->items);
+            $totalDebit  = (float) $draft->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
+            $totalKredit = (float) $draft->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
+            $isBalanced = abs($totalDebit - $totalKredit) < 0.01;
+
+            if ($isBalanced) {
+                // Jika balance, nomor jurnal untuk input selanjutnya adalah Max di draf + 1
+                $this->jurnal = (int) $draft->max('jurnal') + 1;
+            } else {
+                // Jika belum balance, tetap gunakan nomor jurnal yang ada di draf
+                $this->jurnal = $draft->first()['jurnal'];
+            }
+        }
+        session()->put('jurnal_draft_kode', $this->jurnal);
     }
 
     protected function generateKodeJurnal()
     {
-        $last         = JurnalModel::max('jurnal');
-        $this->jurnal = $last ? $last + 1 : 1;
-        session()->put('jurnal_draft_kode', $this->jurnal);
+        // Dialihkan ke syncJurnalNumber untuk konsistensi draf
+        $this->syncJurnalNumber();
     }
 
     private function persistDraftState(): void
@@ -95,15 +105,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
         session()->put('jurnal_draft_banyak', $this->banyak);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // VIEW DATA — query dengan filter & limit
-    // ─────────────────────────────────────────────────────────────
     protected function getViewData(): array
     {
         $sub  = SubAnakAkun::selectRaw("kode_sub_anak_akun as no, nama_sub_anak_akun as nama");
         $anak = AnakAkun::selectRaw("kode_anak_akun as no, nama_anak_akun as nama");
 
-        // Query history dengan filter tanggal (hanya jika filter sudah diapply)
         $query = JurnalModel::latest('id');
 
         if (!empty($this->filterTglDari)) {
@@ -114,17 +120,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
             $query->whereDate('tgl', '<=', $this->filterTglSampai);
         }
 
-        // Ambil perPage + 1 untuk deteksi apakah masih ada data berikutnya
         $data = $query->limit($this->perPage + 1)->get();
-
-        // Cek apakah masih ada halaman berikutnya
         $this->hasMorePages = $data->count() > $this->perPage;
-
-        // Potong ke perPage saja untuk ditampilkan
         $historyJurnals = $data->take($this->perPage);
 
-        // ── Total dari SEMUA data sesuai filter (bukan hanya perPage) ──
-        // Query ulang tanpa limit untuk akurasi balance check akuntan
         $totalsQuery = JurnalModel::query();
         if (!empty($this->filterTglDari)) {
             $totalsQuery->whereDate('tgl', '>=', $this->filterTglDari);
@@ -149,10 +148,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
         ];
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // APPLY FILTER — dipanggil saat tombol Apply diklik
-    // Reset perPage ke 50 agar mulai dari awal
-    // ─────────────────────────────────────────────────────────────
     public function applyFilter(): void
     {
         $this->filterTglDari   = $this->filterTglDariInput;
@@ -161,9 +156,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->hasMorePages    = true;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // RESET FILTER
-    // ─────────────────────────────────────────────────────────────
     public function resetFilter(): void
     {
         $this->filterTglDariInput   = '';
@@ -174,19 +166,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->hasMorePages         = true;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // LOAD MORE — infinite scroll, tambah 50 baris
-    // ─────────────────────────────────────────────────────────────
     public function loadMore(): void
     {
         if (!$this->hasMorePages) return;
-
         $this->perPage += 50;
     }
-
-    // ─────────────────────────────────────────────────────────────
-    // SEMUA METHOD LAMA TIDAK BERUBAH
-    // ─────────────────────────────────────────────────────────────
 
     protected function isDraftBalanced(): bool
     {
@@ -199,7 +183,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
         return abs($totalDebit - $totalKredit) < 0.01;
     }
 
-    private function updateAutoBalanceSuggestion()
+    /**
+     * Logic Auto-Balance Fleksibel
+     * @param bool $suggestMap Jika true, sistem akan menyarankan posisi (D/K) penyeimbang.
+     */
+    private function updateAutoBalanceSuggestion(bool $suggestMap = true)
     {
         if (empty($this->items)) {
             return;
@@ -211,10 +199,16 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $selisih     = $totalDebit - $totalKredit;
 
         if (abs($selisih) > 0.01) {
+            // Isi otomatis harga dengan nilai selisih
             $this->harga  = abs($selisih);
-            $this->map    = ($selisih > 0) ? 'K' : 'D';
             $this->banyak = 1;
+
+            // Berikan saran posisi HANYA JIKA diminta (setelah addItem atau saat pilih akun pertama kali)
+            if ($suggestMap) {
+                $this->map = ($selisih > 0) ? 'k' : 'd';
+            }
         } else {
+            // Jika sudah balance, kosongkan harga saran
             $this->harga  = '';
             $this->banyak = 1;
         }
@@ -233,7 +227,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ?? AnakAkun::where('kode_anak_akun', $value)->first()?->nama_anak_akun
             ?? '';
 
-        $this->updateAutoBalanceSuggestion();
+        // Saat pilih akun, hitung selisih harga tapi jangan paksa pindah posisi Map.
+        // User tetap bisa memilih sendiri mau input Debit atau Kredit lagi.
+        $this->updateAutoBalanceSuggestion(false);
         $this->persistDraftState();
     }
 
@@ -253,21 +249,22 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'banyak'     => (float) $this->banyak,
             'harga'      => (float) $this->harga,
             'total'      => (float) $this->banyak * (float) $this->harga,
-            'map'        => $this->map,
+            'map'        => strtolower($this->map),
         ];
 
+        // Cek apakah draf sekarang sudah balance
         if ($this->isDraftBalanced()) {
             $this->reset(['no_akun', 'nama_akun', 'keterangan', 'banyak', 'harga']);
             $this->banyak      = 1;
-            $this->map         = 'D';
+            $this->map         = 'd';
             $this->wasBalanced = true;
-            $this->jurnal      = (int) $this->jurnal + 1;
+            // Update nomor jurnal ke angka baru karena voucher sebelumnya sudah selesai (balance)
+            $this->syncJurnalNumber();
         } else {
+            // Belum balance: bersihkan input field akun saja, pertahankan jurnal number
             $this->reset(['no_akun', 'nama_akun', 'keterangan']);
-            $this->harga  = '';
-            $this->banyak = 1;
-            $this->map    = 'D';
-            $this->updateAutoBalanceSuggestion();
+            // Sarankan posisi Map penyeimbang untuk baris berikutnya
+            $this->updateAutoBalanceSuggestion(true);
         }
 
         $this->persistDraftState();
@@ -277,7 +274,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         if (isset($this->items[$index])) {
             array_splice($this->items, $index, 1);
-            $this->updateAutoBalanceSuggestion();
+
+            // Setelah penghapusan, cek ulang nomor jurnal.
+            // Jika draf menjadi unbalanced, nomor jurnal harus kembali ke nomor yang ada di draf.
+            $this->syncJurnalNumber();
+            $this->updateAutoBalanceSuggestion(true);
             $this->persistDraftState();
         }
     }
@@ -309,13 +310,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->wasBalanced = false;
         $this->reset(['no_akun', 'nama_akun', 'keterangan', 'banyak', 'harga']);
         $this->banyak = 1;
-        $this->map    = 'D';
+        $this->map    = 'd';
 
-        // Reset pagination setelah posting agar data baru langsung muncul
         $this->perPage      = 50;
         $this->hasMorePages = true;
 
-        $this->generateKodeJurnal();
+        // Reset ke nomor jurnal terbaru di DB
+        $this->syncJurnalNumber();
 
         Notification::make()->title('Jurnal Berhasil Diposting')->success()->send();
     }
@@ -324,8 +325,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         $this->reset(['no_akun', 'nama_akun', 'keterangan', 'banyak', 'harga']);
         $this->banyak = 1;
-        $this->map    = 'D';
-        $this->updateAutoBalanceSuggestion();
+        $this->map    = 'd';
+        $this->updateAutoBalanceSuggestion(false);
         $this->persistDraftState();
     }
 
@@ -336,15 +337,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ->modalSubmitActionLabel('Simpan Perubahan')
             ->form([
                 Grid::make(2)->schema([
-                    DatePicker::make('tgl')
-                        ->label('Tanggal')
-                        ->required()
-                        ->native(false),
-
-                    TextInput::make('jurnal')
-                        ->label('No. Jurnal')
-                        ->required(),
-
+                    DatePicker::make('tgl')->label('Tanggal')->required()->native(false),
+                    TextInput::make('jurnal')->label('No. Jurnal')->required(),
                     Select::make('no_akun')
                         ->label('Cari Nomor Akun')
                         ->required()
@@ -365,30 +359,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
                                 ?? '';
                             $set('nama_akun', $name);
                         }),
-
-                    TextInput::make('nama_akun')
-                        ->label('Nama Akun')
-                        ->required()
-                        ->readOnly(),
-
-                    TextInput::make('keterangan')
-                        ->label('Keterangan')
-                        ->columnSpanFull(),
-
-                    TextInput::make('banyak')
-                        ->label('Kuantitas')
-                        ->numeric()
-                        ->required(),
-
-                    TextInput::make('harga')
-                        ->label('Harga Satuan')
-                        ->numeric()
-                        ->prefix('Rp')
-                        ->required(),
-
+                    TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
+                    TextInput::make('keterangan')->label('Keterangan')->columnSpanFull(),
+                    TextInput::make('banyak')->label('Kuantitas')->numeric()->required(),
+                    TextInput::make('harga')->label('Harga Satuan')->numeric()->prefix('Rp')->required(),
                     Select::make('map')
                         ->label('Posisi')
-                        ->options(['D' => 'Debit', 'K' => 'Kredit'])
+                        ->options(['d' => 'Debit', 'k' => 'Kredit'])
                         ->required(),
                 ])
             ])
