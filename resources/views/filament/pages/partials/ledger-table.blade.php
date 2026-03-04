@@ -4,6 +4,7 @@ Vars: $transaksis (Collection), $saldoAwal (numeric)
 --}}
 
 @php
+$saldoNormal = $saldoNormal ?? 'debit';
 $saldoBerjalan = $saldoAwal;
 $totalDebit = 0;
 $totalKredit = 0;
@@ -268,13 +269,28 @@ $tglAwalan = \Carbon\Carbon::parse($this->filterBulan)
             }
 
             $isDebit = strtolower($trx->map) === 'd';
-            if ($isDebit) {
-            $saldoBerjalan += $nominal;
-            $totalDebit += $nominal;
-            } else {
-            $saldoBerjalan -= $nominal;
-            $totalKredit += $nominal;
-            }
+
+if ($saldoNormal === 'kredit') {
+
+    if ($isDebit) {
+        $saldoBerjalan -= $nominal;
+        $totalDebit += $nominal;
+    } else {
+        $saldoBerjalan += $nominal;
+        $totalKredit += $nominal;
+    }
+
+} else {
+
+    if ($isDebit) {
+        $saldoBerjalan += $nominal;
+        $totalDebit += $nominal;
+    } else {
+        $saldoBerjalan -= $nominal;
+        $totalKredit += $nominal;
+    }
+
+}
             @endphp
             <tr>
                 <td class="bb-tgl">{{ \Carbon\Carbon::parse($trx->tgl)->format('d/m/Y') }}</td>

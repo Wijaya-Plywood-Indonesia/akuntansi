@@ -137,31 +137,42 @@ class BukuBesar extends Page
 
     // Perbaikan Saldo Akun (Mendukung rekursif untuk Induk)
     public function getTotalRecursive($akun)
-    {
-        $total = 0;
+{
+    $total = 0;
 
-        $kode =
-            $akun->kode_anak_akun
-            ?? $akun->kode_sub_anak_akun
-            ?? null;
+    $kode =
+        $akun->kode_anak_akun
+        ?? $akun->kode_sub_anak_akun
+        ?? null;
 
-        if ($kode) {
-            $total += $this->saldoAwalMap[$kode] ?? 0;
-            $total += $this->saldoMap[$kode] ?? 0;
+    if ($kode) {
+
+        $saldoAwal = $this->saldoAwalMap[$kode] ?? 0;
+        $mutasi    = $this->saldoMap[$kode] ?? 0;
+
+        $saldoNormal = strtolower($akun->saldo_normal ?? 'debit');
+
+        if ($saldoNormal === 'kredit') {
+            // balik logika
+            $total += $saldoAwal - $mutasi;
+        } else {
+            $total += $saldoAwal + $mutasi;
         }
-
-        if (isset($akun->children)) {
-            foreach ($akun->children as $child) {
-                $total += $this->getTotalRecursive($child);
-            }
-        }
-
-        if (isset($akun->subAnakAkuns)) {
-            foreach ($akun->subAnakAkuns as $sub) {
-                $total += $this->getTotalRecursive($sub);
-            }
-        }
-
-        return $total;
     }
+
+    // Rekursif children
+    if (isset($akun->children)) {
+        foreach ($akun->children as $child) {
+            $total += $this->getTotalRecursive($child);
+        }
+    }
+
+    if (isset($akun->subAnakAkuns)) {
+        foreach ($akun->subAnakAkuns as $sub) {
+            $total += $this->getTotalRecursive($sub);
+        }
+    }
+
+    return $total;
+}
 }

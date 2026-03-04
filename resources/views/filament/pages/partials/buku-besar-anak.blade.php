@@ -57,9 +57,10 @@ $saldoClass = $saldoAkhir < 0 ? 'neg' : '';
     {{-- Ledger table --}}
     @if($jumlahTrx > 0 || $saldoAwal != 0)
         @include('filament.pages.partials.ledger-table', [
-            'transaksis' => $transaksis,
-            'saldoAwal'  => $saldoAwal,
-        ])
+    'transaksis'   => $transaksis,
+    'saldoAwal'    => $saldoAwal,
+    'saldoNormal'  => strtolower($akun->saldo_normal ?? 'debit'),
+])
     @endif
 
 </div>

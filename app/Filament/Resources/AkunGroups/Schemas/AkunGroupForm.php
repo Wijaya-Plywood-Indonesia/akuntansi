@@ -32,6 +32,7 @@ class AkunGroupForm
                     ->placeholder('Kosongkan jika hanya grouping')
                     ->options([
                         'pendapatan'      => 'Pendapatan',
+                        'retur_potongan'  => 'Retur & Potongan Penjualan',
                         'hpp'             => 'Harga Pokok Penjualan (HPP)',
                         'beban_produksi'  => 'Beban Produksi',
                         'beban_usaha'     => 'Beban Usaha',
