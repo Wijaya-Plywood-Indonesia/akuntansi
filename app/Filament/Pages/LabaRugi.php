@@ -17,7 +17,6 @@ use UnitEnum;
 
 class LabaRugi extends Page
 {
-    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
     protected static ?string $title = 'Laporan Laba Rugi';
 
