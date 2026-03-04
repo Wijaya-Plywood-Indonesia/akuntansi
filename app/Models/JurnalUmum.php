@@ -14,9 +14,14 @@ class JurnalUmum extends Model
         'jurnal',
         'no_akun',
         'nama_akun',
-        'keterangan',
+        'nama',
         'banyak',
+        'mm',
+        'm3',
         'harga',
+        'keterangan',
+        'hit_kbk',
+        'no-dokumen',
         'map'
     ];
 

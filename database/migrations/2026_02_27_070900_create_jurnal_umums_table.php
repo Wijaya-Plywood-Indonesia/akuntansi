@@ -20,10 +20,19 @@ return new class extends Migration
             $table->string('no_akun');
             $table->string('nama_akun')->nullable();
             $table->string('keterangan')->nullable();
-            $table->decimal('banyak', 15, 4)->nullable()->default(1);
+            // Revisi
+            $table->integer('banyak')->nullable()->default(1);
+            // Tambahan
+            $table->decimal('m3', 15, 4)->nullable();
             $table->decimal('harga', 20, 2)->nullable();
             $table->string('map', 5)->nullable();
-            $table->timestamps();
+
+            // Tambahan form 
+            $table->string('no-dokumen')->nullable();
+            $table->string('nama')->nullable();
+            $table->integer('mm')->nullable();
+            $table->string('hit_kbk', 10)->nullable();
+            $table->$table->timestamps();
         });
     }
 
