@@ -251,10 +251,25 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // ---
     public function addItem(): void
     {
-        $this->validate([
-            'no_akun' => 'required',
-            'harga'   => 'required|numeric|min:0.01',
-        ]);
+        // Validasi manual dengan toast per field agar user tahu persis field mana yang kosong
+        $errors = [];
+
+        if (blank($this->no_akun)) {
+            $errors[] = 'No. Akun wajib dipilih.';
+        }
+        if (blank($this->nama_akun)) {
+            $errors[] = 'Nama Akun belum terisi.';
+        }
+        if (blank($this->harga) || (float) $this->harga < 0.01) {
+            $errors[] = 'Harga wajib diisi (minimal Rp 1).';
+        }
+
+        if (!empty($errors)) {
+            foreach ($errors as $err) {
+                $this->dispatch('toast', type: 'error', title: 'Field Wajib Kosong', msg: $err);
+            }
+            return;
+        }
 
         // Hitung total berdasarkan pilihan hit_kbk:
         // 'banyak'   -> banyak * harga
@@ -338,15 +353,20 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         if (empty($this->items) || !$this->isDraftBalanced()) return;
 
-        DB::transaction(function () {
-            foreach ($this->items as $item) {
-                JurnalModel::create([
-                    ...$item,
-                    'status'     => 'belum sinkron',
-                    'created_by' => Auth::user()->name,
-                ]);
-            }
-        });
+        try {
+            DB::transaction(function () {
+                foreach ($this->items as $item) {
+                    JurnalModel::create([
+                        ...$item,
+                        'status'     => 'belum sinkron',
+                        'created_by' => Auth::user()->name,
+                    ]);
+                }
+            });
+        } catch (\Throwable $e) {
+            $this->dispatch('toast', type: 'error', title: 'Error Sistem', msg: 'Gagal menyimpan jurnal: ' . $e->getMessage());
+            return;
+        }
 
         session()->forget([
             'jurnal_draft_items',

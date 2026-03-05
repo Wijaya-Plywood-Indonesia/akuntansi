@@ -513,6 +513,8 @@
                             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
                             <input type="text" x-model="harga_display"
                                 @input="harga_display = formatRupiah($event.target.value); harga_raw = $event.target.value.replace(/[^0-9]/g, '')"
+                                @blur="harga_raw = $event.target.value.replace(/[^0-9]/g, '')"
+                                @change="harga_raw = $event.target.value.replace(/[^0-9]/g, '')"
                                 placeholder="0"
                                 class="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
                         </div>
@@ -530,7 +532,12 @@
 
                 <div class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-6">
                     <button type="button" wire:click="resetForm" class="px-6 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-none">Batal</button>
-                    <button type="submit" class="px-10 py-2.5 bg-amber-600 dark:bg-amber-700 text-white rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-none flex items-center gap-2 shadow-sm">
+                    <button type="button"
+                        @click="
+                            harga_raw = harga_display.replace(/[^0-9]/g, '');
+                            $nextTick(() => { $wire.addItem(); });
+                        "
+                        class="px-10 py-2.5 bg-amber-600 dark:bg-amber-700 text-white rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-none flex items-center gap-2 shadow-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
@@ -563,8 +570,8 @@
                                 <th class="px-4 py-4 text-center w-[110px]">No Jurnal</th>
                                 <th class="px-4 py-4 text-right w-[110px]">Qty</th>
                                 <th class="px-4 py-4 text-right w-[140px]">Harga</th>
-                                <th class="px-4 py-4 text-right w-[150px] text-emerald-600 bg-emerald-50/10 italic font-black">Debit (Rp)</th>
-                                <th class="px-4 py-4 text-right w-[150px] text-rose-600 bg-rose-50/10 italic font-black">Kredit (Rp)</th>
+                                <th class="px-4 py-4 text-right w-[150px] text-green-400 bg-green-50/10 italic font-black">Debit (Rp)</th>
+                                <th class="px-4 py-4 text-right w-[150px] text-red-400 bg-red-50/10 italic font-black">Kredit (Rp)</th>
                                 <th class="px-4 py-4 w-10"></th>
                             </tr>
                         </thead>
@@ -577,10 +584,10 @@
                                     <td class="px-4 py-4 text-center text-gray-400 font-medium" x-text="row.jurnal"></td>
                                     <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500" x-text="new Intl.NumberFormat('id-ID').format(row.banyak)"></td>
                                     <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono" x-text="new Intl.NumberFormat('id-ID').format(row.harga)"></td>
-                                    <td class="px-4 py-4 text-right font-bold text-emerald-600 bg-emerald-50/5" x-text="row.map.toLowerCase() === 'd' ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
-                                    <td class="px-4 py-4 text-right font-bold text-rose-600 bg-rose-50/5" x-text="row.map.toLowerCase() === 'k' ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
+                                    <td class="px-4 py-4 text-right font-bold text-green-400 bg-green-50/5" x-text="row.map.toLowerCase() === 'd' ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
+                                    <td class="px-4 py-4 text-right font-bold text-red-400 bg-red-50/5" x-text="row.map.toLowerCase() === 'k' ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
                                     <td class="px-4 py-4 text-center">
-                                        <button type="button" @click="$wire.removeItem(i)" class="text-gray-300 hover:text-rose-600 transition-none">
+                                        <button type="button" @click="$wire.removeItem(i)" class="text-gray-300 hover:text-red-600 transition-none">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
@@ -592,8 +599,8 @@
                         <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
                             <tr class="font-black text-[10px] uppercase">
                                 <td colspan="6" class="px-4 py-5 text-right text-gray-400 tracking-widest">Total Mutasi Draft</td>
-                                <td class="px-4 py-5 text-right text-emerald-600 bg-emerald-100/10 text-base" x-text="new Intl.NumberFormat('id-ID').format(totalDebit)"></td>
-                                <td class="px-4 py-5 text-right text-rose-600 bg-rose-100/10 text-base" x-text="new Intl.NumberFormat('id-ID').format(totalKredit)"></td>
+                                <td class="px-4 py-5 text-right text-green-400 bg-green-100/10 text-base" x-text="new Intl.NumberFormat('id-ID').format(totalDebit)"></td>
+                                <td class="px-4 py-5 text-right text-red-400 bg-red-100/10 text-base" x-text="new Intl.NumberFormat('id-ID').format(totalKredit)"></td>
                                 <td></td>
                             </tr>
                         </tfoot>
@@ -782,7 +789,7 @@
                 {{-- Scroll zone — hanya tbody yang scroll, thead sticky di atas --}}
                 <div class="table-body-scroll" x-ref="tableScrollBody">
                     <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1500px]">
-                        <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
+                        <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
                             <tr class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest">
                                 <th class="px-4 py-4 w-[110px]">Tanggal</th>
                                 <th class="px-4 py-4 w-[110px]">No Akun</th>
