@@ -264,15 +264,23 @@
                         @endif
                     </div>
                 </div>
-                @if($induk->anakAkuns->isNotEmpty())
+
+                {{-- ============================================================
+                     PERUBAHAN: whereNull('parent') ditambahkan agar hanya
+                     root nodes (akun tanpa parent) yang dirender di level ini.
+                     Akun yang punya parent (seperti "Kas" dengan parent=1) akan
+                     muncul sebagai children dari induknya, bukan dobel di sini.
+                     ============================================================ --}}
+                @if($induk->anakAkuns->whereNull('parent')->isNotEmpty())
                     <div class="tree-children-wrap" id="children-induk-{{ $induk->id }}">
                         <div class="tree-body">
-                            @foreach($induk->anakAkuns as $anak)
+                            @foreach($induk->anakAkuns->whereNull('parent') as $anak)
                                 @include('filament.components._tree_node', ['node' => $anak, 'level' => 1])
                             @endforeach
                         </div>
                     </div>
                 @endif
+
             </div>
         @endforeach
     </div>
