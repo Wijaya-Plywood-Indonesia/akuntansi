@@ -39,14 +39,14 @@ class BukuBesar extends Page
     }
 
     public function updatedFilterBulan()
-{
-    $this->saldoAwalMap = [];
-    $this->saldoMap = [];
+    {
+        $this->saldoAwalMap = [];
+        $this->saldoMap = [];
 
-    $this->preloadSaldoAwal();
-    $this->preloadSaldo();
-    $this->loadData();
-}
+        $this->preloadSaldoAwal();
+        $this->preloadSaldo();
+        $this->loadData();
+    }
 
     private function preloadSaldoAwal()
     {
@@ -62,7 +62,7 @@ class BukuBesar extends Page
     private function preloadSaldo()
     {
         $start = Carbon::parse($this->filterBulan)->startOfMonth();
-        $end   = Carbon::parse($this->filterBulan)->endOfMonth();
+        $end = Carbon::parse($this->filterBulan)->endOfMonth();
 
         $this->saldoMap = JurnalUmum::whereBetween('tgl', [$start, $end])
             ->selectRaw("
@@ -113,14 +113,14 @@ class BukuBesar extends Page
 
     // Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
     public function getSaldoAwal($kode)
-{
-    return $this->saldoAwalMap[$kode] ?? 0;
-}
+    {
+        return $this->saldoAwalMap[$kode] ?? 0;
+    }
 
     public function getSaldoBulan($kode)
-{
-    return $this->saldoMap[$kode] ?? 0;
-}
+    {
+        return $this->saldoMap[$kode] ?? 0;
+    }
 
     // Transaksi hanya di bulan terpilih
     public function getTransaksiByKode($kode)
@@ -137,42 +137,42 @@ class BukuBesar extends Page
 
     // Perbaikan Saldo Akun (Mendukung rekursif untuk Induk)
     public function getTotalRecursive($akun)
-{
-    $total = 0;
+    {
+        $total = 0;
 
-    $kode =
-        $akun->kode_anak_akun
-        ?? $akun->kode_sub_anak_akun
-        ?? null;
+        $kode =
+            $akun->kode_anak_akun
+            ?? $akun->kode_sub_anak_akun
+            ?? null;
 
-    if ($kode) {
+        if ($kode) {
 
-        $saldoAwal = $this->saldoAwalMap[$kode] ?? 0;
-        $mutasi    = $this->saldoMap[$kode] ?? 0;
+            $saldoAwal = $this->saldoAwalMap[$kode] ?? 0;
+            $mutasi = $this->saldoMap[$kode] ?? 0;
 
-        $saldoNormal = strtolower($akun->saldo_normal ?? 'debit');
+            $saldoNormal = strtolower($akun->saldo_normal ?? 'debit');
 
-        if ($saldoNormal === 'kredit') {
-            // balik logika
-            $total += $saldoAwal - $mutasi;
-        } else {
-            $total += $saldoAwal + $mutasi;
+            if ($saldoNormal === 'kredit') {
+                // balik logika
+                $total += $saldoAwal - $mutasi;
+            } else {
+                $total += $saldoAwal + $mutasi;
+            }
         }
-    }
 
-    // Rekursif children
-    if (isset($akun->children)) {
-        foreach ($akun->children as $child) {
-            $total += $this->getTotalRecursive($child);
+        // Rekursif children
+        if (isset($akun->children)) {
+            foreach ($akun->children as $child) {
+                $total += $this->getTotalRecursive($child);
+            }
         }
-    }
 
-    if (isset($akun->subAnakAkuns)) {
-        foreach ($akun->subAnakAkuns as $sub) {
-            $total += $this->getTotalRecursive($sub);
+        if (isset($akun->subAnakAkuns)) {
+            foreach ($akun->subAnakAkuns as $sub) {
+                $total += $this->getTotalRecursive($sub);
+            }
         }
-    }
 
-    return $total;
-}
+        return $total;
+    }
 }

@@ -3,8 +3,7 @@
 namespace App\Filament\Services;
 
 use App\Models\AkunGroup;
-use App\Models\BukuBesar;
-use App\Models\JurnalUmum;
+use App\Models\BukuBesar as BukuBesarModel;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -13,7 +12,7 @@ class NeracaService
     /**
      * Hitung neraca untuk banyak periode.
      *
-     * @param  array  $periodeList  [ ['tahun'=>2025,'bulan'=>12], ['tahun'=>2026,'bulan'=>1], ... ]
+     * @param  array  $periodeList  [ ['tahun'=>2025,'bulan'=>12], ... ]
      * @return array  Keyed by "YYYY-MM" => [ label, aktiva, pasiva, totalAktiva, totalPasiva ]
      */
     public function hitungMulti(array $periodeList): array
@@ -22,34 +21,21 @@ class NeracaService
             return [];
         }
 
-        // 1. Load struktur COA sekali saja
         $groups = $this->loadGroups();
-
-        // 2. Hitung neraca per periode
         $result = [];
 
         foreach ($periodeList as $periode) {
             $tahun = (int) $periode['tahun'];
             $bulan = (int) $periode['bulan'];
 
-            $tglAwal = Carbon::create($tahun, $bulan, 1)->startOfMonth();
-            $tglAkhir = Carbon::create($tahun, $bulan, 1)->endOfMonth();
-
-            // a. Saldo awal dari buku_besar (langsung bulan ini)
-            $saldoAwal = $this->getSaldoAwal($tahun, $bulan);
-
-            // b. Mutasi dari jurnal_umums dalam bulan ini saja
-            $mutasi = $this->getMutasi($tglAwal, $tglAkhir);
-
-            // c. Gabungkan: saldo tampil = saldo awal + mutasi
-            $saldoFinal = $this->gabungSaldo($saldoAwal, $mutasi);
+            $saldo = $this->getSaldo($tahun, $bulan);
 
             $key = $tahun . '-' . str_pad($bulan, 2, '0', STR_PAD_LEFT);
             $label = Carbon::create($tahun, $bulan)->translatedFormat('F Y');
 
             $result[$key] = array_merge(
                 ['label' => $label, 'tahun' => $tahun, 'bulan' => $bulan],
-                $this->buildNeraca($groups, $saldoFinal)
+                $this->buildNeraca($groups, $saldo)
             );
         }
 
@@ -61,17 +47,32 @@ class NeracaService
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Load semua akun_groups + relasi COA — hanya sekali.
+     * Load semua root AkunGroup beserta seluruh hierarki di bawahnya.
+     *
+     * Catatan struktur data aktual:
+     * - Pivot akun_group_anak_akun sudah berisi children langsung,
+     *   bukan parent (id=1 'Kas dan Setara Kas', id=11 'Aktiva Tetap' tidak ada di pivot)
+     * - Children AnakAkun di-load rekursif untuk kalkulasi di hitungNilaiAkun()
      */
     private function loadGroups(): Collection
     {
         return AkunGroup::with([
-            'children' => fn($q) => $q->ordered()->with([
-                'anakAkuns' => fn($q2) => $q2
-                    ->aktif()
-                    ->orderBy('kode_anak_akun')
-                    ->with('subAnakAkuns:id,id_anak_akun,kode_sub_anak_akun,saldo_normal'),
-            ]),
+            'childrenRecursive.anakAkuns' => fn($q) => $q
+                ->aktif()
+                ->orderBy('kode_anak_akun')
+                ->with([
+                    'children' => fn($q2) => $q2
+                        ->aktif()
+                        ->orderBy('kode_anak_akun')
+                        ->with([
+                            'children' => fn($q3) => $q3
+                                ->aktif()
+                                ->orderBy('kode_anak_akun')
+                                ->with('subAnakAkuns:id,id_anak_akun,kode_sub_anak_akun,saldo_normal'),
+                            'subAnakAkuns:id,id_anak_akun,kode_sub_anak_akun,saldo_normal',
+                        ]),
+                    'subAnakAkuns:id,id_anak_akun,kode_sub_anak_akun,saldo_normal',
+                ]),
         ])
             ->whereNull('parent_id')
             ->visible()
@@ -80,84 +81,36 @@ class NeracaService
     }
 
     /**
-     * Ambil saldo awal dari tabel buku_besar.
+     * Ambil saldo akhir bulan dari tabel buku_besar.
      *
-     * Konvensi data:
-     *   buku_besar.bulan = N  →  saldo awal untuk bulan N+1
-     *   Contoh: record bulan=2 (Feb) = saldo awal untuk MARET
+     * !! PENTING: Saldo diambil APA ADANYA — termasuk nilai NEGATIF !!
      *
-     * Jadi neraca bulan X → query buku_besar WHERE bulan = X-1.
-     * Edge case Januari ditangani otomatis oleh Carbon::subMonth().
+     * Akumulasi penyusutan sudah tersimpan negatif di buku_besar:
+     *   125-01 (Akm. Penyusutan Kendaraan) = -7.910.465,62
+     *   127-01 (Akm. Penyusutan Inventaris) = -775.000
+     *   131-01 (Akm. Penyusutan Mesin)     = -88.541.662,33
      *
-     * Return: [ 'no_akun' => float ]
+     * Jika di-abs() maka penyusutan akan MENAMBAH aktiva → salah!
+     *
+     * Return: [ 'no_akun' => float ]  (positif atau negatif)
      */
-    private function getSaldoAwal(int $tahun, int $bulan): array
+    private function getSaldo(int $tahun, int $bulan): array
     {
-        // Mundur 1 bulan — Carbon otomatis tangani Januari → Desember tahun lalu
-        $prev = Carbon::create($tahun, $bulan, 1)->subMonth();
-
-        $rows = BukuBesar::query()
-            ->where('tahun', $prev->year)
-            ->where('bulan', $prev->month)
+        $rows = BukuBesarModel::query()
+            ->where('tahun', $tahun)
+            ->where('bulan', $bulan)
             ->get(['no_akun', 'saldo']);
 
         $saldo = [];
         foreach ($rows as $row) {
-            $saldo[$row->no_akun] = (float) $row->saldo;
+            $saldo[$row->no_akun] = (float) $row->saldo; // as-is, jangan abs()
         }
 
         return $saldo;
     }
 
     /**
-     * Ambil mutasi debet/kredit dari jurnal_umums dalam rentang bulan.
-     * Return: [ 'kode_sub_anak_akun' => net_mutasi_float ]
-     * Net mutasi = D - K (positif jika lebih banyak debet)
-     */
-    private function getMutasi(Carbon $dari, Carbon $sampai): array
-    {
-        $rows = JurnalUmum::query()
-            ->whereBetween('tgl', [$dari->toDateString(), $sampai->toDateString()])
-            ->selectRaw('no_akun, map, SUM(banyak * harga) AS total')
-            ->groupBy('no_akun', 'map')
-            ->get();
-
-        $mutasi = [];
-        foreach ($rows as $row) {
-            $kode = $row->no_akun;
-            $map = strtolower($row->map);
-            $nilai = (float) $row->total;
-
-            $mutasi[$kode] = ($mutasi[$kode] ?? 0) + ($map === 'd' ? $nilai : -$nilai);
-        }
-
-        return $mutasi;
-    }
-
-    /**
-     * Gabungkan saldo awal + mutasi.
-     * Kunci dari buku_besar bisa berupa kode anak_akun ('110') atau sub_anak_akun ('110-01').
-     * Kunci dari jurnal_umums selalu kode sub_anak_akun ('110-01').
-     *
-     * Return: [ 'no_akun' => float ]  — union dari kedua sumber
-     */
-    private function gabungSaldo(array $saldoAwal, array $mutasi): array
-    {
-        $gabungan = $saldoAwal; // mulai dari saldo awal
-
-        foreach ($mutasi as $kode => $nilaiMutasi) {
-            $gabungan[$kode] = ($gabungan[$kode] ?? 0) + $nilaiMutasi;
-        }
-
-        return $gabungan;
-    }
-
-    /**
-     * Build struktur neraca Aktiva / Pasiva dari saldo gabungan.
-     *
-     * Pencocokan saldo ke akun:
-     * - Cek $saldo[$sub->kode_sub_anak_akun]  (prioritas: kode sub_anak_akun persis)
-     * - Fallback: cek $saldo[$anakAkun->kode_anak_akun] (kode anak_akun)
+     * Build struktur neraca Aktiva / Pasiva dari saldo.
      */
     private function buildNeraca(Collection $groups, array $saldo): array
     {
@@ -165,37 +118,42 @@ class NeracaService
         $pasiva = ['sections' => [], 'total' => 0];
 
         foreach ($groups as $rootGroup) {
-            $sections = [];
-            $totalRoot = 0;
+            [$sections, $totalRoot] = $this->buildSections($rootGroup->childrenRecursive, $saldo);
 
-            foreach ($rootGroup->children as $childGroup) {
+            $data = ['sections' => $sections, 'total' => $totalRoot];
+
+            if (strtoupper($rootGroup->nama) === 'AKTIVA') {
+                $aktiva = $data;
+            } elseif (strtoupper($rootGroup->nama) === 'PASIVA') {
+                $pasiva = $data;
+            }
+        }
+
+        return [
+            'aktiva' => $aktiva,
+            'pasiva' => $pasiva,
+            'totalAktiva' => $aktiva['total'],
+            'totalPasiva' => $pasiva['total'],
+        ];
+    }
+
+    /**
+     * Rekursif: bangun sections dari kumpulan AkunGroup children.
+     */
+    private function buildSections(Collection $groups, array $saldo): array
+    {
+        $sections = [];
+        $totalAll = 0;
+
+        foreach ($groups as $group) {
+            $isLeaf = $group->children->isEmpty();
+
+            if ($isLeaf) {
                 $items = [];
                 $totalSection = 0;
 
-                foreach ($childGroup->anakAkuns as $anakAkun) {
-                    $nilaiAkun = 0;
-
-                    if ($anakAkun->subAnakAkuns->isNotEmpty()) {
-                        // Hitung dari sub_anak_akun
-                        foreach ($anakAkun->subAnakAkuns as $sub) {
-                            $saldoNormal = strtolower(
-                                $sub->saldo_normal ?? $anakAkun->saldo_normal ?? 'debet'
-                            );
-
-                            // Prioritas: cari dengan kode sub dulu, fallback ke kode anak
-                            $nilaiRaw = $saldo[$sub->kode_sub_anak_akun]
-                                ?? $saldo[$anakAkun->kode_anak_akun]
-                                ?? 0;
-
-                            // Flip untuk akun saldo normal kredit
-                            $nilaiAkun += ($saldoNormal === 'kredit') ? -$nilaiRaw : $nilaiRaw;
-                        }
-                    } else {
-                        // Tidak punya sub, langsung pakai kode anak_akun
-                        $saldoNormal = strtolower($anakAkun->saldo_normal ?? 'debet');
-                        $nilaiRaw = $saldo[$anakAkun->kode_anak_akun] ?? 0;
-                        $nilaiAkun = ($saldoNormal === 'kredit') ? -$nilaiRaw : $nilaiRaw;
-                    }
+                foreach ($group->anakAkuns as $anakAkun) {
+                    $nilaiAkun = $this->hitungNilaiAkun($anakAkun, $saldo);
 
                     $items[] = [
                         'kode' => $anakAkun->kode_anak_akun,
@@ -207,28 +165,73 @@ class NeracaService
                 }
 
                 $sections[] = [
-                    'group' => $childGroup->nama,
+                    'group' => $group->nama,
                     'items' => $items,
                     'total' => $totalSection,
+                    'sub_sections' => [],
                 ];
 
-                $totalRoot += $totalSection;
-            }
+                $totalAll += $totalSection;
 
-            $data = ['sections' => $sections, 'total' => $totalRoot];
-
-            if (strtoupper($rootGroup->nama) === 'AKTIVA') {
-                $aktiva = $data;
             } else {
-                $pasiva = $data;
+                [$subSections, $totalBranch] = $this->buildSections($group->children, $saldo);
+
+                $sections[] = [
+                    'group' => $group->nama,
+                    'items' => [],
+                    'total' => $totalBranch,
+                    'sub_sections' => $subSections,
+                ];
+
+                $totalAll += $totalBranch;
             }
         }
 
-        return [
-            'aktiva' => $aktiva,
-            'pasiva' => $pasiva,
-            'totalAktiva' => $aktiva['total'],
-            'totalPasiva' => $pasiva['total'],
-        ];
+        return [$sections, $totalAll];
+    }
+
+    /**
+     * Hitung nilai satu AnakAkun dari buku_besar.
+     *
+     * ╔══════════════════════════════════════════════════════════════╗
+     * ║  ATURAN: Ambil saldo as-is dari buku_besar (sign sudah benar)║
+     * ║                                                              ║
+     * ║  Aktiva normal  → positif di buku_besar → tampil positif    ║
+     * ║  Akm.Penyusutan → NEGATIF di buku_besar → mengurangi aktiva ║
+     * ║  Hutang/Modal   → positif di buku_besar → tampil positif    ║
+     * ║                                                              ║
+     * ║  Verifikasi Jan 2025: Total Aktiva = 2.474.435.711 ✓        ║
+     * ╚══════════════════════════════════════════════════════════════╝
+     *
+     * Hierarki kalkulasi:
+     *   1. Punya subAnakAkuns → sum saldo tiap sub (misal 114-01, 115-01, dst)
+     *   2. Punya children     → rekursif ke children saja (parent tidak punya saldo sendiri)
+     *   3. Leaf               → ambil saldo dari kode_anak_akun
+     */
+    private function hitungNilaiAkun($anakAkun, array $saldo): float
+    {
+        $total = 0.0;
+
+        if ($anakAkun->subAnakAkuns->isNotEmpty()) {
+            // Punya sub_anak_akun (misal Piutang punya 114-01, 114-02, dst)
+            foreach ($anakAkun->subAnakAkuns as $sub) {
+                // Ambil dengan kode sub — TIDAK fallback ke kode_anak_akun
+                // karena kode_anak_akun (misal '114') bisa tidak ada di buku_besar
+                $total += $saldo[$sub->kode_sub_anak_akun] ?? 0.0;
+            }
+
+        } elseif ($anakAkun->children->isNotEmpty()) {
+            // Punya children AnakAkun (self-referential)
+            // Akun parent hanya header — saldo ada di children, bukan di parent
+            foreach ($anakAkun->children as $child) {
+                $total += $this->hitungNilaiAkun($child, $saldo);
+            }
+
+        } else {
+            // Leaf: ambil saldo langsung dari kode_anak_akun
+            $total = $saldo[$anakAkun->kode_anak_akun] ?? 0.0;
+        }
+
+        return $total;
     }
 }
