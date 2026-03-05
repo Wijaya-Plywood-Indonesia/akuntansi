@@ -32,7 +32,7 @@ return new class extends Migration
             $table->string('nama')->nullable();
             $table->integer('mm')->nullable();
             $table->string('hit_kbk', 10)->nullable();
-            $table->$table->timestamps();
+            $table->timestamps();
         });
     }
 
