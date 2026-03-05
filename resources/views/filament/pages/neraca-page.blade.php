@@ -16,17 +16,16 @@
                 <label class="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">
                     Dari Periode
                 </label>
-                <select
+                <input
+                    type="month"
                     wire:model.live="periodeAwal"
+                    min="{{ now()->subYears(5)->format('Y-m') }}"
+                    max="{{ now()->addYear()->format('Y-m') }}"
                     class="w-full rounded-xl border-2 border-gray-300 dark:border-gray-600
                            dark:bg-gray-700 dark:text-gray-200
                            text-base px-4 py-3 shadow-sm
                            focus:border-primary-500 focus:ring-2 focus:ring-primary-200
-                           transition-colors cursor-pointer">
-                    @foreach($this->opsiPeriode() as $val => $label)
-                        <option value="{{ $val }}">{{ $label }}</option>
-                    @endforeach
-                </select>
+                           transition-colors cursor-pointer" />
             </div>
 
             {{-- Pemisah --}}
@@ -42,17 +41,16 @@
                 <label class="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">
                     Sampai Periode
                 </label>
-                <select
+                <input
+                    type="month"
                     wire:model.live="periodeAkhir"
+                    min="{{ now()->subYears(5)->format('Y-m') }}"
+                    max="{{ now()->addYear()->format('Y-m') }}"
                     class="w-full rounded-xl border-2 border-gray-300 dark:border-gray-600
                            dark:bg-gray-700 dark:text-gray-200
                            text-base px-4 py-3 shadow-sm
                            focus:border-primary-500 focus:ring-2 focus:ring-primary-200
-                           transition-colors cursor-pointer">
-                    @foreach($this->opsiPeriode() as $val => $label)
-                        <option value="{{ $val }}">{{ $label }}</option>
-                    @endforeach
-                </select>
+                           transition-colors cursor-pointer" />
             </div>
 
             {{-- Info jumlah periode --}}

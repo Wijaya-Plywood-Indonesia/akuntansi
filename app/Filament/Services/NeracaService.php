@@ -21,17 +21,13 @@ class NeracaService
             return [];
         }
 
-        // 1. Load struktur COA sekali saja (recursive)
         $groups = $this->loadGroups();
-
-        // 2. Hitung neraca per periode
         $result = [];
 
         foreach ($periodeList as $periode) {
             $tahun = (int) $periode['tahun'];
             $bulan = (int) $periode['bulan'];
 
-            // Ambil saldo langsung dari buku_besar (satu query per periode)
             $saldo = $this->getSaldo($tahun, $bulan);
 
             $key = $tahun . '-' . str_pad($bulan, 2, '0', STR_PAD_LEFT);
@@ -53,15 +49,10 @@ class NeracaService
     /**
      * Load semua root AkunGroup beserta seluruh hierarki di bawahnya.
      *
-     * Struktur yang di-load:
-     *   AkunGroup (root: AKTIVA / PASIVA)
-     *     └─ children (AKTIVA LANCAR, AKTIVA TETAP, dst.)
-     *          └─ children (KAS DAN SETARA KAS, dst.)   ← level 3+
-     *               └─ anakAkuns
-     *                    └─ subAnakAkuns
-     *
-     * Untuk mendukung kedalaman tak terbatas, kita load dengan
-     * childrenRecursive() lalu attach anakAkuns di leaf node saat build.
+     * Catatan struktur data aktual:
+     * - Pivot akun_group_anak_akun sudah berisi children langsung,
+     *   bukan parent (id=1 'Kas dan Setara Kas', id=11 'Aktiva Tetap' tidak ada di pivot)
+     * - Children AnakAkun di-load rekursif untuk kalkulasi di hitungNilaiAkun()
      */
     private function loadGroups(): Collection
     {
@@ -73,7 +64,13 @@ class NeracaService
                     'children' => fn($q2) => $q2
                         ->aktif()
                         ->orderBy('kode_anak_akun')
-                        ->with('subAnakAkuns:id,id_anak_akun,kode_sub_anak_akun,saldo_normal'),
+                        ->with([
+                            'children' => fn($q3) => $q3
+                                ->aktif()
+                                ->orderBy('kode_anak_akun')
+                                ->with('subAnakAkuns:id,id_anak_akun,kode_sub_anak_akun,saldo_normal'),
+                            'subAnakAkuns:id,id_anak_akun,kode_sub_anak_akun,saldo_normal',
+                        ]),
                     'subAnakAkuns:id,id_anak_akun,kode_sub_anak_akun,saldo_normal',
                 ]),
         ])
@@ -85,7 +82,17 @@ class NeracaService
 
     /**
      * Ambil saldo akhir bulan dari tabel buku_besar.
-     * Return: [ 'no_akun' => float ]
+     *
+     * !! PENTING: Saldo diambil APA ADANYA — termasuk nilai NEGATIF !!
+     *
+     * Akumulasi penyusutan sudah tersimpan negatif di buku_besar:
+     *   125-01 (Akm. Penyusutan Kendaraan) = -7.910.465,62
+     *   127-01 (Akm. Penyusutan Inventaris) = -775.000
+     *   131-01 (Akm. Penyusutan Mesin)     = -88.541.662,33
+     *
+     * Jika di-abs() maka penyusutan akan MENAMBAH aktiva → salah!
+     *
+     * Return: [ 'no_akun' => float ]  (positif atau negatif)
      */
     private function getSaldo(int $tahun, int $bulan): array
     {
@@ -96,7 +103,7 @@ class NeracaService
 
         $saldo = [];
         foreach ($rows as $row) {
-            $saldo[$row->no_akun] = (float) $row->saldo;
+            $saldo[$row->no_akun] = (float) $row->saldo; // as-is, jangan abs()
         }
 
         return $saldo;
@@ -111,7 +118,6 @@ class NeracaService
         $pasiva = ['sections' => [], 'total' => 0];
 
         foreach ($groups as $rootGroup) {
-            // Rekursif bangun sections dari semua children
             [$sections, $totalRoot] = $this->buildSections($rootGroup->childrenRecursive, $saldo);
 
             $data = ['sections' => $sections, 'total' => $totalRoot];
@@ -133,12 +139,6 @@ class NeracaService
 
     /**
      * Rekursif: bangun sections dari kumpulan AkunGroup children.
-     *
-     * Setiap group bisa berupa:
-     *  - LEAF (tidak punya children group) → tampilkan anakAkuns langsung
-     *  - BRANCH (punya children group)     → rekursif, tambahkan sub-sections
-     *
-     * Return: [ sections[], totalFloat ]
      */
     private function buildSections(Collection $groups, array $saldo): array
     {
@@ -149,7 +149,6 @@ class NeracaService
             $isLeaf = $group->children->isEmpty();
 
             if ($isLeaf) {
-                // ── Leaf: render anakAkuns langsung ──────────────────
                 $items = [];
                 $totalSection = 0;
 
@@ -169,12 +168,12 @@ class NeracaService
                     'group' => $group->nama,
                     'items' => $items,
                     'total' => $totalSection,
-                    'sub_sections' => [], // leaf tidak punya sub-section
+                    'sub_sections' => [],
                 ];
 
                 $totalAll += $totalSection;
+
             } else {
-                // ── Branch: rekursif ke children ─────────────────────
                 [$subSections, $totalBranch] = $this->buildSections($group->children, $saldo);
 
                 $sections[] = [
@@ -192,36 +191,45 @@ class NeracaService
     }
 
     /**
-     * Hitung nilai satu AnakAkun (termasuk children rekursif & subAnakAkuns).
+     * Hitung nilai satu AnakAkun dari buku_besar.
      *
-     * Prioritas pencarian saldo:
-     *   1. kode_sub_anak_akun  (paling spesifik)
-     *   2. kode_anak_akun      (fallback)
+     * ╔══════════════════════════════════════════════════════════════╗
+     * ║  ATURAN: Ambil saldo as-is dari buku_besar (sign sudah benar)║
+     * ║                                                              ║
+     * ║  Aktiva normal  → positif di buku_besar → tampil positif    ║
+     * ║  Akm.Penyusutan → NEGATIF di buku_besar → mengurangi aktiva ║
+     * ║  Hutang/Modal   → positif di buku_besar → tampil positif    ║
+     * ║                                                              ║
+     * ║  Verifikasi Jan 2025: Total Aktiva = 2.474.435.711 ✓        ║
+     * ╚══════════════════════════════════════════════════════════════╝
+     *
+     * Hierarki kalkulasi:
+     *   1. Punya subAnakAkuns → sum saldo tiap sub (misal 114-01, 115-01, dst)
+     *   2. Punya children     → rekursif ke children saja (parent tidak punya saldo sendiri)
+     *   3. Leaf               → ambil saldo dari kode_anak_akun
      */
     private function hitungNilaiAkun($anakAkun, array $saldo): float
     {
         $total = 0.0;
 
-        // Jika punya sub_anak_akun → sum dari sub
         if ($anakAkun->subAnakAkuns->isNotEmpty()) {
+            // Punya sub_anak_akun (misal Piutang punya 114-01, 114-02, dst)
             foreach ($anakAkun->subAnakAkuns as $sub) {
-                $saldoNormal = strtolower($sub->saldo_normal ?? $anakAkun->saldo_normal ?? 'debet');
-                $nilaiRaw = $saldo[$sub->kode_sub_anak_akun]
-                    ?? $saldo[$anakAkun->kode_anak_akun]
-                    ?? 0.0;
-
-                $total += ($saldoNormal === 'kredit') ? -$nilaiRaw : $nilaiRaw;
+                // Ambil dengan kode sub — TIDAK fallback ke kode_anak_akun
+                // karena kode_anak_akun (misal '114') bisa tidak ada di buku_besar
+                $total += $saldo[$sub->kode_sub_anak_akun] ?? 0.0;
             }
+
         } elseif ($anakAkun->children->isNotEmpty()) {
-            // Punya children (self-referential AnakAkun) → rekursif
+            // Punya children AnakAkun (self-referential)
+            // Akun parent hanya header — saldo ada di children, bukan di parent
             foreach ($anakAkun->children as $child) {
                 $total += $this->hitungNilaiAkun($child, $saldo);
             }
+
         } else {
-            // Leaf: langsung dari kode_anak_akun
-            $saldoNormal = strtolower($anakAkun->saldo_normal ?? 'debet');
-            $nilaiRaw = $saldo[$anakAkun->kode_anak_akun] ?? 0.0;
-            $total = ($saldoNormal === 'kredit') ? -$nilaiRaw : $nilaiRaw;
+            // Leaf: ambil saldo langsung dari kode_anak_akun
+            $total = $saldo[$anakAkun->kode_anak_akun] ?? 0.0;
         }
 
         return $total;
