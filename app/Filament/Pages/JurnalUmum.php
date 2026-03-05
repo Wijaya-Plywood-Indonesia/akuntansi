@@ -30,113 +30,149 @@ class JurnalUmum extends Page implements HasActions, HasForms
     protected static UnitEnum|string|null $navigationGroup = 'Jurnal';
     protected static ?string $title = 'Jurnal Umum';
 
-    public $tgl, $jurnal, $no_akun, $nama_akun, $keterangan, $harga, $banyak = 1, $map = 'd';
-    public $items = [];
+    public $tgl, $jurnal, $no_dokumen, $no_akun, $nama_akun, $nama, $keterangan;
+    public $harga  = '';
+    public $banyak = 1;
+    public $mm     = '';
+    public $m3     = '';
+    public $hit_kbk = 'b';
+    public $map    = 'd';
+    public $items  = [];
 
-    public bool $wasBalanced = false;
-
-    // ─────────────────────────────────────────────────────────────
-    // FILTER & PAGINATION PROPERTIES
-    // ─────────────────────────────────────────────────────────────
-
-    public $filterTglDariInput  = '';
+    public bool $wasBalanced  = false;
+    public $filterTglDariInput   = '';
     public $filterTglSampaiInput = '';
-    public $filterTglDari  = '';
-    public $filterTglSampai = '';
-    public int $perPage = 50;
+    public $filterTglDari        = '';
+    public $filterTglSampai      = '';
+    public int  $perPage      = 50;
     public bool $hasMorePages = true;
     public bool $isLoadingMore = false;
 
-    // ─────────────────────────────────────────────────────────────
+    // ---
     // MOUNT
-    // ─────────────────────────────────────────────────────────────
-    public function mount()
+    // ---
+    public function mount(): void
     {
-        $this->tgl    = session()->get('jurnal_draft_tgl', now()->format('Y-m-d'));
-        $this->items  = session()->get('jurnal_draft_items', []);
-        $this->map    = session()->get('jurnal_draft_map', 'd');
-        $this->banyak = session()->get('jurnal_draft_banyak', 1);
-        $this->harga  = session()->get('jurnal_draft_harga', '');
+        $this->tgl        = session()->get('jurnal_draft_tgl',    now()->format('Y-m-d'));
+        $this->items      = session()->get('jurnal_draft_items',  []);
+        $this->banyak     = session()->get('jurnal_draft_banyak', 1);
+        $this->harga      = session()->get('jurnal_draft_harga',  '');
+        $this->no_dokumen = session()->get('jurnal_draft_nodok',  '');
+        $this->nama       = session()->get('jurnal_draft_nama',   '');
+        $this->mm         = session()->get('jurnal_draft_mm',     '');
+        $this->m3         = session()->get('jurnal_draft_m3',     '');
+        $this->hit_kbk    = session()->get('jurnal_draft_hitkbk', 'b');
+
+        // map: pastikan selalu lowercase - bersihkan nilai lama yang mungkin uppercase
+        $savedMap    = session()->get('jurnal_draft_map', 'd');
+        $this->map   = in_array(strtolower($savedMap), ['d', 'k']) ? strtolower($savedMap) : 'd';
 
         $this->syncJurnalNumber();
-        $this->updateAutoBalanceSuggestion(false);
+
+        // Saat load: isi saran harga jika ada selisih, tapi jangan ubah posisi map
+        $this->recalcAutoBalance(changemap: false);
     }
 
-    /**
-     * Logika sinkronisasi nomor jurnal secara cerdas.
-     * Jika draf kosong atau tidak balance, gunakan nomor jurnal yang sedang dikerjakan.
-     * Jika draf sudah balance, siapkan nomor jurnal berikutnya.
-     */
-    protected function syncJurnalNumber()
+    // ---
+    // SYNC NOMOR JURNAL
+    // Draft kosong          -> Max DB + 1
+    // Draft ada + balance   -> Max jurnal di draft + 1
+    // Draft ada + unbalance -> Jurnal pertama di draft (tetap)
+    // ---
+    protected function syncJurnalNumber(): void
     {
         if (empty($this->items)) {
-            $last = JurnalModel::max('jurnal');
-            $this->jurnal = $last ? $last + 1 : 1;
+            $last         = JurnalModel::max('jurnal');
+            $this->jurnal = $last ? (int)$last + 1 : 1;
         } else {
-            $draft = collect($this->items);
-            $totalDebit  = (float) $draft->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
-            $totalKredit = (float) $draft->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
-            $isBalanced = abs($totalDebit - $totalKredit) < 0.01;
+            $draft   = collect($this->items);
+            $debit   = (float) $draft->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
+            $kredit  = (float) $draft->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
+            $balance = abs($debit - $kredit) < 0.01;
 
-            if ($isBalanced) {
-                // Jika balance, nomor jurnal untuk input selanjutnya adalah Max di draf + 1
-                $this->jurnal = (int) $draft->max('jurnal') + 1;
-            } else {
-                // Jika belum balance, tetap gunakan nomor jurnal yang ada di draf
-                $this->jurnal = $draft->first()['jurnal'];
-            }
+            $this->jurnal = $balance
+                ? (int) $draft->max('jurnal') + 1
+                : (int) $draft->first()['jurnal'];
         }
         session()->put('jurnal_draft_kode', $this->jurnal);
     }
 
-    protected function generateKodeJurnal()
+    // ---
+    // AUTO BALANCE RECALCULATE
+    //
+    // $changemap = true  -> sistem arahkan tombol D/K ke posisi lawan
+    // $changemap = false -> hanya isi harga, posisi map dibiarkan
+    // ---
+    private function recalcAutoBalance(bool $changemap = true): void
     {
-        // Dialihkan ke syncJurnalNumber untuk konsistensi draf
-        $this->syncJurnalNumber();
+        if (empty($this->items)) {
+            // Draft kosong: kembali ke posisi awal tanpa syarat
+            $this->harga  = '';
+            $this->banyak = 1;
+            $this->map    = 'd';
+            return;
+        }
+
+        $draft   = collect($this->items);
+        $debit   = (float) $draft->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
+        $kredit  = (float) $draft->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
+        $selisih = $debit - $kredit;
+
+        if (abs($selisih) > 0.01) {
+            $this->harga  = abs($selisih);
+            $this->banyak = 1;
+            if ($changemap) {
+                $this->map = ($selisih > 0) ? 'k' : 'd';
+            }
+        } else {
+            $this->harga  = '';
+            $this->banyak = 1;
+        }
     }
 
+    // ---
+    // PERSIST SESSION
+    // ---
     private function persistDraftState(): void
     {
-        session()->put('jurnal_draft_items',  $this->items);
-        session()->put('jurnal_draft_kode',   $this->jurnal);
-        session()->put('jurnal_draft_tgl',    $this->tgl);
-        session()->put('jurnal_draft_map',    $this->map);
-        session()->put('jurnal_draft_harga',  $this->harga);
-        session()->put('jurnal_draft_banyak', $this->banyak);
+        session()->put('jurnal_draft_items',   $this->items);
+        session()->put('jurnal_draft_kode',    $this->jurnal);
+        session()->put('jurnal_draft_tgl',     $this->tgl);
+        session()->put('jurnal_draft_map',     $this->map);
+        session()->put('jurnal_draft_harga',   $this->harga);
+        session()->put('jurnal_draft_banyak',  $this->banyak);
+        session()->put('jurnal_draft_nodok',   $this->no_dokumen);
+        session()->put('jurnal_draft_nama',    $this->nama);
+        session()->put('jurnal_draft_mm',      $this->mm);
+        session()->put('jurnal_draft_m3',      $this->m3);
+        session()->put('jurnal_draft_hitkbk',  $this->hit_kbk);
     }
 
+    // ---
+    // VIEW DATA
+    // ---
     protected function getViewData(): array
     {
         $sub  = SubAnakAkun::selectRaw("kode_sub_anak_akun as no, nama_sub_anak_akun as nama");
         $anak = AnakAkun::selectRaw("kode_anak_akun as no, nama_anak_akun as nama");
 
         $query = JurnalModel::latest('id');
+        if (!empty($this->filterTglDari))   $query->whereDate('tgl', '>=', $this->filterTglDari);
+        if (!empty($this->filterTglSampai)) $query->whereDate('tgl', '<=', $this->filterTglSampai);
 
-        if (!empty($this->filterTglDari)) {
-            $query->whereDate('tgl', '>=', $this->filterTglDari);
-        }
-
-        if (!empty($this->filterTglSampai)) {
-            $query->whereDate('tgl', '<=', $this->filterTglSampai);
-        }
-
-        $data = $query->limit($this->perPage + 1)->get();
+        $data               = $query->limit($this->perPage + 1)->get();
         $this->hasMorePages = $data->count() > $this->perPage;
-        $historyJurnals = $data->take($this->perPage);
+        $historyJurnals     = $data->take($this->perPage);
 
         $totalsQuery = JurnalModel::query();
-        if (!empty($this->filterTglDari)) {
-            $totalsQuery->whereDate('tgl', '>=', $this->filterTglDari);
-        }
-        if (!empty($this->filterTglSampai)) {
-            $totalsQuery->whereDate('tgl', '<=', $this->filterTglSampai);
-        }
+        if (!empty($this->filterTglDari))   $totalsQuery->whereDate('tgl', '>=', $this->filterTglDari);
+        if (!empty($this->filterTglSampai)) $totalsQuery->whereDate('tgl', '<=', $this->filterTglSampai);
         $allForTotals = $totalsQuery->get(['map', 'banyak', 'harga']);
 
-        $totalDebitDB  = $allForTotals->filter(fn($j) => strtolower($j->map) === 'd')->sum(fn($j) => $j->banyak * $j->harga);
-        $totalKreditDB = $allForTotals->filter(fn($j) => strtolower($j->map) === 'k')->sum(fn($j) => $j->banyak * $j->harga);
+        $totalDebitDB      = $allForTotals->filter(fn($j) => strtolower($j->map) === 'd')->sum(fn($j) => $j->banyak * $j->harga);
+        $totalKreditDB     = $allForTotals->filter(fn($j) => strtolower($j->map) === 'k')->sum(fn($j) => $j->banyak * $j->harga);
         $isHistoryBalanced = abs($totalDebitDB - $totalKreditDB) < 0.01;
-        $selisihDB = abs($totalDebitDB - $totalKreditDB);
+        $selisihDB         = abs($totalDebitDB - $totalKreditDB);
 
         return [
             'accounts'          => $sub->unionAll($anak)->get(),
@@ -148,6 +184,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
         ];
     }
 
+    // ---
+    // FILTER
+    // ---
     public function applyFilter(): void
     {
         $this->filterTglDari   = $this->filterTglDariInput;
@@ -172,49 +211,25 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->perPage += 50;
     }
 
+    // ---
+    // BALANCE CHECK
+    // ---
     protected function isDraftBalanced(): bool
     {
         if (empty($this->items)) return false;
 
-        $data        = collect($this->items);
-        $totalDebit  = (float) $data->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
-        $totalKredit = (float) $data->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
+        $data    = collect($this->items);
+        $debit   = (float) $data->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
+        $kredit  = (float) $data->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
 
-        return abs($totalDebit - $totalKredit) < 0.01;
+        return abs($debit - $kredit) < 0.01;
     }
 
-    /**
-     * Logic Auto-Balance Fleksibel
-     * @param bool $suggestMap Jika true, sistem akan menyarankan posisi (D/K) penyeimbang.
-     */
-    private function updateAutoBalanceSuggestion(bool $suggestMap = true)
-    {
-        if (empty($this->items)) {
-            return;
-        }
-
-        $data        = collect($this->items);
-        $totalDebit  = (float) $data->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
-        $totalKredit = (float) $data->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
-        $selisih     = $totalDebit - $totalKredit;
-
-        if (abs($selisih) > 0.01) {
-            // Isi otomatis harga dengan nilai selisih
-            $this->harga  = abs($selisih);
-            $this->banyak = 1;
-
-            // Berikan saran posisi HANYA JIKA diminta (setelah addItem atau saat pilih akun pertama kali)
-            if ($suggestMap) {
-                $this->map = ($selisih > 0) ? 'k' : 'd';
-            }
-        } else {
-            // Jika sudah balance, kosongkan harga saran
-            $this->harga  = '';
-            $this->banyak = 1;
-        }
-    }
-
-    public function updatedNoAkun($value)
+    // ---
+    // UPDATED NO AKUN
+    // Hanya isi saran harga, posisi map tidak berubah
+    // ---
+    public function updatedNoAkun($value): void
     {
         if (blank($value)) {
             $this->nama_akun = '';
@@ -227,63 +242,99 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ?? AnakAkun::where('kode_anak_akun', $value)->first()?->nama_anak_akun
             ?? '';
 
-        // Saat pilih akun, hitung selisih harga tapi jangan paksa pindah posisi Map.
-        // User tetap bisa memilih sendiri mau input Debit atau Kredit lagi.
-        $this->updateAutoBalanceSuggestion(false);
+        $this->recalcAutoBalance(changemap: false);
         $this->persistDraftState();
     }
 
-    public function addItem()
+    // ---
+    // ADD ITEM
+    // ---
+    public function addItem(): void
     {
         $this->validate([
             'no_akun' => 'required',
             'harga'   => 'required|numeric|min:0.01',
         ]);
 
+        // Hitung total berdasarkan pilihan hit_kbk:
+        // 'banyak'   -> banyak * harga
+        // 'kubikasi' -> m3 * harga
+        // ''         -> harga saja (tidak dikalikan)
+        $harga = (float) $this->harga;
+        $total = match ($this->hit_kbk) {
+            'b'     => (float) $this->banyak * $harga,
+            'm'     => (float) $this->m3 * $harga,
+            default => $harga,
+        };
+
         $this->items[] = [
             'tgl'        => $this->tgl,
             'jurnal'     => $this->jurnal,
+            'no_dokumen' => $this->no_dokumen,
             'no_akun'    => $this->no_akun,
             'nama_akun'  => $this->nama_akun,
+            'nama'       => $this->nama,
+            'mm'         => $this->mm,
             'keterangan' => $this->keterangan,
+            'hit_kbk'    => $this->hit_kbk,
             'banyak'     => (float) $this->banyak,
-            'harga'      => (float) $this->harga,
-            'total'      => (float) $this->banyak * (float) $this->harga,
+            'm3'         => (float) $this->m3,
+            'harga'      => $harga,
+            'total'      => $total,
             'map'        => strtolower($this->map),
         ];
 
-        // Cek apakah draf sekarang sudah balance
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
+
         if ($this->isDraftBalanced()) {
-            $this->reset(['no_akun', 'nama_akun', 'keterangan', 'banyak', 'harga']);
+            // Balance: clear semua, naikkan nomor jurnal
+            $this->harga       = '';
             $this->banyak      = 1;
             $this->map         = 'd';
+            $this->hit_kbk     = 'b';
             $this->wasBalanced = true;
-            // Update nomor jurnal ke angka baru karena voucher sebelumnya sudah selesai (balance)
             $this->syncJurnalNumber();
+            $this->dispatch('toast', type: 'success', title: 'Jurnal Balanced!', msg: 'Draft selesai — siap diposting.');
         } else {
-            // Belum balance: bersihkan input field akun saja, pertahankan jurnal number
-            $this->reset(['no_akun', 'nama_akun', 'keterangan']);
-            // Sarankan posisi Map penyeimbang untuk baris berikutnya
-            $this->updateAutoBalanceSuggestion(true);
+            // Belum balance: sarankan harga + arahkan map ke posisi lawan
+            $this->recalcAutoBalance(changemap: true);
+            $this->dispatch('toast', type: 'info', title: 'Item Ditambahkan', msg: 'Jurnal belum balance — tambah entri penyeimbang.');
         }
 
         $this->persistDraftState();
     }
 
-    public function removeItem(int $index)
+    // ---
+    // REMOVE ITEM
+    // Setelah hapus semua item -> kembali ke posisi awal (map='d', harga='')
+    // Setelah hapus sebagian  -> recalc saran penyeimbang
+    // ---
+    public function removeItem(int $index): void
     {
-        if (isset($this->items[$index])) {
-            array_splice($this->items, $index, 1);
+        if (!isset($this->items[$index])) return;
 
-            // Setelah penghapusan, cek ulang nomor jurnal.
-            // Jika draf menjadi unbalanced, nomor jurnal harus kembali ke nomor yang ada di draf.
-            $this->syncJurnalNumber();
-            $this->updateAutoBalanceSuggestion(true);
-            $this->persistDraftState();
+        array_splice($this->items, $index, 1);
+
+        if (empty($this->items)) {
+            // Semua dihapus: kembali ke posisi awal tanpa syarat
+            $this->harga  = '';
+            $this->banyak = 1;
+            $this->map    = 'd';
+            $this->dispatch('toast', type: 'error', title: 'Draft Dikosongkan', msg: 'Semua item berhasil dihapus.');
+        } else {
+            // Masih ada item: sync jurnal dan recalc saran
+            $this->recalcAutoBalance(changemap: true);
+            $this->dispatch('toast', type: 'error', title: 'Item Dihapus', msg: 'Item berhasil dihapus dari draft.');
         }
+
+        $this->syncJurnalNumber();
+        $this->persistDraftState();
     }
 
-    public function saveJurnal()
+    // ---
+    // SAVE JURNAL
+    // ---
+    public function saveJurnal(): void
     {
         if (empty($this->items) || !$this->isDraftBalanced()) return;
 
@@ -304,32 +355,46 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'jurnal_draft_map',
             'jurnal_draft_harga',
             'jurnal_draft_banyak',
+            'jurnal_draft_nodok',
+            'jurnal_draft_nama',
+            'jurnal_draft_mm',
+            'jurnal_draft_m3',
+            'jurnal_draft_hitkbk',
         ]);
 
         $this->items       = [];
         $this->wasBalanced = false;
-        $this->reset(['no_akun', 'nama_akun', 'keterangan', 'banyak', 'harga']);
-        $this->banyak = 1;
-        $this->map    = 'd';
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
+        $this->harga   = '';
+        $this->banyak  = 1;
+        $this->map     = 'd';
+        $this->hit_kbk = 'b';
 
         $this->perPage      = 50;
         $this->hasMorePages = true;
 
-        // Reset ke nomor jurnal terbaru di DB
         $this->syncJurnalNumber();
 
-        Notification::make()->title('Jurnal Berhasil Diposting')->success()->send();
+        $this->dispatch('toast', type: 'success', title: 'Jurnal Diposting!', msg: 'Semua entri berhasil disimpan ke database.');
     }
 
-    public function resetForm()
+    // ---
+    // RESET FORM (tombol Batal)
+    // Hanya bersihkan field input, draft tidak disentuh, jurnal tidak berubah
+    // ---
+    public function resetForm(): void
     {
-        $this->reset(['no_akun', 'nama_akun', 'keterangan', 'banyak', 'harga']);
-        $this->banyak = 1;
-        $this->map    = 'd';
-        $this->updateAutoBalanceSuggestion(false);
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
+        $this->harga   = '';
+        $this->banyak  = 1;
+        $this->map     = 'd';
+        $this->hit_kbk = 'b';
         $this->persistDraftState();
     }
 
+    // ---
+    // EDIT HISTORY
+    // ---
     public function editHistoryAction(): Action
     {
         return Action::make('editHistory')
@@ -344,7 +409,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                         ->required()
                         ->searchable()
                         ->options(function () {
-                            $sub = SubAnakAkun::all()->mapWithKeys(fn($item) => [
+                            $sub  = SubAnakAkun::all()->mapWithKeys(fn($item) => [
                                 $item->kode_sub_anak_akun => "{$item->kode_sub_anak_akun} - {$item->nama_sub_anak_akun}"
                             ]);
                             $anak = AnakAkun::all()->mapWithKeys(fn($item) => [
@@ -379,6 +444,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
             });
     }
 
+    // ---
+    // DELETE HISTORY
+    // ---
     public function deleteHistoryAction(): Action
     {
         return Action::make('deleteHistory')

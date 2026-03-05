@@ -189,6 +189,105 @@
             top: 0;
             z-index: 10;
         }
+
+        /* ── TOAST NOTIFICATION ── */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 4px;
+            border-left: 3px solid;
+            min-width: 280px;
+            max-width: 360px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+            pointer-events: all;
+            animation: toastIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .toast.hide {
+            animation: toastOut 0.18s ease-in forwards;
+        }
+
+        .toast-success {
+            background: #111827;
+            border-color: #10b981;
+            color: #d1fae5;
+        }
+
+        .toast-error {
+            background: #111827;
+            border-color: #ef4444;
+            color: #fee2e2;
+        }
+
+        .toast-info {
+            background: #111827;
+            border-color: #d97706;
+            color: #fef3c7;
+        }
+
+        .toast-icon {
+            flex-shrink: 0;
+            width: 18px;
+            height: 18px;
+            margin-top: 1px;
+        }
+
+        .toast-body {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            line-height: 1.3;
+        }
+
+        .toast-msg {
+            font-size: 12px;
+            font-weight: 500;
+            opacity: 0.75;
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateX(24px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes toastOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: translateX(24px);
+            }
+        }
     </style>
 
     {{-- ══════════════════════════════════════════════════════════════ --}}
@@ -199,10 +298,15 @@
         x-data="{
             tgl: @entangle('tgl'),
             jurnal: @entangle('jurnal'),
+            no_dokumen: @entangle('no_dokumen'),
             no_akun: @entangle('no_akun'),
             nama_akun: @entangle('nama_akun'),
+            nama: @entangle('nama'),
+            mm: @entangle('mm'),
             keterangan: @entangle('keterangan'),
+            hit_kbk: @entangle('hit_kbk'),
             banyak: @entangle('banyak'),
+            m3: @entangle('m3'),
             harga_display: '',
             harga_raw: @entangle('harga'),
             map: @entangle('map'),
@@ -244,11 +348,11 @@
             },
             get totalDebit() {
                 return this.items.reduce((acc, curr) =>
-                    (['D','d','Debit','debit'].includes(curr.map)) ? acc + parseFloat(curr.total) : acc, 0);
+                    curr.map.toLowerCase() === 'd' ? acc + parseFloat(curr.total) : acc, 0);
             },
             get totalKredit() {
                 return this.items.reduce((acc, curr) =>
-                    (['K','k','Kredit','kredit'].includes(curr.map)) ? acc + parseFloat(curr.total) : acc, 0);
+                    curr.map.toLowerCase() === 'k' ? acc + parseFloat(curr.total) : acc, 0);
             },
             get isBalanced() {
                 return Math.abs(this.totalDebit - this.totalKredit) < 0.01 && this.items.length > 0;
@@ -262,6 +366,11 @@
                 else if (searchTerm !== value) { searchTerm = value; }
             });
             harga_display = formatRupiah(harga_raw);
+
+            // ── Livewire toast events ──
+            $wire.on('toast', ({ type, title, msg }) => {
+                window.showToast(type, title, msg ?? '');
+            });
         ">
 
         {{-- Form Input Utama --}}
@@ -277,6 +386,8 @@
 
             <form wire:submit.prevent="addItem" class="p-6 space-y-6">
                 @csrf
+
+                {{-- ROW 1: Tanggal | No. Jurnal | No. Dokumen --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                     {{-- Tanggal --}}
@@ -290,6 +401,16 @@
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No. Jurnal</label>
                         <input type="text" x-model="jurnal" placeholder="Isi nomor jurnal..." class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm">
                     </div>
+
+                    {{-- No. Dokumen --}}
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No. Dokumen</label>
+                        <input type="text" x-model="no_dokumen" placeholder="Masukkan no. dokumen..." class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm">
+                    </div>
+                </div>
+
+                {{-- ROW 2: No Akun | Nama Akun | Nama --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                     {{-- Searchable No Akun --}}
                     <div class="space-y-1.5 relative" @click.away="isDropdownOpen = false">
@@ -320,17 +441,70 @@
                         <div class="px-3 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-[4px] text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center" x-text="nama_akun || 'Pilih akun...'"></div>
                     </div>
 
+                    {{-- Nama --}}
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama</label>
+                        <input type="text" x-model="nama" placeholder="Masukkan nama..." class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm">
+                    </div>
+                </div>
+
+                {{-- ROW 3: MM (Tebal Plywood) | Keterangan --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    {{-- MM Tebal Plywood --}}
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">MM (Tebal Plywood)</label>
+                        <input type="text" inputmode="decimal" x-model="mm" placeholder="Contoh: 18" class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm">
+                    </div>
+
                     {{-- Keterangan --}}
-                    <div class="md:col-span-2 space-y-1.5">
+                    <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Keterangan Transaksi</label>
                         <input type="text" x-model="keterangan" placeholder="Masukkan detail..." class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-amber-500 placeholder:text-sm">
                     </div>
+                </div>
 
-                    {{-- Kuantitas --}}
+                {{-- ROW 4: Hit KBK | Kuantitas (Banyak) | Kubikasi (M3) --}}
+                {{--
+                    hit_kbk = 'banyak'   -> total = banyak * harga
+                    hit_kbk = 'kubikasi' -> total = m3 * harga
+                    hit_kbk = ''         -> total = harga (tidak dikalikan)
+                --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                    {{-- Hit KBK --}}
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kuantitas</label>
-                        <input type="text" inputmode="numeric" step="any" x-model="banyak" placeholder="0" class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Hit KBK <span class="text-amber-500">*</span>
+                        </label>
+                        <select x-model="hit_kbk"
+                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
+                            style="background-image:url('data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e');background-position:right 10px center;background-repeat:no-repeat;background-size:16px;padding-right:36px;-webkit-appearance:none">
+                            <option value="">-- Tidak ada --</option>
+                            <option value="b">Banyak</option>
+                            <option value="m">Kubikasi</option>
+                        </select>
                     </div>
+
+                    {{-- Kuantitas (Banyak) --}}
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kuantitas (Banyak)</label>
+                        <input type="text" inputmode="decimal" x-model="banyak"
+                            placeholder="0"
+                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
+                    </div>
+
+                    {{-- Kubikasi (M3) --}}
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kubikasi (M3)</label>
+                        <input type="text" inputmode="decimal" x-model="m3"
+                            placeholder="0.0000"
+                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
+                    </div>
+                </div>
+
+                {{-- ROW 5: Harga | Tipe Mutasi --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
 
                     {{-- Harga --}}
                     <div class="space-y-1.5">
@@ -403,8 +577,8 @@
                                     <td class="px-4 py-4 text-center text-gray-400 font-medium" x-text="row.jurnal"></td>
                                     <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500" x-text="new Intl.NumberFormat('id-ID').format(row.banyak)"></td>
                                     <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono" x-text="new Intl.NumberFormat('id-ID').format(row.harga)"></td>
-                                    <td class="px-4 py-4 text-right font-bold text-emerald-600 bg-emerald-50/5" x-text="['D','d','Debit','debit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
-                                    <td class="px-4 py-4 text-right font-bold text-rose-600 bg-rose-50/5" x-text="['K','k','Kredit','kredit'].includes(row.map) ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
+                                    <td class="px-4 py-4 text-right font-bold text-emerald-600 bg-emerald-50/5" x-text="row.map.toLowerCase() === 'd' ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
+                                    <td class="px-4 py-4 text-right font-bold text-rose-600 bg-rose-50/5" x-text="row.map.toLowerCase() === 'k' ? new Intl.NumberFormat('id-ID').format(row.total) : '-'"></td>
                                     <td class="px-4 py-4 text-center">
                                         <button type="button" @click="$wire.removeItem(i)" class="text-gray-300 hover:text-rose-600 transition-none">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -608,7 +782,7 @@
                 {{-- Scroll zone — hanya tbody yang scroll, thead sticky di atas --}}
                 <div class="table-body-scroll" x-ref="tableScrollBody">
                     <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1500px]">
-                        <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
                             <tr class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest">
                                 <th class="px-4 py-4 w-[110px]">Tanggal</th>
                                 <th class="px-4 py-4 w-[110px]">No Akun</th>
@@ -806,5 +980,73 @@
 
     <x-filament-actions::modals />
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+    {{-- Toast Container --}}
+    <div id="toast-container"></div>
+
+    {{-- Global toast function — plain DOM, no template literals (safe from Blade parsing) --}}
+    <script>
+        window.showToast = function(type, title, msg, duration) {
+            if (duration === undefined) duration = 3500;
+            var container = document.getElementById('toast-container');
+            if (!container) return;
+
+            var svgNS = 'http://www.w3.org/2000/svg';
+
+            // Build icon SVG via DOM
+            var svg = document.createElementNS(svgNS, 'svg');
+            svg.setAttribute('class', 'toast-icon');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('viewBox', '0 0 24 24');
+
+            var path = document.createElementNS(svgNS, 'path');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+
+            if (type === 'success') {
+                path.setAttribute('stroke-width', '2.5');
+                path.setAttribute('d', 'M5 13l4 4L19 7');
+            } else if (type === 'error') {
+                path.setAttribute('stroke-width', '2.5');
+                path.setAttribute('d', 'M6 18L18 6M6 6l12 12');
+            } else {
+                path.setAttribute('stroke-width', '2');
+                path.setAttribute('d', 'M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z');
+            }
+            svg.appendChild(path);
+
+            // Build body
+            var body = document.createElement('div');
+            body.className = 'toast-body';
+
+            var titleEl = document.createElement('div');
+            titleEl.className = 'toast-title';
+            titleEl.textContent = title;
+            body.appendChild(titleEl);
+
+            if (msg) {
+                var msgEl = document.createElement('div');
+                msgEl.className = 'toast-msg';
+                msgEl.textContent = msg;
+                body.appendChild(msgEl);
+            }
+
+            // Wrap
+            var el = document.createElement('div');
+            el.className = 'toast toast-' + type;
+            el.appendChild(svg);
+            el.appendChild(body);
+
+            container.appendChild(el);
+
+            setTimeout(function() {
+                el.classList.add('hide');
+                el.addEventListener('animationend', function() {
+                    el.remove();
+                });
+            }, duration);
+        };
+    </script>
 
 </x-filament-panels::page>
