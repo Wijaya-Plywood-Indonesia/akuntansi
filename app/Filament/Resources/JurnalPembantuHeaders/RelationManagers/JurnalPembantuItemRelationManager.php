@@ -136,7 +136,7 @@ class JurnalPembantuItemRelationManager extends RelationManager
                     ->alignRight()
                     ->weight('bold'),
 
-                IconColumn::make('aktif')
+                IconColumn::make('status')
                     ->boolean(),
             ])
             ->headerActions([

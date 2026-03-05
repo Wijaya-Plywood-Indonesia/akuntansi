@@ -20,10 +20,12 @@ return new class extends Migration {
             $table->string('nama', 255)->nullable();          // Nama barang/bahan/orang
             $table->string('jenis_pihak', 20)->nullable();
             // Klasifikasi: 'pelanggan', 'pemasok', 'karyawan', 'lain'
-
+            $table->string('nama_pihak', 255)->nullable();
+            $table->string('nama_barang', 255)->nullable();
             $table->string('no_dokumen', 100)->nullable();    // No. surat jalan, dsb.
+            $table->string('no_referensi', 100)->nullable();
             $table->text('keterangan')->nullable();    // Keterangan item
-
+            $table->integer('jumlah')->nullable();
             // --- Dimensi (untuk veneer/kayu) ---
             $table->string('ukuran', 255)->nullable();          // Tebal dalam milimeter
             $table->string('kualitas', 20)->nullable();       // 1/2/3/4/5/AF/dll

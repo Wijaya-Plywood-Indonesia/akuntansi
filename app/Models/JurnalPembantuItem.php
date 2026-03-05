@@ -26,7 +26,7 @@ class JurnalPembantuItem extends Model
         'harga',
         'hit_kbk',
         'jumlah',
-        'aktif',
+        'status',
         'created_by',
         'updated_by',
     ];
@@ -36,7 +36,7 @@ class JurnalPembantuItem extends Model
         'm3' => 'decimal:6',
         'harga' => 'decimal:6',
         'jumlah' => 'decimal:4',
-        'aktif' => 'boolean',
+        'status' => 'boolean',
     ];
 
     // ── Konstanta ─────────────────────────────────────────────────────
