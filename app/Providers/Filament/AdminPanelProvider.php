@@ -73,6 +73,7 @@ class AdminPanelProvider extends PanelProvider
                     ->icon('heroicon-o-book-open')
                     ->collapsed(),
             ])
+            ->sidebarCollapsibleOnDesktop()
         ;
     }
 }
