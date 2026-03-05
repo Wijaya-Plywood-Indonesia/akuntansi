@@ -1,12 +1,16 @@
 <x-filament-panels::page>
-{{-- FILTER SECTION TETAP SAMA --}}
+{{-- FILTER SECTION --}}
 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-    <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Filter Periode</h3>
+    <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
+        Filter Periode
+    </h3>
     <form wire:submit.prevent="filter">
         {{ $this->schema }}
         <div class="mt-4 flex items-center gap-3">
-            <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors">
-                <x-heroicon-m-funnel class="w-4 h-4" /> Tampilkan Laporan
+            <button type="submit"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors">
+                <x-heroicon-m-funnel class="w-4 h-4" />
+                Tampilkan Laporan
             </button>
         </div>
     </form>
@@ -14,38 +18,43 @@
 
 @if($sudahFilter && count($laporanData) > 0)
 @php
-    $r = $ringkasanPerBulan;
+    $r    = $ringkasanPerBulan;
     $buls = $bulanList;
-    
+
     $tipeReturPotongan = ['retur_potongan'];
-    $tipeHPP = ['hpp', 'beban_produksi'];
-    $tipeBebanUsaha = ['beban_usaha'];
-    $tipeLain = ['pendapatan_lain', 'beban_lain'];
+    $tipeHPP           = ['hpp', 'beban_produksi'];
+    $tipeBebanUsaha    = ['beban_usaha'];
+    $tipeLain          = ['pendapatan_lain', 'beban_lain'];
+
     $lastPendapatanIdx = null; $lastReturIdx = null; $lastHppIdx = null; $lastBebanIdx = null; $lastLainIdx = null;
 
     foreach ($laporanData as $idx => $section) {
         $tipe = $section['tipe'];
-        if ($tipe === 'pendapatan') $lastPendapatanIdx = $idx;
-        if (in_array($tipe, $tipeReturPotongan)) $lastReturIdx = $idx;
-        if (in_array($tipe, $tipeHPP)) $lastHppIdx = $idx;
-        if (in_array($tipe, $tipeBebanUsaha)) $lastBebanIdx = $idx;
-        if (in_array($tipe, $tipeLain)) $lastLainIdx = $idx;
+        if ($tipe === 'pendapatan')              $lastPendapatanIdx = $idx;
+        if (in_array($tipe, $tipeReturPotongan)) $lastReturIdx      = $idx;
+        if (in_array($tipe, $tipeHPP))           $lastHppIdx        = $idx;
+        if (in_array($tipe, $tipeBebanUsaha))    $lastBebanIdx      = $idx;
+        if (in_array($tipe, $tipeLain))          $lastLainIdx       = $idx;
     }
     if ($lastReturIdx === null) $lastReturIdx = $lastPendapatanIdx;
 @endphp
 
-<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" 
+<div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden" 
      x-data="{ allOpen: false }"
      @laba-rugi-expand.window="allOpen = true; $el.querySelectorAll('[data-collapse]').forEach(el => el.style.display = '')"
      @laba-rugi-collapse.window="allOpen = false; $el.querySelectorAll('[data-collapse]').forEach(el => el.style.display = 'none')">
     
-    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50/50">
-        <h2 class="text-sm font-bold text-gray-900 uppercase tracking-widest">Laporan Laba Rugi</h2>
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
+        <div>
+            <h2 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-widest">Laporan Laba Rugi</h2>
+        </div>
         <div class="flex items-center gap-2">
-            <button type="button" @click="$dispatch('laba-rugi-collapse')" class="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-md shadow-sm">
+            <button type="button" @click="$dispatch('laba-rugi-collapse')" 
+                class="px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700">
                 Collapse All
             </button>
-            <button type="button" @click="$dispatch('laba-rugi-expand')" class="px-3 py-1.5 text-xs font-semibold text-white bg-gray-800 rounded-md shadow-sm">
+            <button type="button" @click="$dispatch('laba-rugi-expand')" 
+                class="px-3 py-1.5 text-xs font-semibold text-white bg-gray-800 dark:bg-primary-600 rounded-md shadow-sm hover:bg-gray-700 dark:hover:bg-primary-500">
                 Expand All
             </button>
         </div>
@@ -54,19 +63,20 @@
     <div class="overflow-x-auto">
         <table class="w-full text-sm border-collapse">
             <thead>
-                <tr class="bg-amber-400">
-                    <th class="px-4 py-3 text-left text-xs font-extrabold text-amber-950 uppercase tracking-widest w-32">KODE AKUN</th>
-                    <th class="px-4 py-3 text-left text-xs font-extrabold text-amber-950 uppercase tracking-widest">NAMA AKUN</th>
+                <tr class="bg-amber-400 dark:bg-amber-500">
+                    <th class="px-4 py-3 text-left text-xs font-extrabold text-amber-950 dark:text-amber-950 uppercase tracking-widest w-32">KODE AKUN</th>
+                    <th class="px-4 py-3 text-left text-xs font-extrabold text-amber-950 dark:text-amber-950 uppercase tracking-widest sticky left-0 bg-amber-400 dark:bg-amber-500">NAMA AKUN</th>
                     @foreach($buls as $bulan)
-                        <th class="px-4 py-3 text-right text-xs font-extrabold text-amber-950 uppercase tracking-widest min-w-[160px]">{{ $this->getNamaBulan($bulan) }}</th>
+                        <th class="px-4 py-3 text-right text-xs font-extrabold text-amber-950 dark:text-amber-950 uppercase tracking-widest min-w-[160px]">
+                            {{ $this->getNamaBulan($bulan) }}
+                        </th>
                     @endforeach
                 </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                 @foreach($laporanData as $idx => $section)
                     @include('filament.pages.partials.laba-rugi-node', ['node' => $section, 'depth' => 0, 'buls' => $buls])
                     
-                    {{-- Subtotal Logic --}}
                     @if($idx === $lastPendapatanIdx)
                         @include('filament.pages.partials.laba-rugi-subtotal', ['label' => 'Pendapatan Bruto', 'key' => 'total_pendapatan', 'style' => 'pendapatan_bruto', 'rumus' => 'Total semua akun pendapatan', 'buls' => $buls, 'r' => $r])
                     @endif
