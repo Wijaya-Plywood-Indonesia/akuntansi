@@ -6,6 +6,7 @@ use App\Filament\Resources\JurnalPembantuHeaders\Pages\CreateJurnalPembantuHeade
 use App\Filament\Resources\JurnalPembantuHeaders\Pages\EditJurnalPembantuHeader;
 use App\Filament\Resources\JurnalPembantuHeaders\Pages\ListJurnalPembantuHeaders;
 use App\Filament\Resources\JurnalPembantuHeaders\Pages\ViewJurnalPembantuHeader;
+use App\Filament\Resources\JurnalPembantuHeaders\RelationManagers\JurnalPembantuItemRelationManager;
 use App\Filament\Resources\JurnalPembantuHeaders\Schemas\JurnalPembantuHeaderForm;
 use App\Filament\Resources\JurnalPembantuHeaders\Schemas\JurnalPembantuHeaderInfolist;
 use App\Filament\Resources\JurnalPembantuHeaders\Tables\JurnalPembantuHeadersTable;
@@ -42,7 +43,7 @@ class JurnalPembantuHeaderResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            JurnalPembantuItemRelationManager::class,
         ];
     }
 

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\JurnalPembantuHeaders\Schemas;
 
 use App\Models\JurnalPembantuHeader;
 use App\Models\SubAnakAkun;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
@@ -122,6 +123,9 @@ class JurnalPembantuHeaderForm
                         ->helperText('Tidak diteruskan ke Jurnal Umum.')
                         ->columnSpanFull(),
                 ]),
+            Hidden::make('dibuat_oleh')
+                ->default(fn() => Filament::auth()->id())
+                ->dehydrated(),
         ]);
     }
 }
