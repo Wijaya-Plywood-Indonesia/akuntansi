@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\AnakAkun;
 use App\Models\SubAnakAkun;
 use App\Models\JurnalUmum as JurnalModel;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
@@ -23,6 +24,7 @@ use UnitEnum;
 
 class JurnalUmum extends Page implements HasActions, HasForms
 {
+    use HasPageShield;
     use InteractsWithActions;
     use InteractsWithForms;
 
