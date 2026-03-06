@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\IndukAkun;
 use App\Models\JurnalUmum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Carbon\Carbon;
 use BackedEnum;
@@ -13,6 +14,7 @@ use Throwable;
 
 class BukuBesar extends Page
 {
+    use HasPageShield;
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
     protected string $view = 'filament.pages.buku-besar';
     protected static ?string $navigationLabel = 'Buku Besar';
