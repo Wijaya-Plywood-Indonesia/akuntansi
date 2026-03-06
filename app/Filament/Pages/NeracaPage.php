@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Services\NeracaService;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -12,6 +13,7 @@ use UnitEnum;
 
 class NeracaPage extends Page implements HasForms
 {
+    use HasPageShield;
     use InteractsWithForms;
 
     protected static ?string $navigationLabel = 'Neraca';
