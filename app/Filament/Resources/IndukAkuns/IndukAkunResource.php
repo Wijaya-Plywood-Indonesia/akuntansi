@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\IndukAkuns;
 
+use App\Filament\Resources\AkunGroups\RelationManagers\AnakAkunsRelationManager;
 use App\Filament\Resources\IndukAkuns\Pages\CreateIndukAkun;
 use App\Filament\Resources\IndukAkuns\Pages\EditIndukAkun;
 use App\Filament\Resources\IndukAkuns\Pages\ListIndukAkuns;
 use App\Filament\Resources\IndukAkuns\Pages\ViewIndukAkun;
+use App\Filament\Resources\IndukAkuns\RelationManagers\SubAnakAkunRelationManager;
 use App\Filament\Resources\IndukAkuns\Schemas\IndukAkunForm;
 use App\Filament\Resources\IndukAkuns\Schemas\IndukAkunInfolist;
 use App\Filament\Resources\IndukAkuns\Tables\IndukAkunsTable;
@@ -45,7 +47,9 @@ class IndukAkunResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+                //
+            AnakAkunsRelationManager::class,
+            SubAnakAkunRelationManager::class,
         ];
     }
 
