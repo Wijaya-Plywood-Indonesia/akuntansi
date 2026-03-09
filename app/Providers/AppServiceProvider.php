@@ -23,9 +23,14 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Register Pusher
-        FilamentAsset::register([
-            Js::make('jurnal-realtime', asset('js/app/jurnal-realtime.js')),
-            Js::make('app-js', Vite::asset('resources/js/app.js')),
-        ]);
+        if (! app()->runningInConsole()) {
+            // Register Pusher & Vite Assets
+            FilamentAsset::register([
+                Js::make('jurnal-realtime', asset('js/app/jurnal-realtime.js')),
+
+                // Baris ini yang sebelumnya menyebabkan error saat artisan command dijalankan
+                Js::make('app-js', Vite::asset('resources/js/app.js')),
+            ]);
+        }
     }
 }
