@@ -50,6 +50,14 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public bool $hasMorePages = true;
     public bool $isLoadingMore = false;
 
+    // ── BULK DELETE ──────────────────────────────────────────
+    // Array id yang sedang dicentang di tabel history
+    public array $selectedIds = [];
+
+    // Flag "select all" di layar
+    public bool $selectAll = false;
+    // ─────────────────────────────────────────────────────────
+
     // ---
     // MOUNT
     // ---
@@ -65,21 +73,15 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->m3 = session()->get('jurnal_draft_m3', '');
         $this->hit_kbk = session()->get('jurnal_draft_hitkbk', 'b');
 
-        // map: pastikan selalu lowercase - bersihkan nilai lama yang mungkin uppercase
         $savedMap = session()->get('jurnal_draft_map', 'd');
         $this->map = in_array(strtolower($savedMap), ['d', 'k']) ? strtolower($savedMap) : 'd';
 
         $this->syncJurnalNumber();
-
-        // Saat load: isi saran harga jika ada selisih, tapi jangan ubah posisi map
         $this->recalcAutoBalance(changemap: false);
     }
 
     // ---
     // SYNC NOMOR JURNAL
-    // Draft kosong          -> Max DB + 1
-    // Draft ada + balance   -> Max jurnal di draft + 1
-    // Draft ada + unbalance -> Jurnal pertama di draft (tetap)
     // ---
     protected function syncJurnalNumber(): void
     {
@@ -101,14 +103,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     // ---
     // AUTO BALANCE RECALCULATE
-    //
-    // $changemap = true  -> sistem arahkan tombol D/K ke posisi lawan
-    // $changemap = false -> hanya isi harga, posisi map dibiarkan
     // ---
     private function recalcAutoBalance(bool $changemap = true): void
     {
         if (empty($this->items)) {
-            // Draft kosong: kembali ke posisi awal tanpa syarat
             $this->harga = '';
             $this->banyak = 1;
             $this->map = 'd';
@@ -199,6 +197,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->filterTglSampai = $this->filterTglSampaiInput;
         $this->perPage = 50;
         $this->hasMorePages = true;
+        // Reset pilihan saat filter berubah
+        $this->selectedIds = [];
+        $this->selectAll = false;
     }
 
     public function resetFilter(): void
@@ -209,6 +210,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->filterTglSampai = '';
         $this->perPage = 50;
         $this->hasMorePages = true;
+        $this->selectedIds = [];
+        $this->selectAll = false;
     }
 
     public function loadMore(): void
@@ -216,6 +219,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         if (!$this->hasMorePages)
             return;
         $this->perPage += 50;
+        // Reset selectAll saat load more agar tidak membingungkan
+        $this->selectAll = false;
     }
 
     // ---
@@ -235,7 +240,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     // ---
     // UPDATED NO AKUN
-    // Hanya isi saran harga, posisi map tidak berubah
     // ---
     public function updatedNoAkun($value): void
     {
@@ -259,7 +263,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // ---
     public function addItem(): void
     {
-        // Validasi manual dengan toast per field agar user tahu persis field mana yang kosong
         $errors = [];
 
         if (blank($this->no_akun)) {
@@ -279,10 +282,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
             return;
         }
 
-        // Hitung total berdasarkan pilihan hit_kbk:
-        // 'banyak'   -> banyak * harga
-        // 'kubikasi' -> m3 * harga
-        // ''         -> harga saja (tidak dikalikan)
         $harga = (float) $this->harga;
         $total = match ($this->hit_kbk) {
             'b' => (float) $this->banyak * $harga,
@@ -310,7 +309,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
 
         if ($this->isDraftBalanced()) {
-            // Balance: clear semua, naikkan nomor jurnal
             $this->harga = '';
             $this->banyak = 1;
             $this->map = 'd';
@@ -319,7 +317,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
             $this->syncJurnalNumber();
             $this->dispatch('toast', type: 'success', title: 'Jurnal Balanced!', msg: 'Draft selesai — siap diposting.');
         } else {
-            // Belum balance: sarankan harga + arahkan map ke posisi lawan
             $this->recalcAutoBalance(changemap: true);
             $this->dispatch('toast', type: 'info', title: 'Item Ditambahkan', msg: 'Jurnal belum balance — tambah entri penyeimbang.');
         }
@@ -329,8 +326,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     // ---
     // REMOVE ITEM
-    // Setelah hapus semua item -> kembali ke posisi awal (map='d', harga='')
-    // Setelah hapus sebagian  -> recalc saran penyeimbang
     // ---
     public function removeItem(int $index): void
     {
@@ -340,13 +335,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
         array_splice($this->items, $index, 1);
 
         if (empty($this->items)) {
-            // Semua dihapus: kembali ke posisi awal tanpa syarat
             $this->harga = '';
             $this->banyak = 1;
             $this->map = 'd';
             $this->dispatch('toast', type: 'error', title: 'Draft Dikosongkan', msg: 'Semua item berhasil dihapus.');
         } else {
-            // Masih ada item: sync jurnal dan recalc saran
             $this->recalcAutoBalance(changemap: true);
             $this->dispatch('toast', type: 'error', title: 'Item Dihapus', msg: 'Item berhasil dihapus dari draft.');
         }
@@ -399,18 +392,15 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->banyak = 1;
         $this->map = 'd';
         $this->hit_kbk = 'b';
-
         $this->perPage = 50;
         $this->hasMorePages = true;
 
         $this->syncJurnalNumber();
-
         $this->dispatch('toast', type: 'success', title: 'Jurnal Diposting!', msg: 'Semua entri berhasil disimpan ke database.');
     }
 
     // ---
-    // RESET FORM (tombol Batal)
-    // Hanya bersihkan field input, draft tidak disentuh, jurnal tidak berubah
+    // RESET FORM
     // ---
     public function resetForm(): void
     {
@@ -421,6 +411,65 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->hit_kbk = 'b';
         $this->persistDraftState();
     }
+
+    // ══════════════════════════════════════════════════════════
+    // BULK DELETE — method baru, tidak mengubah logika lama
+    // ══════════════════════════════════════════════════════════
+
+    // Toggle select all — hanya untuk baris yang tampil di layar
+    // IDs dikirim dari Alpine via dispatch
+    public function toggleSelectAll(array $ids): void
+    {
+        if ($this->selectAll) {
+            $this->selectedIds = [];
+            $this->selectAll = false;
+        } else {
+            $this->selectedIds = $ids;
+            $this->selectAll = true;
+        }
+    }
+
+    // Toggle satu row
+    public function toggleSelected(int $id): void
+    {
+        if (in_array($id, $this->selectedIds)) {
+            $this->selectedIds = array_values(array_filter(
+                $this->selectedIds,
+                fn($i) => $i !== $id
+            ));
+        } else {
+            $this->selectedIds[] = $id;
+        }
+
+        // Jika ada yang tidak dicentang, selectAll = false
+        $this->selectAll = false;
+    }
+
+    // Hapus semua yang dipilih
+    public function bulkDelete(): void
+    {
+        if (empty($this->selectedIds)) {
+            $this->dispatch('toast', type: 'error', title: 'Tidak ada yang dipilih', msg: 'Centang minimal 1 baris terlebih dahulu.');
+            return;
+        }
+
+        $count = count($this->selectedIds);
+
+        try {
+            JurnalModel::whereIn('id', $this->selectedIds)->delete();
+        } catch (\Throwable $e) {
+            $this->dispatch('toast', type: 'error', title: 'Gagal Hapus', msg: $e->getMessage());
+            return;
+        }
+
+        $this->selectedIds = [];
+        $this->selectAll = false;
+
+        $this->dispatch('toast', type: 'success', title: 'Berhasil Dihapus', msg: "{$count} transaksi berhasil dihapus.");
+        $this->dispatch('bulk-delete-done'); // trigger tutup modal konfirmasi di Alpine
+    }
+
+    // ══════════════════════════════════════════════════════════
 
     // ---
     // EDIT HISTORY

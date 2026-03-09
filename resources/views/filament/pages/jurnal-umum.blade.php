@@ -45,7 +45,6 @@
             background: #374151;
         }
 
-        /* ── LOADING DOTS ANIMATION ── */
         @keyframes blink {
 
             0%,
@@ -82,7 +81,6 @@
             animation-delay: 0.4s;
         }
 
-        /* ── LEDGER SKELETON ── */
         @keyframes shimmer {
             0% {
                 background-position: -600px 0;
@@ -106,7 +104,6 @@
             background-size: 600px 100%;
         }
 
-        /* ── COIN BOUNCE (end of list) ── */
         @keyframes coinSpin {
             0% {
                 transform: rotateY(0deg) scale(1);
@@ -126,7 +123,6 @@
             display: inline-block;
         }
 
-        /* ── ROW FADE IN ── */
         @keyframes fadeInRow {
             from {
                 opacity: 0;
@@ -143,7 +139,6 @@
             animation: fadeInRow 0.25s ease-out forwards;
         }
 
-        /* ── FILTER BADGE ── */
         .filter-badge {
             background: linear-gradient(135deg, #fef3c7, #fde68a);
             border: 1px solid #f59e0b;
@@ -156,9 +151,6 @@
             color: #fcd34d;
         }
 
-
-
-        /* ── TABLE BODY SCROLL WRAPPER ── */
         .table-body-scroll {
             max-height: 700px;
             overflow-y: auto;
@@ -183,14 +175,12 @@
             background: #374151;
         }
 
-        /* thead sticky dalam scroll zone */
         .table-body-scroll thead {
             position: sticky;
             top: 0;
             z-index: 10;
         }
 
-        /* ── TOAST NOTIFICATION ── */
         #toast-container {
             position: fixed;
             top: 20px;
@@ -288,10 +278,32 @@
                 transform: translateX(24px);
             }
         }
+
+        /* ── BULK ACTION BAR ── */
+        .bulk-bar {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            animation: fadeInRow 0.2s ease-out forwards;
+        }
+
+        /* ── CHECKBOX STYLE ── */
+        .row-checkbox {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 2px solid #d1d5db;
+            cursor: pointer;
+            accent-color: #d97706;
+        }
+
+        .row-selected td {
+            background-color: rgba(217, 119, 6, 0.06) !important;
+        }
     </style>
 
     {{-- ══════════════════════════════════════════════════════════════ --}}
-    {{-- FORM INPUT UTAMA (tidak ada perubahan dari kode asli)          --}}
+    {{-- FORM INPUT UTAMA (tidak ada perubahan)                         --}}
     {{-- ══════════════════════════════════════════════════════════════ --}}
     <div class="w-full mx-auto no-transition"
         x-cloak
@@ -367,7 +379,6 @@
             });
             harga_display = formatRupiah(harga_raw);
 
-            // ── Livewire toast events ──
             $wire.on('toast', ({ type, title, msg }) => {
                 window.showToast(type, title, msg ?? '');
             });
@@ -387,32 +398,22 @@
             <form wire:submit.prevent="addItem" class="p-6 space-y-6">
                 @csrf
 
-                {{-- ROW 1: Tanggal | No. Jurnal | No. Dokumen --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                    {{-- Tanggal --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tanggal Transaksi</label>
                         <input type="text" x-ref="dateInput" readonly class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer">
                     </div>
-
-                    {{-- No Jurnal --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No. Jurnal</label>
                         <input type="text" x-model="jurnal" placeholder="Isi nomor jurnal..." class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm">
                     </div>
-
-                    {{-- No. Dokumen --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No. Dokumen</label>
                         <input type="text" x-model="no_dokumen" placeholder="Masukkan no. dokumen..." class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm">
                     </div>
                 </div>
 
-                {{-- ROW 2: No Akun | Nama Akun | Nama --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                    {{-- Searchable No Akun --}}
                     <div class="space-y-1.5 relative" @click.away="isDropdownOpen = false">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cari Nomor Akun</label>
                         <div class="relative flex items-center">
@@ -434,49 +435,30 @@
                             </template>
                         </div>
                     </div>
-
-                    {{-- Nama Akun --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama Akun</label>
                         <div class="px-3 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-[4px] text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center" x-text="nama_akun || 'Pilih akun...'"></div>
                     </div>
-
-                    {{-- Nama --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama</label>
                         <input type="text" x-model="nama" placeholder="Masukkan nama..." class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm">
                     </div>
                 </div>
 
-                {{-- ROW 3: MM (Tebal Plywood) | Keterangan --}}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                    {{-- MM Tebal Plywood --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">MM (Tebal Plywood)</label>
                         <input type="text" inputmode="decimal" x-model="mm" placeholder="Contoh: 18" class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm">
                     </div>
-
-                    {{-- Keterangan --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Keterangan Transaksi</label>
                         <input type="text" x-model="keterangan" placeholder="Masukkan detail..." class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-amber-500 placeholder:text-sm">
                     </div>
                 </div>
 
-                {{-- ROW 4: Hit KBK | Kuantitas (Banyak) | Kubikasi (M3) --}}
-                {{--
-                    hit_kbk = 'banyak'   -> total = banyak * harga
-                    hit_kbk = 'kubikasi' -> total = m3 * harga
-                    hit_kbk = ''         -> total = harga (tidak dikalikan)
-                --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                    {{-- Hit KBK --}}
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Hit KBK <span class="text-amber-500">*</span>
-                        </label>
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hit KBK <span class="text-amber-500">*</span></label>
                         <select x-model="hit_kbk"
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
                             style="background-image:url('data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e');background-position:right 10px center;background-repeat:no-repeat;background-size:16px;padding-right:36px;-webkit-appearance:none">
@@ -485,28 +467,19 @@
                             <option value="m">Kubikasi</option>
                         </select>
                     </div>
-
-                    {{-- Kuantitas (Banyak) --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kuantitas (Banyak)</label>
-                        <input type="text" inputmode="decimal" x-model="banyak"
-                            placeholder="0"
+                        <input type="text" inputmode="decimal" x-model="banyak" placeholder="0"
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
                     </div>
-
-                    {{-- Kubikasi (M3) --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kubikasi (M3)</label>
-                        <input type="text" inputmode="decimal" x-model="m3"
-                            placeholder="0.0000"
+                        <input type="text" inputmode="decimal" x-model="m3" placeholder="0.0000"
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
                     </div>
                 </div>
 
-                {{-- ROW 5: Harga | Tipe Mutasi --}}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-
-                    {{-- Harga --}}
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Harga</label>
                         <div class="relative">
@@ -519,8 +492,6 @@
                                 class="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
                         </div>
                     </div>
-
-                    {{-- Tipe Mutasi --}}
                     <div class="space-y-3 pt-1">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider block text-center">Tipe Mutasi</label>
                         <div class="grid grid-cols-2 gap-3">
@@ -533,10 +504,7 @@
                 <div class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-6">
                     <button type="button" wire:click="resetForm" class="px-6 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-none">Batal</button>
                     <button type="button"
-                        @click="
-                            harga_raw = harga_display.replace(/[^0-9]/g, '');
-                            $nextTick(() => { $wire.addItem(); });
-                        "
+                        @click="harga_raw = harga_display.replace(/[^0-9]/g, ''); $nextTick(() => { $wire.addItem(); });"
                         class="px-10 py-2.5 bg-amber-600 dark:bg-amber-700 text-white rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-none flex items-center gap-2 shadow-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -548,7 +516,7 @@
         </div>
 
         {{-- ══════════════════════════════════════════════════════════════ --}}
-        {{-- TABLE DRAFT                                                    --}}
+        {{-- TABLE DRAFT (tidak ada perubahan)                             --}}
         {{-- ══════════════════════════════════════════════════════════════ --}}
         <div x-show="items.length > 0" x-cloak class="space-y-4 mb-10">
             <div class="flex items-center justify-between px-1">
@@ -617,7 +585,7 @@
         </div>
 
         {{-- ══════════════════════════════════════════════════════════════ --}}
-        {{-- TABLE HISTORY JURNAL UMUM                                     --}}
+        {{-- TABLE HISTORY JURNAL UMUM + BULK DELETE                       --}}
         {{-- ══════════════════════════════════════════════════════════════ --}}
         <div class="space-y-4"
             x-data="{
@@ -629,6 +597,48 @@
                 activeFilterDari:   @entangle('filterTglDari'),
                 activeFilterSampai: @entangle('filterTglSampai'),
                 hasMorePages: @entangle('hasMorePages'),
+
+                // ── BULK DELETE STATE ──────────────────────────────
+                selectedIds:    @entangle('selectedIds'),
+                selectAll:      @entangle('selectAll'),
+                showConfirm:    false,
+
+                // Kumpulkan semua id yang tampil di layar sekarang
+                get visibleIds() {
+                    return Array.from(document.querySelectorAll('[data-row-id]'))
+                        .map(el => parseInt(el.dataset.rowId));
+                },
+
+                toggleSelectAll() {
+                    if (this.selectAll) {
+                        this.$wire.toggleSelectAll([]);
+                    } else {
+                        this.$wire.toggleSelectAll(this.visibleIds);
+                    }
+                },
+
+                toggleRow(id) {
+                    this.$wire.toggleSelected(id);
+                },
+
+                isSelected(id) {
+                    return this.selectedIds.includes(id);
+                },
+
+                confirmBulkDelete() {
+                    if (this.selectedIds.length === 0) return;
+                    this.showConfirm = true;
+                },
+
+                cancelBulkDelete() {
+                    this.showConfirm = false;
+                },
+
+                doBulkDelete() {
+                    this.showConfirm = false;
+                    this.$wire.bulkDelete();
+                },
+                // ──────────────────────────────────────────────────
 
                 get hasActiveFilter() {
                     return this.activeFilterDari !== '' || this.activeFilterSampai !== '';
@@ -648,7 +658,6 @@
 
                 async resetFilter() {
                     this.isFiltering = true;
-                    // Bersihkan visual flatpickr — ini yang menyebabkan tanggal tidak hilang saat reset
                     if (this.fpDari)   this.fpDari.clear();
                     if (this.fpSampai) this.fpSampai.clear();
                     this.filterDari   = '';
@@ -658,23 +667,17 @@
                 },
 
                 initFilterDatepickers() {
-                    // Simpan instance flatpickr agar bisa dipanggil .clear() saat reset
                     this.fpDari = flatpickr(this.$refs.filterDariInput, {
                         dateFormat: 'Y-m-d',
-                        onChange: (selectedDates, dateStr) => {
-                            this.filterDari = dateStr;
-                        }
+                        onChange: (selectedDates, dateStr) => { this.filterDari = dateStr; }
                     });
                     this.fpSampai = flatpickr(this.$refs.filterSampaiInput, {
                         dateFormat: 'Y-m-d',
-                        onChange: (selectedDates, dateStr) => {
-                            this.filterSampai = dateStr;
-                        }
+                        onChange: (selectedDates, dateStr) => { this.filterSampai = dateStr; }
                     });
                 },
 
                 initInfiniteScroll() {
-                    {{-- Observer menggunakan root = scroll container agar trigger di dalam scroll, bukan viewport luar --}}
                     const sentinel   = this.$refs.scrollSentinel;
                     const scrollRoot = this.$refs.tableScrollBody;
                     if (!sentinel || !scrollRoot) return;
@@ -685,10 +688,7 @@
                                 this.$wire.loadMore();
                             }
                         });
-                    }, {
-                        root: scrollRoot,       {{-- scroll container sebagai viewport --}}
-                        rootMargin: '100px'     {{-- trigger 100px sebelum sentinel terlihat --}}
-                    });
+                    }, { root: scrollRoot, rootMargin: '100px' });
 
                     observer.observe(sentinel);
                 }
@@ -696,12 +696,56 @@
             x-init="
                 initFilterDatepickers();
                 initInfiniteScroll();
+
+                // Tutup modal konfirmasi setelah bulk delete selesai
+                $wire.on('bulk-delete-done', () => { showConfirm = false; });
+                $wire.on('toast', ({ type, title, msg }) => {
+                    window.showToast(type, title, msg ?? '');
+                });
             ">
+
+            {{-- ── MODAL KONFIRMASI BULK DELETE ─────────────────────────── --}}
+            <div x-show="showConfirm" x-cloak
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-[4px] shadow-2xl p-8 max-w-sm w-full mx-4">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-black text-sm text-gray-800 dark:text-gray-100 uppercase tracking-wider">Hapus Transaksi?</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Tindakan ini tidak dapat dibatalkan.</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                        Anda akan menghapus
+                        <span class="font-black text-red-500" x-text="selectedIds.length"></span>
+                        transaksi secara permanen dari database.
+                    </p>
+                    <div class="flex gap-3 justify-end">
+                        <button @click="cancelBulkDelete()"
+                            class="px-5 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 transition-none">
+                            Batal
+                        </button>
+                        <button @click="doBulkDelete()"
+                            class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none flex items-center gap-2"
+                            wire:loading.attr="disabled" wire:target="bulkDelete">
+                            <span wire:loading wire:target="bulkDelete" class="flex gap-1">
+                                <span class="loading-dot" style="background:#fff"></span>
+                                <span class="loading-dot" style="background:#fff"></span>
+                                <span class="loading-dot" style="background:#fff"></span>
+                            </span>
+                            <span wire:loading.remove wire:target="bulkDelete">Ya, Hapus Semua</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {{-- ──────────────────────────────────────────────────────────── --}}
 
             {{-- Header + Filter Bar --}}
             <div class="flex flex-col gap-3 px-1">
-
-                {{-- Judul --}}
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -709,8 +753,6 @@
                         </svg>
                         <h2 class="text-sm font-black uppercase tracking-widest text-gray-500">Jurnal Umum</h2>
                     </div>
-
-                    {{-- Badge filter aktif --}}
                     <div x-show="hasActiveFilter" x-cloak
                         class="filter-badge px-3 py-1.5 rounded-[4px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -723,45 +765,28 @@
                 {{-- Filter Form --}}
                 <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] p-4 shadow-sm">
                     <div class="flex flex-wrap items-end gap-3">
-
-                        {{-- Label --}}
                         <div class="flex items-center gap-2 mr-1">
                             <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <span class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Filter Tanggal</span>
                         </div>
-
-                        {{-- Input Dari --}}
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dari</label>
                             <input type="text" x-ref="filterDariInput" readonly placeholder="Pilih tanggal..."
                                 class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer w-40 outline-none focus:border-amber-400">
                         </div>
-
-                        {{-- Separator --}}
                         <div class="pb-2 text-gray-300 dark:text-gray-600 font-black text-lg">→</div>
-
-                        {{-- Input Sampai --}}
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sampai</label>
                             <input type="text" x-ref="filterSampaiInput" readonly placeholder="Pilih tanggal..."
                                 class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer w-40 outline-none focus:border-amber-400">
                         </div>
-
-                        {{-- Tombol Apply --}}
-                        <button type="button" @click="applyFilter()"
-                            :disabled="isFiltering"
+                        <button type="button" @click="applyFilter()" :disabled="isFiltering"
                             class="flex items-center gap-2 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none shadow-sm disabled:opacity-60 disabled:cursor-wait">
-
-                            {{-- Loading dots saat filtering --}}
                             <span x-show="isFiltering" class="flex items-center gap-1">
-                                <span class="loading-dot"></span>
-                                <span class="loading-dot"></span>
-                                <span class="loading-dot"></span>
+                                <span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>
                             </span>
-
-                            {{-- Icon normal --}}
                             <span x-show="!isFiltering" class="flex items-center gap-1.5">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -769,8 +794,6 @@
                                 Apply
                             </span>
                         </button>
-
-                        {{-- Tombol Reset --}}
                         <button type="button" @click="resetFilter()"
                             x-show="hasActiveFilter || filterDari || filterSampai"
                             :disabled="isFiltering"
@@ -784,13 +807,50 @@
                 </div>
             </div>
 
+            {{-- ── BULK ACTION BAR — muncul hanya jika ada yang dipilih ─── --}}
+            <div x-show="selectedIds.length > 0" x-cloak
+                class="bulk-bar bg-rose-600 dark:bg-rose-700 rounded-[4px] px-5 py-3 flex items-center justify-between shadow-lg">
+                <div class="flex items-center gap-3">
+                    <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                        <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <span class="text-white font-black text-[11px] uppercase tracking-widest">
+                        <span x-text="selectedIds.length"></span> transaksi dipilih
+                    </span>
+                </div>
+                <div class="flex items-center gap-3">
+                    {{-- Batalkan pilihan --}}
+                    <button @click="selectedIds = []; selectAll = false; $wire.set('selectedIds', []); $wire.set('selectAll', false);"
+                        class="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-[4px] font-bold text-[10px] uppercase tracking-widest transition-none border border-white/20">
+                        Batalkan
+                    </button>
+                    {{-- Tombol hapus --}}
+                    <button @click="confirmBulkDelete()"
+                        class="px-5 py-1.5 bg-white text-rose-600 hover:bg-rose-50 rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none flex items-center gap-2 shadow-sm">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Hapus yang Dipilih
+                    </button>
+                </div>
+            </div>
+            {{-- ──────────────────────────────────────────────────────────── --}}
+
             {{-- Tabel History --}}
             <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] shadow-sm overflow-hidden custom-scroll">
-                {{-- Scroll zone — hanya tbody yang scroll, thead sticky di atas --}}
                 <div class="table-body-scroll" x-ref="tableScrollBody">
-                    <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1500px]">
+                    <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1600px]">
                         <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
                             <tr class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest">
+                                {{-- Kolom Checkbox -- tambahan baru --}}
+                                <th class="px-4 py-4 w-[48px]">
+                                    <input type="checkbox" class="row-checkbox"
+                                        :checked="selectAll"
+                                        @change="toggleSelectAll()"
+                                        title="Pilih semua">
+                                </th>
                                 <th class="px-4 py-4 w-[110px]">Tanggal</th>
                                 <th class="px-4 py-4 w-[110px]">No Akun</th>
                                 <th class="px-4 py-4 w-[180px]">Nama Akun</th>
@@ -806,10 +866,10 @@
 
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 
-                            {{-- Loading skeleton saat filtering --}}
                             <template x-if="isFiltering">
                                 <template x-for="n in 8" :key="n">
                                     <tr class="skeleton-row">
+                                        <td class="px-4 py-5"></td>
                                         <td class="px-4 py-5">
                                             <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
                                         </td>
@@ -844,10 +904,20 @@
                                 </template>
                             </template>
 
-                            {{-- Data aktual — selalu dirender PHP, skeleton Alpine yang sembunyikan sementara --}}
                             @forelse($historyJurnals as $index => $hj)
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top transition-none row-fadein"
+                            {{-- data-row-id dipakai Alpine untuk kumpulkan visibleIds --}}
+                            <tr data-row-id="{{ $hj->id }}"
+                                :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
+                                class="hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top transition-none row-fadein"
                                 style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
+
+                                {{-- Checkbox per baris --}}
+                                <td class="px-4 py-4 text-center">
+                                    <input type="checkbox" class="row-checkbox"
+                                        :checked="isSelected({{ $hj->id }})"
+                                        @change="toggleRow({{ $hj->id }})">
+                                </td>
+
                                 <td class="px-4 py-4 text-gray-500 font-medium whitespace-nowrap">{{ $hj->tgl->format('d-m-Y') }}</td>
                                 <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500">{{ $hj->no_akun }}</td>
                                 <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100">{{ $hj->nama_akun }}</td>
@@ -880,7 +950,7 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="10" class="px-6 py-16 text-center">
+                                <td colspan="11" class="px-6 py-16 text-center">
                                     <div class="flex flex-col items-center gap-3 text-gray-400">
                                         <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -895,26 +965,21 @@
                         </tbody>
                     </table>
 
-                    {{-- ── Sentinel — di DALAM scroll container ── --}}
                     <div x-ref="scrollSentinel" class="h-1"></div>
 
-                    {{-- ── Loading overlay — muncul di tengah scroll area saat loadMore ── --}}
                     <div wire:loading wire:target="loadMore"
                         style="position: sticky; bottom: 0; left: 0; right: 0; z-index: 20; pointer-events: none;"
                         class="flex items-center justify-center py-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-t border-amber-100 dark:border-amber-900/40">
                         <div class="flex items-center gap-3 px-5 py-2.5 bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded-full shadow-md">
                             <svg class="w-4 h-4 text-amber-500 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"
-                                    stroke-dasharray="31.4" stroke-dashoffset="10" opacity="0.25" />
-                                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor"
-                                    stroke-width="3" stroke-linecap="round" />
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4" stroke-dashoffset="10" opacity="0.25" />
+                                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
                             </svg>
                             <span class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-[0.2em]">Memuat data jurnal</span>
                             <span class="text-[10px] font-black text-amber-600 dark:text-amber-400">+50 baris</span>
                         </div>
                     </div>
 
-                    {{-- End of list indicator --}}
                     @if(!$hasMorePages && $historyJurnals->count() > 0)
                     <div style="position: sticky; bottom: 0; left: 0; right: 0;"
                         class="flex items-center justify-center gap-3 py-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-t border-gray-100 dark:border-gray-800">
@@ -931,13 +996,12 @@
                     </div>
                     @endif
                 </div>
-                {{-- ── Tfoot terpisah di luar scroll zone — selalu terlihat ── --}}
+
                 <div class="overflow-x-auto border-t-2 border-gray-200 dark:border-gray-700">
-                    <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1500px]">
+                    <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1600px]">
                         <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
-                            {{-- Baris 1: Total Debit & Kredit dari SEMUA data di DB sesuai filter --}}
                             <tr>
-                                <td colspan="7" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
+                                <td colspan="8" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
                                 <td class="px-4 py-5 text-right text-green-400 bg-green-50/10 text-base font-black">
                                     {{ number_format($totalDebitDB, 0, ',', '.') }}
                                 </td>
@@ -946,11 +1010,9 @@
                                 </td>
                                 <td></td>
                             </tr>
-                            {{-- Baris 2: Badge Balance / Unbalance ── informasi kritis untuk akuntan --}}
                             <tr class="border-t border-gray-200 dark:border-gray-700">
-                                <td colspan="10" class="px-4 py-3">
+                                <td colspan="11" class="px-4 py-3">
                                     @if($isHistoryBalanced)
-                                    {{-- BALANCED --}}
                                     <div class="flex items-center justify-end gap-2">
                                         <div class="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-[4px]">
                                             <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -961,7 +1023,6 @@
                                         </div>
                                     </div>
                                     @else
-                                    {{-- UNBALANCED — tampilkan selisih agar mudah diidentifikasi --}}
                                     <div class="flex items-center justify-end gap-3">
                                         <div class="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-[4px]">
                                             <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
@@ -980,7 +1041,6 @@
                         </tfoot>
                     </table>
                 </div>
-
             </div>
         </div>
     </div>
@@ -988,10 +1048,8 @@
     <x-filament-actions::modals />
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
-    {{-- Toast Container --}}
     <div id="toast-container"></div>
 
-    {{-- Global toast function — plain DOM, no template literals (safe from Blade parsing) --}}
     <script>
         window.showToast = function(type, title, msg, duration) {
             if (duration === undefined) duration = 3500;
@@ -999,8 +1057,6 @@
             if (!container) return;
 
             var svgNS = 'http://www.w3.org/2000/svg';
-
-            // Build icon SVG via DOM
             var svg = document.createElementNS(svgNS, 'svg');
             svg.setAttribute('class', 'toast-icon');
             svg.setAttribute('fill', 'none');
@@ -1023,7 +1079,6 @@
             }
             svg.appendChild(path);
 
-            // Build body
             var body = document.createElement('div');
             body.className = 'toast-body';
 
@@ -1039,7 +1094,6 @@
                 body.appendChild(msgEl);
             }
 
-            // Wrap
             var el = document.createElement('div');
             el.className = 'toast toast-' + type;
             el.appendChild(svg);
