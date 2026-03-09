@@ -100,7 +100,7 @@ class JurnalPembantuItem extends Model
         });
     }
 
-    public static function hitungJumlah(): float
+    public function hitungJumlah(): float
     {
         return match ($this->hit_kbk) {
             'k' => (float) $this->harga * (float) ($this->m3 ?? 0),
