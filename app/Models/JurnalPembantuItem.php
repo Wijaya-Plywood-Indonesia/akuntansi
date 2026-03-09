@@ -87,6 +87,7 @@ class JurnalPembantuItem extends Model
             if ($item->header?->modul_asal !== 'kayu_masuk') {
                 $item->header->recalculateTotalNilai();
             }
+        });
 
         // Setelah item disimpan/dihapus, update total_nilai di header
         static::saved(function (self $item) {
@@ -99,7 +100,7 @@ class JurnalPembantuItem extends Model
         });
     }
 
-    public function hitungJumlah(): float
+    public static function hitungJumlah(): float
     {
         return match ($this->hit_kbk) {
             'k' => (float) $this->harga * (float) ($this->m3 ?? 0),
