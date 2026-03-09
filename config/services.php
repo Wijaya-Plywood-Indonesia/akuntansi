@@ -34,5 +34,8 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'produksi_api' => [
+        'key' => env('APP_API_KEY'),
+    ],
 
 ];

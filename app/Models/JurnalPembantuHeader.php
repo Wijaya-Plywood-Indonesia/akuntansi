@@ -139,9 +139,9 @@ class JurnalPembantuHeader extends Model
 
     // ── Hitung ulang total_nilai dari items ───────────────────────────
 
-    public function recalculateTotalNilai(): void
+    public function recalculateTotalNilai(string $kolomStatus = 'aktif'): void
     {
-        $total = $this->items()->where('aktif', true)->sum('jumlah');
+        $total = $this->items()->where($kolomStatus, true)->sum('jumlah'); // ← pakai $kolomStatus
         $this->update(['total_nilai' => $total]);
     }
 
