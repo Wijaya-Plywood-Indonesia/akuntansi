@@ -46,7 +46,7 @@ class AkunGroupResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+                //
             AnakAkunsRelationManager::class,
         ];
     }

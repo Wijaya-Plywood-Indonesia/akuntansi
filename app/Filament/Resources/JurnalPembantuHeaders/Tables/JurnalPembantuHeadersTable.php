@@ -97,6 +97,7 @@ class JurnalPembantuHeadersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
 
+            
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status')

@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\NeracaPage;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use App\Filament\Pages\TreeAkunPage;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -27,6 +28,8 @@ class AdminPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
+            ->sidebarCollapsibleOnDesktop()
+            ->sidebarFullyCollapsibleOnDesktop()
             ->default()
             ->id('admin')
             ->path('admin')
@@ -60,6 +63,9 @@ class AdminPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            ->plugins([
+                FilamentShieldPlugin::make(),
+            ])
             ->authMiddleware([
                 Authenticate::class,
             ])
@@ -67,12 +73,13 @@ class AdminPanelProvider extends PanelProvider
 
                 NavigationGroup::make('Master')
                     ->icon('heroicon-o-circle-stack')
-                    ->collapsed(),
+                    ->collapsed(true),
 
                 NavigationGroup::make('Jurnal')
                     ->icon('heroicon-o-book-open')
-                    ->collapsed(),
+                    ->collapsed(true),
             ])
+            ->sidebarCollapsibleOnDesktop()
         ;
     }
 }

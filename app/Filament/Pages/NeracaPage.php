@@ -2,21 +2,18 @@
 
 namespace App\Filament\Pages;
 
-
-// use App\Services\Filament\NeracaService;
-
 use App\Filament\Services\NeracaService;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Livewire\Attributes\Computed;
-
 use Carbon\Carbon;
 use UnitEnum;
 
 class NeracaPage extends Page implements HasForms
 {
+    use HasPageShield;
     use InteractsWithForms;
 
     protected static ?string $navigationLabel = 'Neraca';
@@ -25,20 +22,23 @@ class NeracaPage extends Page implements HasForms
     protected string $view = 'filament.pages.neraca-page';
 
     // ── Filter state ─────────────────────────────────────────────────
-    // Format: "YYYY-MM"  (mudah dibanding pisah tahun+bulan)
     public string $periodeAwal;
     public string $periodeAkhir;
 
     public function mount(): void
     {
         $now = now();
-        // Default: 3 bulan terakhir
         $this->periodeAwal = $now->copy()->subMonths(2)->format('Y-m');
         $this->periodeAkhir = $now->format('Y-m');
     }
 
     // ── Computed ─────────────────────────────────────────────────────
 
+    /**
+     * Hasil neraca multi-periode.
+     * Data diambil dari tabel buku_besar (saldo akhir bulan),
+     * bukan langsung dari jurnal_umums.
+     */
     #[Computed]
     public function neracaMulti(): array
     {
@@ -51,9 +51,6 @@ class NeracaPage extends Page implements HasForms
 
     // ── Helpers ──────────────────────────────────────────────────────
 
-    /**
-     * Bangun daftar periode dari periodeAwal s/d periodeAkhir secara kronologis.
-     */
     public function buildPeriodeList(): array
     {
         try {
@@ -63,10 +60,8 @@ class NeracaPage extends Page implements HasForms
             return [];
         }
 
-        // Guard: awal tidak boleh lebih dari akhir
-        if ($awal->gt($akhir)) {
+        if ($awal->gt($akhir))
             return [];
-        }
 
         // Guard: maksimal 12 bulan
         if ($awal->diffInMonths($akhir) > 11) {
@@ -87,10 +82,6 @@ class NeracaPage extends Page implements HasForms
         return $list;
     }
 
-    /**
-     * Opsi dropdown bulan — format "YYYY-MM" => "Januari 2026"
-     * Range: 5 tahun ke belakang hingga 1 tahun ke depan.
-     */
     public function opsiPeriode(): array
     {
         $start = now()->subYears(5)->startOfYear();
@@ -112,9 +103,6 @@ class NeracaPage extends Page implements HasForms
         return count($this->buildPeriodeList());
     }
 
-    /**
-     * Cek apakah periodeAwal > periodeAkhir (untuk tampilkan pesan error)
-     */
     public function periodeValid(): bool
     {
         try {

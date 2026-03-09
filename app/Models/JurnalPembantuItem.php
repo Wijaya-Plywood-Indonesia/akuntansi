@@ -32,8 +32,8 @@ class JurnalPembantuItem extends Model
     ];
 
     protected $casts = [
-        'banyak' => 'decimal:6',
-        'm3' => 'decimal:6',
+        'banyak' => 'decimal:2',
+        'm3' => 'decimal:4',
         'harga' => 'decimal:6',
         'jumlah' => 'decimal:4',
         'status' => 'boolean',
@@ -75,21 +75,32 @@ class JurnalPembantuItem extends Model
 
     protected static function booted(): void
     {
-        static::saving(function (self $item) {
-            $item->jumlah = $item->hitungJumlah();
+        static::created(function ($item) {
+            // Hanya recalculate jika BUKAN dari sync kayu masuk
+            if ($item->header?->modul_asal !== 'kayu_masuk') {
+                $item->header->recalculateTotalNilai();
+            }
+        });
+
+
+        static::updated(function ($item) {
+            if ($item->header?->modul_asal !== 'kayu_masuk') {
+                $item->header->recalculateTotalNilai();
+            }
         });
 
         // Setelah item disimpan/dihapus, update total_nilai di header
         static::saved(function (self $item) {
-            $item->header->recalculateTotalNilai();
+            $item->header->recalculateTotalNilai('status'); // ← ganti, bukan tambah
         });
 
         static::deleted(function (self $item) {
-            $item->header->recalculateTotalNilai();
+            $item->header->recalculateTotalNilai('status'); // ← ganti, bukan tambah
+
         });
     }
 
-    public function hitungJumlah(): float
+    public static function hitungJumlah(): float
     {
         return match ($this->hit_kbk) {
             'k' => (float) $this->harga * (float) ($this->m3 ?? 0),
