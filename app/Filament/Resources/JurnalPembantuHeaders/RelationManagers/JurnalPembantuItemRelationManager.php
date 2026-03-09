@@ -119,6 +119,12 @@ class JurnalPembantuItemRelationManager extends RelationManager
                     ->searchable()
                     ->limit(20),
 
+                TextColumn::make('keterangan')
+                    ->limit(100),
+
+                TextColumn::make('ukuran')
+                    ->limit(30),
+
                 TextColumn::make('banyak')
                     ->numeric(6)
                     ->alignRight(),
