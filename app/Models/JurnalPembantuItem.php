@@ -82,10 +82,20 @@ class JurnalPembantuItem extends Model
             }
         });
 
+
         static::updated(function ($item) {
             if ($item->header?->modul_asal !== 'kayu_masuk') {
                 $item->header->recalculateTotalNilai();
             }
+
+        // Setelah item disimpan/dihapus, update total_nilai di header
+        static::saved(function (self $item) {
+            $item->header->recalculateTotalNilai('status'); // ← ganti, bukan tambah
+        });
+
+        static::deleted(function (self $item) {
+            $item->header->recalculateTotalNilai('status'); // ← ganti, bukan tambah
+
         });
     }
 

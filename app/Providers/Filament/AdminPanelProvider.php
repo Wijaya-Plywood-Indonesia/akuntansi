@@ -28,6 +28,8 @@ class AdminPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
+            ->sidebarCollapsibleOnDesktop()
+            ->sidebarFullyCollapsibleOnDesktop()
             ->default()
             ->id('admin')
             ->path('admin')
@@ -71,11 +73,11 @@ class AdminPanelProvider extends PanelProvider
 
                 NavigationGroup::make('Master')
                     ->icon('heroicon-o-circle-stack')
-                    ->collapsed(),
+                    ->collapsed(true),
 
                 NavigationGroup::make('Jurnal')
                     ->icon('heroicon-o-book-open')
-                    ->collapsed(),
+                    ->collapsed(true),
             ])
             ->sidebarCollapsibleOnDesktop()
         ;
