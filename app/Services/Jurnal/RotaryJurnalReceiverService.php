@@ -122,7 +122,7 @@ class RotaryJurnalReceiverService
                         'm3'                        => $detail['m3']       ?? null,
                         'harga'                     => $detail['harga']    ?? 0,
                         'hit_kbk'                   => $detail['hit_kbk']  ?? null,
-                        'jumlah'                    => $detail['jumlah'],  // override hasil hitungJumlah()
+                        'jumlah'                    => (float) $detail['jumlah'],  // override hasil hitungJumlah()
                         'status'                    => true,
                     ]);
 
