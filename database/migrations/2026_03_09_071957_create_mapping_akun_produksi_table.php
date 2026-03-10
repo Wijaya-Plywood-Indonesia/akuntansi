@@ -12,32 +12,34 @@ return new class extends Migration {
     {
         Schema::create('mapping_akun_produksi', function (Blueprint $table) {
             $table->id();
-            $table->string('kode_akun', 20);
-            $table->bigInteger('id_kelompok');
+
+            // FK ke kelompok
+            $table->foreignId('id_kelompok')
+                ->constrained('kelompok_mapping_akun')
+                ->cascadeOnDelete();
+
+            $table->foreignId('sub_anak_akun_id')
+                ->constrained('sub_anak_akuns')
+                ->restrictOnDelete();
+
             $table->enum('posisi_jurnal', ['debet', 'kredit', 'keduanya']);
+
             $table->tinyInteger('urutan')->default(1)
                 ->comment('Urutan baris item dalam kelompok');
+
             $table->text('keterangan')->nullable();
+
             $table->enum('status', ['aktif', 'nonaktif'])->default('aktif');
 
-            // ── User Stamps ──────────────────────────────────
+            // user stamps
             $table->foreignId('dibuat_oleh')->nullable()
                 ->constrained('users')->nullOnDelete();
+
             $table->foreignId('diedit_oleh')->nullable()
                 ->constrained('users')->nullOnDelete();
 
             $table->timestamps();
 
-            // ── Foreign Keys ─────────────────────────────────
-            $table->foreign('id_kelompok')
-                ->references('id')
-                ->on('kelompok_mapping_akun')
-                ->onDelete('cascade');
-
-            $table->foreign('kode_akun')
-                ->references('kode_sub_anak_akun')
-                ->on('sub_anak_akuns')
-                ->onDelete('restrict'); // akun tidak bisa dihapus selama masih dipakai
         });
     }
 
