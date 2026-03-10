@@ -38,4 +38,8 @@ return [
         'key' => env('APP_API_KEY'),
     ],
 
+    'erp' => [
+        'key' => env('ERP_API_KEY', ''),
+    ],
+
 ];

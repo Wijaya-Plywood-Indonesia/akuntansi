@@ -45,6 +45,7 @@ class JurnalPembantuItem extends Model
         'pelanggan' => 'Pelanggan',
         'pemasok' => 'Pemasok',
         'karyawan' => 'Karyawan',
+        'produksi' => 'Produksi',
         'lain' => 'Lain-lain',
     ];
 

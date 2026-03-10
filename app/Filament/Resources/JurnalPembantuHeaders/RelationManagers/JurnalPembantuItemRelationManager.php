@@ -116,6 +116,9 @@ class JurnalPembantuItemRelationManager extends RelationManager
                     ->searchable()
                     ->limit(25),
 
+                TextColumn::make('jenis_pihak')
+                    ->searchable(),
+
                 TextColumn::make('nama_pihak')
                     ->searchable()
                     ->limit(20),
