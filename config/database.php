@@ -60,8 +60,8 @@ return [
             'engine' => null,
             'options' => [
                 // Mematikan verifikasi SSL agar bisa tembus di jaringan lokal kantor
-                PDO::MYSQL_ATTR_SSL_CA => null,
-                PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) => null,
+                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT : \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT) => false,
 
                 // Menjaga agar koneksi tetap persisten (opsional, bagus untuk performa)
                 PDO::ATTR_PERSISTENT => true,
