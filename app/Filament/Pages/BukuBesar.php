@@ -4,53 +4,72 @@ namespace App\Filament\Pages;
 
 use App\Models\IndukAkun;
 use App\Models\JurnalUmum;
+use App\Models\BukuBesar as BukuBesarModel;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Carbon\Carbon;
-use BackedEnum;
 use UnitEnum;
 use Illuminate\Support\Facades\DB;
-use Throwable;
 
 class BukuBesar extends Page
 {
     use HasPageShield;
-    protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
     protected string $view = 'filament.pages.buku-besar';
     protected static ?string $navigationLabel = 'Buku Besar';
     protected static ?string $title = 'Buku Besar';
 
     public $indukAkuns = [];
     public $filterBulan;
-    public $isLoading = true;
+    public bool $isLoading = true;
     public $saldoMap = [];
     public $saldoAwalMap = [];
 
-    public function mount()
+    public function mount(): void
     {
-        $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
-        $this->loadData();
+        $this->filterBulan = Carbon::now()->format('Y-m');
+        // isLoading = true by default, initLoad akan dipanggil via wire:init
     }
 
-    public function initLoad()
+    protected function getHeaderActions(): array
     {
-        $this->loadData();
+        return [
+            \Filament\Actions\Action::make('export')
+                ->label('Export Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->action(function () {
+                    return \Maatwebsite\Excel\Facades\Excel::download(
+                        new \App\Exports\BukuBesarExport($this->filterBulan),
+                        'Buku_Besar_' . $this->filterBulan . '.xlsx'
+                    );
+                }),
+        ];
+    }
+
+    public function initLoad(): void
+    {
         $this->preloadSaldoAwal();
         $this->preloadSaldo();
+        $this->loadData();
         $this->isLoading = false;
     }
 
-    public function updatedFilterBulan()
+    public function updatedFilterBulan(): void
     {
+        $this->isLoading    = true;
         $this->saldoAwalMap = [];
-        $this->saldoMap = [];
+        $this->saldoMap     = [];
 
         $this->preloadSaldoAwal();
         $this->preloadSaldo();
         $this->loadData();
+        $this->isLoading = false;
     }
 
-    private function preloadSaldoAwal()
+    // ── Saldo akhir bulan SEBELUM periode terpilih (dari tabel buku_besar) ──
+    private function preloadSaldoAwal(): void
     {
         $date = Carbon::parse($this->filterBulan)->subMonth();
 
@@ -61,108 +80,111 @@ class BukuBesar extends Page
             ->toArray();
     }
 
-    private function preloadSaldo()
+    // ── Mutasi bulan terpilih dari jurnal_umums ──────────────────────────────
+    // Simpan debit dan kredit GROSS terpisah — bukan net
+    private function preloadSaldo(): void
     {
         $start = Carbon::parse($this->filterBulan)->startOfMonth();
-        $end = Carbon::parse($this->filterBulan)->endOfMonth();
+        $end   = Carbon::parse($this->filterBulan)->endOfMonth();
 
-        $this->saldoMap = JurnalUmum::whereBetween('tgl', [$start, $end])
+        $rows = JurnalUmum::whereBetween('tgl', [$start, $end])
             ->selectRaw("
-            no_akun,
-            SUM(
-                CASE 
-                    WHEN LOWER(map) = 'd'
-                    THEN COALESCE(banyak * harga, harga, 0)
-                    ELSE -COALESCE(banyak * harga, harga, 0)
-                END
-            ) as total
-        ")
+                no_akun,
+                SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_debit,
+                SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_kredit
+            ")
             ->groupBy('no_akun')
-            ->pluck('total', 'no_akun')
-            ->toArray();
+            ->get();
+
+        $this->saldoMap = [];
+        foreach ($rows as $row) {
+            $this->saldoMap[$row->no_akun] = [
+                'd' => (float) $row->total_debit,
+                'k' => (float) $row->total_kredit,
+            ];
+        }
     }
-    public function loadData()
+
+    public function loadData(): void
     {
         $this->indukAkuns = IndukAkun::with([
             'anakAkuns' => function ($query) {
                 $query->whereNull('parent')
                     ->with([
-                        'children.children', // rekursif 2 level
-                        'subAnakAkuns'
+                        'subAnakAkuns',
+                        'children' => function ($q) {
+                            $q->with([
+                                'subAnakAkuns',
+                                'children' => function ($q2) {
+                                    $q2->with(['subAnakAkuns']);
+                                },
+                            ]);
+                        },
                     ]);
-            }
+            },
         ])->get();
     }
 
-    // Fungsi menghitung nominal satu baris transaksi
-    private function hitungNominal($trx)
+    // ── Hitung nominal satu transaksi: cukup banyak × harga ─────────────────
+    public function hitungNominal($trx): float
     {
-        $mode = strtolower($trx->hit_kbk ?? '');
-
-        // Jika data lama (hit_kbk null/kosong)
-        if ($mode === '' || $mode === null) {
-            return $trx->harga ?? 0;
-        }
-
-        // Jika banyak
-        if ($mode === 'b' || $mode === 'banyak') {
-            return ($trx->banyak ?? 0) * ($trx->harga ?? 0);
-        }
-
-        // Jika kubikasi
-        return ($trx->m3 ?? 0) * ($trx->harga ?? 0);
+        return (float) ($trx->banyak ?? 1) * (float) ($trx->harga ?? 0);
     }
 
-    // Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
-    public function getSaldoAwal($kode)
+    // ── Saldo awal (dari snapshot buku_besar bulan sebelumnya) ───────────────
+    public function getSaldoAwal(string $kode): float
     {
-        return $this->saldoAwalMap[$kode] ?? 0;
+        return (float) ($this->saldoAwalMap[$kode] ?? 0);
     }
 
-    public function getSaldoBulan($kode)
+    // ── Mutasi bulan ini untuk satu akun (debit gross) ───────────────────────
+    public function getSaldoBulan(string $kode): float
     {
-        return $this->saldoMap[$kode] ?? 0;
+        return (float) ($this->saldoMap[$kode]['d'] ?? 0)
+             - (float) ($this->saldoMap[$kode]['k'] ?? 0);
     }
 
-    // Transaksi hanya di bulan terpilih
-    public function getTransaksiByKode($kode)
+    // ── Transaksi bulan terpilih untuk satu kode akun ───────────────────────
+    public function getTransaksiByKode(string $kode)
     {
         $start = Carbon::parse($this->filterBulan)->startOfMonth();
-        $end = Carbon::parse($this->filterBulan)->endOfMonth();
+        $end   = Carbon::parse($this->filterBulan)->endOfMonth();
 
         return JurnalUmum::where('no_akun', $kode)
             ->whereBetween('tgl', [$start, $end])
-            ->orderBy('tgl', 'asc')    // Urutkan Tanggal dulu
+            ->orderBy('tgl', 'asc')
             ->orderBy('jurnal', 'asc')
+            ->orderBy('id', 'asc')
             ->get();
     }
 
-    // Perbaikan Saldo Akun (Mendukung rekursif untuk Induk)
-    public function getTotalRecursive($akun)
+    // ── Saldo rekursif berdasarkan saldo_normal akun ─────────────────────────
+    public function getTotalRecursive($akun): float
     {
-        $total = 0;
+        $total = 0.0;
 
-        $kode =
-            $akun->kode_anak_akun
-            ?? $akun->kode_sub_anak_akun
-            ?? null;
+        $kode = $akun->kode_anak_akun ?? $akun->kode_sub_anak_akun ?? null;
 
-        if ($kode) {
-
-            $saldoAwal = $this->saldoAwalMap[$kode] ?? 0;
-            $mutasi = $this->saldoMap[$kode] ?? 0;
+        if ($kode && isset($this->saldoMap[$kode])) {
+            $saldoAwal   = (float) ($this->saldoAwalMap[$kode] ?? 0);
+            $debit       = (float) ($this->saldoMap[$kode]['d'] ?? 0);
+            $kredit      = (float) ($this->saldoMap[$kode]['k'] ?? 0);
 
             $saldoNormal = strtolower($akun->saldo_normal ?? 'debit');
+            $isKredit    = in_array($saldoNormal, ['kredit', 'credit', 'k']);
 
-            if ($saldoNormal === 'kredit') {
-                // balik logika
-                $total += $saldoAwal - $mutasi;
+            if ($isKredit) {
+                // Akun kredit: saldo naik jika kredit, turun jika debit
+                $total += $saldoAwal + $kredit - $debit;
             } else {
-                $total += $saldoAwal + $mutasi;
+                // Akun debit: saldo naik jika debit, turun jika kredit
+                $total += $saldoAwal + $debit - $kredit;
             }
+        } elseif ($kode) {
+            // Tidak ada mutasi bulan ini, hanya saldo awal
+            $total += (float) ($this->saldoAwalMap[$kode] ?? 0);
         }
 
-        // Rekursif children
         if (isset($akun->children)) {
             foreach ($akun->children as $child) {
                 $total += $this->getTotalRecursive($child);

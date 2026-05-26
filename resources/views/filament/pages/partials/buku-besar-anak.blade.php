@@ -5,12 +5,14 @@ $saldoAwal  = $this->getSaldoAwal($kodeAkun);
 $saldoAkhir = $this->getTotalRecursive($akun);
 $transaksis = $this->getTransaksiByKode($kodeAkun);
 $jumlahTrx  = $transaksis->count();
-$tampilkan  = ($saldoAwal != 0) || ($saldoAkhir != 0) || ($jumlahTrx > 0);
 $depth      = $depth ?? 0;
 
 $children = collect();
 if (isset($akun->children))     $children = $children->merge($akun->children);
 if (isset($akun->subAnakAkuns)) $children = $children->merge($akun->subAnakAkuns);
+
+// Tampilkan jika: ada transaksi ATAU ada saldo awal ATAU ada children yang punya data
+$tampilkan = ($jumlahTrx > 0) || ($saldoAwal != 0) || ($saldoAkhir != 0) || $children->count() > 0;
 
 $saldoClass = $saldoAkhir < 0 ? 'neg' : '';
 @endphp
@@ -18,7 +20,6 @@ $saldoClass = $saldoAkhir < 0 ? 'neg' : '';
 @if($tampilkan)
 
 <style>
-/* Hanya di-load sekali, aman karena CSS idempotent */
 .bb-anak { background:var(--bb-surface); border:1px solid var(--bb-border-soft); border-radius:var(--bb-r-md); overflow:hidden; box-shadow:var(--bb-shadow-sm); }
 .bb-anak-head { display:flex; align-items:center; justify-content:space-between; padding:.6rem 1rem; background:var(--bb-surface-3); border-bottom:1px solid var(--bb-border-soft); }
 .bb-anak-left { display:flex; align-items:center; gap:.5rem; }
@@ -32,7 +33,7 @@ $saldoClass = $saldoAkhir < 0 ? 'neg' : '';
 
 <div class="bb-anak">
 
-    {{-- Header --}}
+    {{-- Header akun --}}
     <div class="bb-anak-head">
         <div class="bb-anak-left">
             <span class="bb-anak-dot" @if($depth > 0) style="background:var(--bb-amber-border)" @endif></span>
@@ -57,10 +58,10 @@ $saldoClass = $saldoAkhir < 0 ? 'neg' : '';
     {{-- Ledger table --}}
     @if($jumlahTrx > 0 || $saldoAwal != 0)
         @include('filament.pages.partials.ledger-table', [
-    'transaksis'   => $transaksis,
-    'saldoAwal'    => $saldoAwal,
-    'saldoNormal'  => strtolower($akun->saldo_normal ?? 'debit'),
-])
+            'transaksis'  => $transaksis,
+            'saldoAwal'   => $saldoAwal,
+            'saldoNormal' => strtolower($akun->saldo_normal ?? 'debit'),
+        ])
     @endif
 
 </div>

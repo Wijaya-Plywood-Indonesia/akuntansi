@@ -25,7 +25,7 @@ return new class extends Migration {
             $table->string('no_dokumen', 100)->nullable();    // No. surat jalan, dsb.
             $table->string('no_referensi', 100)->nullable();
             $table->text('keterangan')->nullable();    // Keterangan item
-            $table->integer('jumlah')->nullable();
+            $table->decimal('jumlah', 12, 6)->nullable();
             // --- Dimensi (untuk veneer/kayu) ---
             $table->string('ukuran', 255)->nullable();          // Tebal dalam milimeter
             $table->string('kualitas', 20)->nullable();       // 1/2/3/4/5/AF/dll

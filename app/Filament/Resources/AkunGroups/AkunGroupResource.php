@@ -7,6 +7,7 @@ use App\Filament\Resources\AkunGroups\Pages\EditAkunGroup;
 use App\Filament\Resources\AkunGroups\Pages\ListAkunGroups;
 use App\Filament\Resources\AkunGroups\Pages\ViewAkunGroup;
 use App\Filament\Resources\AkunGroups\RelationManagers\AnakAkunsRelationManager;
+use App\Filament\Resources\AkunGroups\RelationManagers\SubAnakAkunsRelationManager;
 use App\Filament\Resources\AkunGroups\Schemas\AkunGroupForm;
 use App\Filament\Resources\AkunGroups\Schemas\AkunGroupInfolist;
 use App\Filament\Resources\AkunGroups\Tables\AkunGroupsTable;
@@ -24,7 +25,7 @@ class AkunGroupResource extends Resource
 
     // protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Master';
+    protected static string|UnitEnum|null $navigationGroup = 'Master Data';
 
     protected static ?string $recordTitleAttribute = 'nama';
 
@@ -46,8 +47,9 @@ class AkunGroupResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
-            AnakAkunsRelationManager::class,
+                //
+            // AnakAkunsRelationManager::class,
+            SubAnakAkunsRelationManager::class,
         ];
     }
 

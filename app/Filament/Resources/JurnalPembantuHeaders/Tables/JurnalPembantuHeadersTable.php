@@ -55,6 +55,9 @@ class JurnalPembantuHeadersTable
                     ->searchable()
                     ->limit(30),
 
+                TextColumn::make('keterangan')
+                    ->limit(100),
+
                 TextColumn::make('map')
                     ->label('D/K')
                     ->badge()
@@ -94,6 +97,7 @@ class JurnalPembantuHeadersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
 
+            
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status')

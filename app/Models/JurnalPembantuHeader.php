@@ -139,18 +139,18 @@ class JurnalPembantuHeader extends Model
 
     // ── Hitung ulang total_nilai dari items ───────────────────────────
 
-    public function recalculateTotalNilai(): void
+    public function recalculateTotalNilai(string $kolomStatus = 'aktif'): void
     {
+
         $items = $this->items()->where('status', true)->get();
 
         $total = $items->sum(function ($item) {
             return match ($item->hit_kbk) {
-                'k'     => $item->harga * ($item->m3 ?? 0) * 1000,
-                'b'     => $item->harga * ($item->banyak ?? 0),
+                'k' => $item->harga * ($item->m3 ?? 0) * 1000,
+                'b' => $item->harga * ($item->banyak ?? 0),
                 default => $item->harga, // nilai langsung (hutang turun, kas tunai)
             };
         });
-
         $this->update(['total_nilai' => $total]);
     }
 

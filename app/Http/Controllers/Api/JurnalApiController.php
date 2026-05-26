@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Events\Jurnal;
+use App\Events\JurnalBaru;
 use App\Http\Controllers\Controller;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
@@ -24,6 +25,9 @@ class JurnalApiController extends Controller
         'kas_tunai'    => ['no_akun' => '110-01',  'nama_akun' => 'Kas tunai'],
     ];
 
+    // ----------------------------------------------------------
+    // STORE — POST /api/jurnal/store
+    // ----------------------------------------------------------
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -77,9 +81,7 @@ class JurnalApiController extends Controller
                 return $this->simpanJurnal($request->all(), $dibuatOleh);
             });
 
-            // ── BROADCAST ke Pusher ──────────────────────────────
-            // Semua user P2 yang sedang buka halaman jurnal
-            // akan menerima notifikasi real-time ini
+            // ── Broadcast ke Pusher ──────────────────────────────
             $totalDebit = collect($request->entries)
                 ->where('posisi', 'debit')
                 ->sum('total_nilai');
@@ -112,15 +114,20 @@ class JurnalApiController extends Controller
         }
     }
 
+    // ----------------------------------------------------------
+    // SIMPAN JURNAL
+    // ----------------------------------------------------------
     private function simpanJurnal(array $data, int $dibuatOleh): int
     {
         $noJurnal = $this->generateNoJurnal();
         $noJp     = $this->generateNoJp();
+        $supplier = $data['supplier'] ?? '-';
 
         foreach ($data['entries'] as $entry) {
 
             $akun = $this->resolveAkun($entry);
 
+            // ── Buat Header ────────────────────────────────────
             $header = JurnalPembantuHeader::create([
                 'no_jurnal_pembantu'  => $noJp++,
                 'jurnal'              => $noJurnal,
@@ -140,19 +147,39 @@ class JurnalApiController extends Controller
                 'diposting_oleh'      => null,
             ]);
 
-            foreach ($entry['items'] as $i => $item) {
+            // ── Rekap Items ─────────────────────────────────────
+            // Gabungkan item yang memiliki kombinasi sama:
+            // nama_barang + grade + ukuran + harga
+            // → banyak, m3, jumlah dijumlahkan
+            $items = $this->rekapItems($entry['items']);
+
+            // ── Buat Items ─────────────────────────────────────
+            foreach ($items as $i => $item) {
                 JurnalPembantuItem::create([
                     'jurnal_pembantu_header_id' => $header->id,
                     'urut'        => $item['urut'] ?? ($i + 1),
+
+                    // Isi kolom 'nama' dan 'nama_barang' sekaligus
                     'nama'        => $item['nama_barang'] ?? $item['nama'] ?? '-',
+                    'nama_barang' => $item['nama_barang'] ?? $item['nama'] ?? '-',
+
+                    // jenis_pihak = kategori, nama_pihak = nama supplier dari P1
                     'jenis_pihak' => 'pemasok',
+                    'nama_pihak'  => $supplier,
+
                     'no_dokumen'  => $data['no_dokumen'],
                     'keterangan'  => $this->buildKeterangan($item, $data),
+
                     'ukuran'      => $item['ukuran']  ?? null,
                     'kualitas'    => $item['grade']   ?? $item['kode_lahan'] ?? null,
+
                     'banyak'      => $item['banyak']  ?? null,
                     'm3'          => $item['m3']       ?? null,
                     'harga'       => $item['harga']    ?? 0,
+
+                    // Jumlah dihitung otomatis
+                    'jumlah'      => $this->hitungJumlah($item),
+
                     'hit_kbk'     => $this->resolveHitKbk($entry, $item),
                     'status'      => true,
                     'created_by'  => $dibuatOleh,
@@ -164,6 +191,79 @@ class JurnalApiController extends Controller
         return $noJurnal;
     }
 
+    // ----------------------------------------------------------
+    // REKAP ITEMS
+    // Gabungkan item yang memiliki kombinasi sama:
+    //   nama_barang + grade + ukuran + harga
+    //
+    // Contoh: ada 3 baris "Sengon (B) | 130cm | D: 17-17 | harga 750"
+    // → digabung jadi 1 baris dengan banyak=3, m3 dijumlah, jumlah dijumlah
+    // ----------------------------------------------------------
+    private function rekapItems(array $items): array
+    {
+        $grouped = [];
+
+        foreach ($items as $item) {
+            // Kunci unik berdasarkan kombinasi ini
+            $key = implode('|', [
+                $item['nama_barang'] ?? $item['nama'] ?? '-',
+                $item['grade']       ?? '',
+                $item['ukuran']      ?? '',
+                $item['harga']       ?? 0,
+            ]);
+
+            if (! isset($grouped[$key])) {
+                // Pertama kali muncul — simpan apa adanya
+                $grouped[$key] = $item;
+            } else {
+                // Sudah ada — jumlahkan banyak, m3, jumlah
+                $grouped[$key]['banyak'] = (float) ($grouped[$key]['banyak'] ?? 0)
+                    + (float) ($item['banyak'] ?? 0);
+
+                $grouped[$key]['m3']     = round(
+                    (float) ($grouped[$key]['m3'] ?? 0) + (float) ($item['m3'] ?? 0),
+                    6
+                );
+
+                $grouped[$key]['jumlah'] = (float) ($grouped[$key]['jumlah'] ?? 0)
+                    + (float) ($item['jumlah'] ?? 0);
+            }
+        }
+
+        // Reset urut setelah direkap
+        $result = array_values($grouped);
+        foreach ($result as $i => &$item) {
+            $item['urut'] = $i + 1;
+        }
+
+        return $result;
+    }
+
+    // ----------------------------------------------------------
+    // HITUNG JUMLAH
+    // Prioritas: ambil dari payload jika ada
+    // Fallback : hitung dari harga × m3 atau harga × banyak
+    // ----------------------------------------------------------
+    private function hitungJumlah(array $item): float
+    {
+        // Jika payload P1 sudah kirim jumlah, pakai langsung
+        if (isset($item['jumlah']) && (float) $item['jumlah'] != 0) {
+            return (float) $item['jumlah'];
+        }
+
+        $harga  = (float) ($item['harga']  ?? 0);
+        $m3     = (float) ($item['m3']     ?? 0);
+        $banyak = (float) ($item['banyak'] ?? 0);
+
+        if ($m3 > 0)     return $harga * $m3;     // hit_kbk = 'k'
+        if ($banyak > 0) return $harga * $banyak; // hit_kbk = 'b'
+
+        return $harga; // nilai langsung
+    }
+
+    // ----------------------------------------------------------
+    // RESOLVE AKUN
+    // ----------------------------------------------------------
     private function resolveAkun(array $entry): array
     {
         if ($entry['posisi'] === 'debit') {
@@ -172,7 +272,8 @@ class JurnalApiController extends Controller
 
             if (! $akun) {
                 throw new \RuntimeException(
-                    "Mapping akun tidak ditemukan untuk kayu panjang {$panjang}cm."
+                    "Mapping akun tidak ditemukan untuk kayu panjang {$panjang}cm. " .
+                        "Tambahkan di \$mappingAkun['persediaan'][{$panjang}]."
                 );
             }
 
@@ -188,6 +289,9 @@ class JurnalApiController extends Controller
         };
     }
 
+    // ----------------------------------------------------------
+    // RESOLVE DIBUAT OLEH
+    // ----------------------------------------------------------
     private function resolveDibuatOleh(?array $petugas): ?int
     {
         if (! empty($petugas['email'])) {
@@ -198,6 +302,9 @@ class JurnalApiController extends Controller
         return User::orderBy('id')->value('id');
     }
 
+    // ----------------------------------------------------------
+    // RESOLVE HIT_KBK
+    // ----------------------------------------------------------
     private function resolveHitKbk(array $entry, array $item): ?string
     {
         if (
@@ -211,12 +318,15 @@ class JurnalApiController extends Controller
         return null;
     }
 
+    // ----------------------------------------------------------
+    // BUILD KETERANGAN ITEM
+    // ----------------------------------------------------------
     private function buildKeterangan(array $item, array $data): string
     {
         $parts = [];
 
-        if (! empty($item['grade']))     $parts[] = "Grade: {$item['grade']}";
-        if (! empty($item['ukuran']))    $parts[] = $item['ukuran'];
+        if (! empty($item['grade']))      $parts[] = "Grade: {$item['grade']}";
+        if (! empty($item['ukuran']))     $parts[] = $item['ukuran'];
         if (! empty($item['keterangan'])) $parts[] = $item['keterangan'];
 
         $parts[] = "Seri {$data['seri']}";
@@ -226,11 +336,17 @@ class JurnalApiController extends Controller
         return implode(' | ', array_filter($parts));
     }
 
+    // ----------------------------------------------------------
+    // GENERATE NO JURNAL
+    // ----------------------------------------------------------
     private function generateNoJurnal(): int
     {
         return (JurnalPembantuHeader::max('jurnal') ?? 0) + 1;
     }
 
+    // ----------------------------------------------------------
+    // GENERATE NO JURNAL PEMBANTU
+    // ----------------------------------------------------------
     private function generateNoJp(): int
     {
         return (JurnalPembantuHeader::max('no_jurnal_pembantu') ?? 0) + 1;

@@ -1,325 +1,219 @@
-{{--
-Partial: ledger-table.blade.php
-Vars: $transaksis (Collection), $saldoAwal (numeric)
---}}
-
 @php
-$saldoNormal = $saldoNormal ?? 'debit';
-$saldoBerjalan = $saldoAwal;
-$totalDebit = 0;
-$totalKredit = 0;
-$tglAwalan = \Carbon\Carbon::parse($this->filterBulan)
-->startOfMonth()->subDay()->format('d/m/Y');
+$saldoNormal = strtolower($saldoNormal ?? 'debit');
+$isKredit    = in_array($saldoNormal, ['kredit', 'credit', 'k']);
+$running     = (float) $saldoAwal;
+$totalDebit  = 0.0;
+$totalKredit = 0.0;
+$totalQty    = 0.0;
+
+$rows = $transaksis->map(function ($trx) use (&$running, &$totalDebit, &$totalKredit, &$totalQty, $isKredit) {
+    $nominal = (float) ($trx->banyak ?? 1) * (float) ($trx->harga ?? 0);
+    $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
+    $qty     = (float) ($trx->banyak ?? 0);
+
+    if ($isKredit) {
+        $running += $isDebit ? -$nominal : $nominal;
+    } else {
+        $running += $isDebit ? $nominal : -$nominal;
+    }
+
+    if ($isDebit) {
+        $totalDebit += $nominal;
+        // Hanya hitung qty jika ada banyak (bukan null dan bukan 1 default)
+        if ($trx->banyak !== null && $qty > 0) {
+            $totalQty += $qty;
+        }
+    } else {
+        $totalKredit += $nominal;
+        if ($trx->banyak !== null && $qty > 0) {
+            $totalQty -= $qty;
+        }
+    }
+
+    return (object) [
+        'trx'     => $trx,
+        'nominal' => $nominal,
+        'isDebit' => $isDebit,
+        'running' => $running,
+    ];
+});
+
+$saldoAkhir = $running;
+$saldoClass = $saldoAkhir < 0 ? 'lgt-neg' : '';
 @endphp
 
 <style>
-    /* Ledger Table — idempotent, load sekali */
-    .bb-tbl-wrap {
-        overflow-x: auto;
-    }
+.lgt-wrap { overflow-x:auto; }
+.lgt { width:100%; border-collapse:collapse; font-size:.75rem; }
+.lgt th {
+    padding:.45rem .75rem;
+    text-align:left;
+    font-size:.6rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.09em;
+    color:var(--bb-text-3);
+    background:var(--bb-surface-2);
+    border-bottom:1px solid var(--bb-border-soft);
+    white-space:nowrap;
+}
+.lgt th.r, .lgt td.r { text-align:right; }
+.lgt td {
+    padding:.4rem .75rem;
+    border-bottom:1px solid var(--bb-border-soft);
+    color:var(--bb-text-2);
+    vertical-align:middle;
+    white-space:nowrap;
+}
+.lgt tr:last-child td { border-bottom:none; }
+.lgt tr:hover td { background:var(--bb-surface-3); }
 
-    .bb-tbl {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        font-size: .76rem;
-        font-weight: 500;
-    }
+.lgt-sa td { background:var(--bb-accent-soft) !important; color:var(--bb-accent-text) !important; font-weight:700; }
+.dark .lgt-sa td { background:var(--bb-accent-soft) !important; color:var(--bb-accent-text) !important; }
 
-    /* HEAD */
-    .bb-tbl thead tr {
-        background: var(--bb-surface-3);
-        border-bottom: 2px solid var(--bb-border);
-    }
+.lgt-tgl    { width:80px; font-size:.68rem; color:var(--bb-text-3); }
+.lgt-jurnal { width:50px; font-family:'JetBrains Mono',monospace; font-size:.68rem; color:var(--bb-text-3); text-align:center; }
+.lgt-nama   { max-width:140px; overflow:hidden; text-overflow:ellipsis; font-size:.73rem; color:var(--bb-text-2); }
+.lgt-ket    { max-width:200px; overflow:hidden; text-overflow:ellipsis; font-size:.7rem; color:var(--bb-text-3); }
+.lgt-qty    { width:60px; font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--bb-text-3); text-align:right; }
+.lgt-harga  { width:100px; font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--bb-text-3); text-align:right; }
+.lgt-debit  { width:110px; font-family:'JetBrains Mono',monospace; font-weight:600; color:var(--bb-debit); text-align:right; }
+.lgt-kredit { width:110px; font-family:'JetBrains Mono',monospace; font-weight:600; color:var(--bb-kredit); text-align:right; }
+.lgt-saldo  { width:120px; font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--bb-text-1); text-align:right; }
+.lgt-neg    { color:var(--bb-neg) !important; }
 
-    .bb-tbl th {
-        padding: .55rem .9rem;
-        font-size: .63rem;
-        font-weight: 800;
-        letter-spacing: .09em;
-        text-transform: uppercase;
-        color: var(--bb-text-3);
-        white-space: nowrap;
-        text-align: left;
-    }
-
-    .bb-tbl th.c {
-        text-align: center;
-    }
-
-    .bb-tbl th.r {
-        text-align: right;
-    }
-
-    /* BODY */
-    .bb-tbl td {
-        padding: .52rem .9rem;
-        color: var(--bb-text-2);
-        border-bottom: 1px solid var(--bb-border-soft);
-        vertical-align: middle;
-        font-weight: 500;
-    }
-
-    .bb-tbl tbody tr:last-child td {
-        border-bottom: none;
-    }
-
-    /* Zebra */
-    .bb-tbl tbody tr:nth-child(even) td {
-        background: var(--bb-surface-2);
-    }
-
-    /* Hover — konsisten sage, tidak bentrok dengan warna lain */
-    .bb-tbl tbody tr:hover td {
-        background: var(--bb-accent-soft) !important;
-        transition: background .12s;
-    }
-
-    /* ── Baris Saldo Awal ── */
-    .bb-tbl .row-awal td {
-        background: var(--bb-amber-bg) !important;
-        border-bottom: 1px solid var(--bb-amber-border);
-        font-style: italic;
-        font-weight: 600;
-    }
-
-    .bb-tbl tbody tr.row-awal:hover td {
-        background: var(--bb-amber-bg) !important;
-    }
-
-    /* ── Baris Footer ── */
-    .bb-tbl .row-footer td {
-        background: var(--bb-surface-3) !important;
-        border-top: 2px solid var(--bb-border);
-        font-weight: 800;
-        font-size: .7rem;
-        letter-spacing: .06em;
-        text-transform: uppercase;
-        text-align: center;
-    }
-
-    .bb-tbl .row-footer td.bb-debit {
-        color: var(--bb-debit) !important;
-        text-align: right;
-    }
-
-    .bb-tbl .row-footer td.bb-kredit {
-        color: var(--bb-kredit) !important;
-        text-align: right;
-    }
-
-    .bb-tbl tbody tr.row-footer:hover td {
-        background: var(--bb-surface-3) !important;
-    }
-
-    /* Debit & kredit warna konsisten di SEMUA baris */
-    .bb-tbl td.bb-debit {
-        color: var(--bb-debit) !important;
-    }
-
-    .bb-tbl td.bb-kredit {
-        color: var(--bb-kredit) !important;
-    }
-
-    /* ── Cell types ── */
-    .bb-tgl {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: .68rem;
-        font-weight: 500;
-        color: var(--bb-text-3);
-        text-align: center;
-        white-space: nowrap;
-    }
-
-    .bb-jurnal {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: .68rem;
-        font-weight: 600;
-        color: var(--bb-accent-text);
-        background: var(--bb-accent-soft);
-        border: 1px solid var(--bb-accent-mid);
-        padding: 2px 7px;
-        border-radius: 5px;
-        display: inline-block;
-        white-space: nowrap;
-    }
-
-    .dark .bb-jurnal {
-        color: var(--bb-accent);
-        background: var(--bb-accent-soft);
-        border-color: var(--bb-accent-mid);
-    }
-
-    .bb-keterangan {
-        color: var(--bb-text-1);
-        font-weight: 600;
-        max-width: 280px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .bb-debit {
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 600;
-        font-size: .73rem;
-        color: var(--bb-debit);
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    .bb-kredit {
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 600;
-        font-size: .73rem;
-        color: var(--bb-kredit);
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    .bb-saldo {
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 700;
-        font-size: .73rem;
-        color: var(--bb-text-1);
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    .bb-saldo.neg {
-        color: var(--bb-neg);
-    }
-
-    /* Saldo awal khusus */
-    .bb-saldo-awal-val {
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 700;
-        font-size: .74rem;
-        color: var(--bb-amber);
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    .bb-saldo-awal-val.neg {
-        color: var(--bb-neg);
-    }
-
-    /* Footer saldo highlight */
-    .bb-footer-saldo {
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 800;
-        font-size: .76rem;
-        color: var(--bb-accent-text);
-        background: var(--bb-accent-soft) !important;
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    .bb-footer-saldo.neg {
-        color: var(--bb-neg);
-        background: color-mix(in srgb, var(--bb-neg) 10%, transparent) !important;
-    }
-
-    /* Label saldo awal tengah */
-    .bb-awal-label {
-        text-align: center;
-        font-weight: 700;
-        font-size: .72rem;
-        letter-spacing: .06em;
-        text-transform: uppercase;
-        color: var(--bb-amber);
-    }
+.lgt-foot td {
+    padding:.5rem .75rem;
+    background:var(--bb-surface-3);
+    border-top:1.5px solid var(--bb-border);
+    font-family:'JetBrains Mono',monospace;
+    font-size:.72rem;
+    font-weight:700;
+    color:var(--bb-text-1);
+}
+.lgt-foot-lbl {
+    text-align:right;
+    font-size:.6rem;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--bb-text-3);
+    font-family:'Plus Jakarta Sans',sans-serif;
+}
 </style>
 
-<div class="bb-tbl-wrap">
-    <table class="bb-tbl">
-        <thead>
-            <tr>
-                <th class="c" style="width:85px">Tgl</th>
-                <th style="width:85px">Jurnal</th>
-                <th>Keterangan</th>
-                <th class="r" style="width:105px">Debit</th>
-                <th class="r" style="width:105px">Kredit</th>
-                <th class="r" style="width:115px">Saldo</th>
-            </tr>
-        </thead>
-        <tbody>
+<div class="lgt-wrap">
+<table class="lgt">
+    <thead>
+        <tr>
+            <th class="lgt-tgl">Tanggal</th>
+            <th class="lgt-jurnal r">No.J</th>
+            <th class="lgt-nama">Nama</th>
+            <th class="lgt-ket">Keterangan</th>
+            <th class="lgt-qty r">Qty</th>
+            <th class="lgt-harga r">Harga</th>
+            <th class="lgt-debit r" style="color:var(--bb-debit)">Debit</th>
+            <th class="lgt-kredit r" style="color:var(--bb-kredit)">Kredit</th>
+            <th class="lgt-saldo r">Saldo</th>
+        </tr>
+    </thead>
+    <tbody>
 
-            {{-- ── BARIS SALDO AWAL ── --}}
-            <tr class="row-awal">
-                <td class="bb-tgl" style="color:var(--bb-amber);font-style:italic">{{ $tglAwalan }}</td>
-                <td style="text-align:center;color:var(--bb-amber);opacity:.7;font-size:.68rem;font-style:italic">—</td>
-                <td class="bb-awal-label">Saldo Awalan</td>
-                <td></td>
-                <td></td>
-                <td class="bb-saldo-awal-val {{ $saldoAwal < 0 ? 'neg' : '' }}">
-                    @if($saldoAwal < 0)–@endif{{ number_format(abs($saldoAwal), 0, ',' , '.' ) }} </td>
-            </tr>
+        {{-- Baris saldo awal --}}
+        <tr class="lgt-sa">
+            <td class="lgt-tgl" colspan="4"
+                style="font-size:.65rem;letter-spacing:.06em;text-transform:uppercase">
+                Saldo Awal Periode
+            </td>
+            <td class="lgt-qty r">—</td>
+            <td class="lgt-harga r">—</td>
+            <td class="lgt-debit r">—</td>
+            <td class="lgt-kredit r">—</td>
+            <td class="lgt-saldo r {{ $saldoAwal < 0 ? 'lgt-neg' : '' }}">
+                @if($saldoAwal < 0)–@endif
+                {{ number_format(abs($saldoAwal), 0, ',', '.') }}
+            </td>
+        </tr>
 
-            {{-- ── BARIS TRANSAKSI ── --}}
-            @foreach($transaksis as $trx)
-            @php
-            $mode = strtolower($trx->hit_kbk ?? '');
-            if ($mode === '' || $mode === null) {
-            $nominal = $trx->harga ?? 0;
-            } elseif ($mode === 'b' || $mode === 'banyak') {
-            $nominal = ($trx->banyak ?? 0) * ($trx->harga ?? 0);
-            } else {
-            $nominal = ($trx->m3 ?? 0) * ($trx->harga ?? 0);
-            }
+        {{-- Baris transaksi --}}
+        @forelse($rows as $row)
+        <tr>
+            <td class="lgt-tgl">
+                {{ \Carbon\Carbon::parse($row->trx->tgl)->format('d/m/Y') }}
+            </td>
+            <td class="lgt-jurnal r">{{ $row->trx->jurnal }}</td>
+            <td class="lgt-nama" title="{{ $row->trx->nama }}">
+                {{ $row->trx->nama ?? '—' }}
+            </td>
+            <td class="lgt-ket" title="{{ $row->trx->keterangan }}">
+                {{ $row->trx->keterangan ?? '—' }}
+            </td>
+            <td class="lgt-qty r">
+                @if($row->trx->banyak !== null && (float)$row->trx->banyak > 0)
+                    {{ (float)$row->trx->banyak == (int)$row->trx->banyak ? number_format((float)$row->trx->banyak, 0, ',', '.') : rtrim(rtrim(number_format((float)$row->trx->banyak, 4, ',', '.'), '0'), ',') }}
+                @else
+                    —
+                @endif
+            </td>
+            <td class="lgt-harga r">
+                @if($row->trx->harga !== null && (float)$row->trx->harga > 0)
+                    {{ number_format((float)$row->trx->harga, 0, ',', '.') }}
+                @else
+                    —
+                @endif
+            </td>
+            <td class="lgt-debit r"
+                style="{{ $row->isDebit ? 'color:var(--bb-debit);font-weight:700' : 'opacity:.2' }}">
+                @if($row->isDebit)
+                    {{ number_format($row->nominal, 0, ',', '.') }}
+                @else —
+                @endif
+            </td>
+            <td class="lgt-kredit r"
+                style="{{ !$row->isDebit ? 'color:var(--bb-kredit);font-weight:700' : 'opacity:.2' }}">
+                @if(!$row->isDebit)
+                    {{ number_format($row->nominal, 0, ',', '.') }}
+                @else —
+                @endif
+            </td>
+            <td class="lgt-saldo r {{ $row->running < 0 ? 'lgt-neg' : '' }}">
+                @if($row->running < 0)–@endif
+                {{ number_format(abs($row->running), 0, ',', '.') }}
+            </td>
+        </tr>
+        @empty
+        <tr>
+            <td colspan="9"
+                style="padding:.75rem;text-align:center;color:var(--bb-text-3);font-size:.7rem;font-style:italic">
+                Tidak ada mutasi bulan ini
+            </td>
+        </tr>
+        @endforelse
 
-            $isDebit = strtolower($trx->map) === 'd';
-
-if ($saldoNormal === 'kredit') {
-
-    if ($isDebit) {
-        $saldoBerjalan -= $nominal;
-        $totalDebit += $nominal;
-    } else {
-        $saldoBerjalan += $nominal;
-        $totalKredit += $nominal;
-    }
-
-} else {
-
-    if ($isDebit) {
-        $saldoBerjalan += $nominal;
-        $totalDebit += $nominal;
-    } else {
-        $saldoBerjalan -= $nominal;
-        $totalKredit += $nominal;
-    }
-
-}
-            @endphp
-            <tr>
-                <td class="bb-tgl">{{ \Carbon\Carbon::parse($trx->tgl)->format('d/m/Y') }}</td>
-                <td>
-                    @if($trx->jurnal)
-                    <span class="bb-jurnal">{{ $trx->jurnal }}</span>
-                    @else
-                    <span style="color:var(--bb-text-3);font-size:.65rem">—</span>
-                    @endif
-                </td>
-                <td class="bb-keterangan" title="{{ $trx->keterangan }}">{{ $trx->keterangan }}</td>
-                <td class="bb-debit">{{ $isDebit ? number_format($nominal, 0, ',', '.') : '' }}</td>
-                <td class="bb-kredit">{{ !$isDebit ? number_format($nominal, 0, ',', '.') : '' }}</td>
-                <td class="bb-saldo {{ $saldoBerjalan < 0 ? 'neg' : '' }}">
-                    @if($saldoBerjalan < 0)–@endif{{ number_format(abs($saldoBerjalan), 0, ',' , '.' ) }} </td>
-            </tr>
-            @endforeach
-
-            {{-- ── FOOTER SISA SALDO ── --}}
-            <tr class="row-footer">
-                <td colspan="3" style="text-align:center;letter-spacing:.06em">Sisa Saldo</td>
-                <td class="bb-debit" style="font-weight:800;color:var(--bb-debit)">{{ number_format($totalDebit, 0, ',',
-                    '.') }}</td>
-                <td class="bb-kredit" style="font-weight:800;color:var(--bb-kredit)">{{ number_format($totalKredit, 0,
-                    ',', '.') }}</td>
-                <td class="bb-footer-saldo {{ $saldoBerjalan < 0 ? 'neg' : '' }}">
-                    @if($saldoBerjalan < 0)–@endif{{ number_format(abs($saldoBerjalan), 0, ',' , '.' ) }} </td>
-            </tr>
-
-        </tbody>
-    </table>
+    </tbody>
+    <tfoot>
+        <tr class="lgt-foot">
+            <td colspan="4" class="lgt-foot-lbl">Total Mutasi Bulan Ini</td>
+            <td class="lgt-qty r">
+                @if($totalQty != 0)
+                    <span class="{{ $totalQty < 0 ? 'lgt-neg' : '' }}">
+                        {{ (float)$totalQty == (int)$totalQty ? number_format(abs($totalQty), 0, ',', '.') : rtrim(rtrim(number_format(abs($totalQty), 4, ',', '.'), '0'), ',') }}
+                    </span>
+                @else
+                    —
+                @endif
+            </td>
+            <td class="lgt-harga r"></td>
+            <td class="lgt-debit r" style="color:var(--bb-debit)">
+                {{ number_format($totalDebit, 0, ',', '.') }}
+            </td>
+            <td class="lgt-kredit r" style="color:var(--bb-kredit)">
+                {{ number_format($totalKredit, 0, ',', '.') }}
+            </td>
+            <td class="lgt-saldo r {{ $saldoAkhir < 0 ? 'lgt-neg' : '' }}">
+                @if($saldoAkhir < 0)–@endif
+                {{ number_format(abs($saldoAkhir), 0, ',', '.') }}
+            </td>
+        </tr>
+    </tfoot>
+</table>
 </div>
