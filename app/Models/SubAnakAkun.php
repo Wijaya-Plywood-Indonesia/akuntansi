@@ -23,6 +23,10 @@ class SubAnakAkun extends Model
     | Relationships
     |--------------------------------------------------------------------------
     */
+    public function indukAkun(): BelongsTo
+    {
+        return $this->belongsTo(IndukAkun::class, 'id_induk_akun');
+    }
 
     public function anakAkun(): BelongsTo
     {

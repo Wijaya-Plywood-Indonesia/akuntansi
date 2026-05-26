@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Kalnoy\Nestedset\NodeTrait;
 
 class IndukAkun extends Model
 {
+    use NodeTrait;
     protected $fillable = [
         'kode_induk_akun',
         'nama_induk_akun',
@@ -25,6 +27,11 @@ class IndukAkun extends Model
     public function anakAkuns(): HasMany
     {
         return $this->hasMany(AnakAkun::class, 'id_induk_akun');
+    }
+
+    public function subAnakAkun()
+    {
+        return $this->hasMany(AnakAkun::class, 'id_induk_akun'); // Sesuaikan foreign key-nya
     }
 
     public function creator()
