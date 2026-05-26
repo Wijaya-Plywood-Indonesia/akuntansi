@@ -18,9 +18,9 @@ class NeracaPage extends Page implements HasForms
     use HasPageShield;
     use InteractsWithForms;
 
-    protected static ?string $navigationLabel = 'Neraca Telur';
-    protected static UnitEnum|string|null $navigationGroup = 'Akuntansi Telur';
-    protected static ?string $title = 'Neraca Telur';
+    protected static ?string $navigationLabel = 'Neraca';
+    protected static UnitEnum|string|null $navigationGroup = 'Jurnal & Akuntansi';
+    protected static ?string $title = 'Neraca';
     protected string $view = 'filament.pages.neraca-page';
 
     // Properti filter dinamis

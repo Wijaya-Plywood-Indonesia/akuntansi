@@ -20,7 +20,7 @@ use UnitEnum;
 
 class JurnalPembantuHeaderResource extends Resource
 {
-    protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
+    protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
     protected static ?string $model = JurnalPembantuHeader::class;
 
     //  protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;

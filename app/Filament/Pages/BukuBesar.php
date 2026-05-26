@@ -15,7 +15,7 @@ class BukuBesar extends Page
 {
     use HasPageShield;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Akuntansi Telur';
+    protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
     protected string $view = 'filament.pages.buku-besar';
     protected static ?string $navigationLabel = 'Buku Besar';
     protected static ?string $title = 'Buku Besar';

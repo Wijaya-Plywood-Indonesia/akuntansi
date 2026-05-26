@@ -29,7 +29,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     use InteractsWithForms;
 
     protected string $view = 'filament.pages.jurnal-umum';
-    protected static UnitEnum|string|null $navigationGroup = 'Jurnal';
+    protected static UnitEnum|string|null $navigationGroup = 'Jurnal & Akuntansi';
     protected static ?string $title = 'Jurnal Umum';
 
     public $tgl, $jurnal, $no_dokumen, $no_akun, $nama_akun, $nama, $keterangan;

@@ -12,7 +12,7 @@ use UnitEnum;
 class TreeAkunPage extends Page
 {
     use HasPageShield;
-    protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
+    protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
     //    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected string $view = 'filament.pages.tree-akun-page';
     protected static ?string $navigationLabel = 'Chart of Accounts';
