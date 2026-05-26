@@ -42,7 +42,7 @@
     </tr>
 
     @foreach($node['children'] as $child)
-        @include('filament.pages.partials.laba-rugi-telur-node', [
+        @include('filament.pages.partials.laba-rugi-node', [
             'node'              => $child,
             'depth'             => $depth + 1,
             'buls'              => $buls,
@@ -134,7 +134,7 @@
     </tr>
 
     @foreach($node['children'] as $child)
-        @include('filament.pages.partials.laba-rugi-telur-node', [
+        @include('filament.pages.partials.laba-rugi-node', [
             'node'              => $child,
             'depth'             => $depth + 1,
             'buls'              => $buls,
