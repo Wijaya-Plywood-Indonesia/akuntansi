@@ -296,7 +296,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'no_akun' => $this->no_akun,
             'nama_akun' => $this->nama_akun,
             'nama' => $this->nama,
-            'mm' => $this->mm,
+            'mm' => $this->mm === '' ? null : (int) $this->mm,
             'keterangan' => $this->keterangan,
             'hit_kbk' => $this->hit_kbk,
             'banyak' => (float) $this->banyak,
