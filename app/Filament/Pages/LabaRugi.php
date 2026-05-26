@@ -12,14 +12,14 @@ use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
-class LabaRugiTelur extends Page
+class LabaRugi extends Page
 {
     use HasPageShield;
 
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
     protected static ?string $title = 'Laba Rugi Telur';
-    protected static ?string $navigationLabel = 'Laba Rugi Telur';
-    protected string $view = 'filament.pages.laba-rugi-telur';
+    protected static ?string $navigationLabel = 'Laba Rugi ';
+    protected string $view = 'filament.pages.laba-rugi';
 
     // ── PROPERTI FILTER DINAMIS ──
     public string $jenisFilter = 'bulan'; // Default bulanan

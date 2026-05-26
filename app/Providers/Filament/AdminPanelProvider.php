@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\LabaRugi;
 use App\Filament\Pages\NeracaPage;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use App\Filament\Pages\TreeAkunPage;
@@ -46,6 +47,7 @@ class AdminPanelProvider extends PanelProvider
                 NeracaPage::class,
                 Dashboard::class,
                 TreeAkunPage::class,
+                LabaRugi::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
