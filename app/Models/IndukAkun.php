@@ -4,11 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Kalnoy\Nestedset\NodeTrait;
+// use Kalnoy\Nestedset\NodeTrait;
 
 class IndukAkun extends Model
 {
-    use NodeTrait;
+    // use NodeTrait;
     protected $fillable = [
         'kode_induk_akun',
         'nama_induk_akun',
