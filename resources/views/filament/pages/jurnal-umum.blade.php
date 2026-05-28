@@ -326,6 +326,8 @@
             isDropdownOpen: false,
             accounts: @js($accounts ?? []),
             items: @entangle('items'),
+            total: @entangle('total'),
+            total_display: '',
 
             get filteredAccounts() {
                 if (this.searchTerm === '') return this.accounts;
@@ -468,6 +470,10 @@
                 if (!value) { searchTerm = ''; }
                 else if (searchTerm !== value) { searchTerm = value; }
             });
+            $watch('$wire.total', value => {
+                if (document.activeElement === $refs.totalInput) return;
+                total_display = formatRupiah(value);
+            });
 
             {{-- GANTI baris harga_display = formatRupiah(...) menjadi ini --}}
             $nextTick(() => {
@@ -475,6 +481,7 @@
                 banyak_display = $wire.banyak !== '' && $wire.banyak !== null
                 ? $wire.banyak.toString().replace('.', ',')
                 : '';
+                total_display = formatRupiah($wire.total ?? '');
             });
 
             $wire.on('toast', ({ type, title, msg }) => {
@@ -557,18 +564,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hit KBK <span class="text-amber-500">*</span></label>
-                        <select x-model="hit_kbk" @change="
-                                if (hit_kbk === 'b') {
-                                    banyak_display = '1';
-                                    m3 = '';
-                                } else if (hit_kbk === 'm') {
-                                    banyak_display = '';
-                                    m3 = '';
-                                } else {
-                                    banyak_display = '';
-                                    m3 = '';
-                                }
-                            "
+                        <select x-model="hit_kbk" @change="$wire.set('hit_kbk', hit_kbk)"
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
                             style="background-image:url('data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e');background-position:right 10px center;background-repeat:no-repeat;background-size:16px;padding-right:36px;-webkit-appearance:none">
                             <option value="">-- Tidak ada --</option>
@@ -582,28 +578,49 @@
                             :value="banyak_display"
 
                             @input="
-        const el = $event.target;
-        const cursorPos = el.selectionStart;
-        const oldLen    = el.value.length;
+                                const el = $event.target;
+                                const cursorPos = el.selectionStart;
+                                const oldLen    = el.value.length;
 
-        const formatted = formatBanyakInput(el.value);
-        banyak_display  = formatted;
-        el.value        = formatted;
+                                const formatted = formatBanyakInput(el.value);
+                                banyak_display  = formatted;
+                                el.value        = formatted;
 
-        // Preserve posisi cursor
-        const newLen    = formatted.length;
-        const newPos    = cursorPos + (newLen - oldLen);
-        el.setSelectionRange(newPos, newPos);
+                                // Preserve posisi cursor
+                                const newLen    = formatted.length;
+                                const newPos    = cursorPos + (newLen - oldLen);
+                                el.setSelectionRange(newPos, newPos);
 
-        const parsed = parseInputID(formatted);
-        $wire.set('banyak', parsed === '' ? '' : parsed);
-    "
+                                const parsed = parseInputID(formatted);
+                                $wire.set('banyak', parsed === '' ? '' : parsed);
+                            "
                             @blur="
-        if (banyak_display !== '') {
-            let num = parseFloat(parseInputID(banyak_display));
-            banyak_display = isNaN(num) ? '' : (Number.isInteger(num) ? num.toString() : banyak_display);
-        }
-    "
+                                if (banyak_display !== '') {
+                                    let num = parseFloat(parseInputID(banyak_display));
+                                    banyak_display = isNaN(num) ? '' : (Number.isInteger(num) ? num.toString() : banyak_display);
+                                }
+
+                                // Kalkulasi dua arah — banyak diisi
+                                if (hit_kbk === 'b') {
+                                    const b = parseFloat(parseInputID(banyak_display));
+                                    const t = parseFloat(parseInputID(total_display));
+                                    const h = parseFloat(parseInputID(harga_display));
+
+                                    if (!isNaN(b) && b > 0) {
+                                        if (!isNaN(t) && t > 0) {
+                                            // total sudah ada → harga menyesuaikan
+                                            const newHarga = t / b;
+                                            $wire.set('harga', newHarga);
+                                            harga_display = formatRupiah(newHarga);
+                                        } else if (!isNaN(h) && h > 0) {
+                                            // harga sudah ada → total menyesuaikan
+                                            const newTotal = b * h;
+                                            total_display = formatRupiah(newTotal);
+                                            $wire.set('total', newTotal);
+                                        }
+                                    }
+                                }
+                            "
                             placeholder="0 atau 1,5"
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300 tabular-nums">
 
@@ -611,11 +628,32 @@
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kubikasi (M3)</label>
                         <input type="text" inputmode="decimal" x-model="m3" placeholder="0.0000"
+                            @blur="
+                            if (hit_kbk === 'm') {
+                                const m = parseFloat(m3);
+                                const t = parseFloat(parseInputID(total_display));
+                                const h = parseFloat(parseInputID(harga_display));
+
+                                if (!isNaN(m) && m > 0) {
+                                    if (!isNaN(t) && t > 0) {
+                                        // total sudah ada → harga menyesuaikan
+                                        const newHarga = t / m;
+                                        $wire.set('harga', newHarga);
+                                        harga_display = formatRupiah(newHarga);
+                                    } else if (!isNaN(h) && h > 0) {
+                                        // harga sudah ada → total menyesuaikan
+                                        const newTotal = m * h;
+                                        total_display = formatRupiah(newTotal);
+                                        $wire.set('total', newTotal);
+                                    }
+                                }
+                            }
+                        "
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Harga</label>
                         <div class="relative">
@@ -641,9 +679,89 @@
                                     const parsed = parseInputID(harga_display);
                                     $wire.set('harga', parsed === '' ? '' : parsed);
                                     harga_display = formatRupiah(parsed === '' ? '' : parsed);
+
+                                    // Kalkulasi dua arah
+                                    const h = parseFloat(parsed);
+                                    const t = parseFloat(parseInputID(total_display));
+
+                                    if (hit_kbk === 'b' && !isNaN(h) && h > 0 && !isNaN(t) && t > 0) {
+                                        // harga diisi → banyak menyesuaikan
+                                        const newBanyak = t / h;
+                                        banyak_display = newBanyak.toString().replace('.', ',');
+                                        $wire.set('banyak', newBanyak);
+                                    } else if (hit_kbk === 'm' && !isNaN(h) && h > 0 && !isNaN(t) && t > 0) {
+                                        // harga diisi → m3 menyesuaikan
+                                        const newM3 = t / h;
+                                        $wire.set('m3', newM3);
+                                    } else if (hit_kbk === '') {
+                                        // tidak ada hit_kbk → total ikut harga
+                                        total_display = formatRupiah(parsed);
+                                        $wire.set('total', parsed === '' ? '' : parsed);
+                                    }
                                 "
                                 placeholder=" 0"
                                 class="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300 tabular-nums">
+                        </div>
+                    </div>
+                    {{-- Kolom 1: Total --}}
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Total
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
+                            <input type="text" inputmode="decimal"
+                                x-ref="totalInput"
+                                :value="total_display"
+                                @input="
+                                    const el = $event.target;
+                                    const cursorPos = el.selectionStart;
+                                    const oldLen = el.value.length;
+
+                                    const formatted = formatHargaInput(el.value);
+                                    total_display = formatted;
+                                    el.value = formatted;
+
+                                    const newLen = formatted.length;
+                                    const newPos = cursorPos + (newLen - oldLen);
+                                    el.setSelectionRange(newPos, newPos);
+                                "
+                                @blur="
+                                    const parsed = parseInputID(total_display);
+                                    $wire.set('total', parsed === '' ? '' : parsed);
+                                    total_display = formatRupiah(parsed === '' ? '' : parsed);
+
+                                    {{-- Jika hit_kbk kosong, total = harga --}}
+                                    if (hit_kbk === '') {
+                                        const newHarga = parsed;
+                                        $wire.set('harga', newHarga);
+                                        harga_display = formatRupiah(newHarga);
+                                    }
+
+                                    {{-- Jika hit_kbk = b, harga = total / banyak --}}
+                                    if (hit_kbk === 'b') {
+                                        const t = parseFloat(parsed);
+                                        const b = parseFloat(parseInputID(banyak_display));
+                                        if (!isNaN(t) && t > 0 && !isNaN(b) && b > 0) {
+                                            const newHarga = t / b;
+                                            $wire.set('harga', newHarga);
+                                            harga_display = formatRupiah(newHarga);
+                                        }
+                                    }
+
+                                    {{-- Jika hit_kbk = m, harga = total / m3 --}}
+                                    if (hit_kbk === 'm') {
+                                        const t = parseFloat(parsed);
+                                        const m = parseFloat(m3);
+                                        if (!isNaN(t) && t > 0 && !isNaN(m) && m > 0) {
+                                            const newHarga = t / m;
+                                            $wire.set('harga', newHarga);
+                                            harga_display = formatRupiah(newHarga);
+                                        }
+                                    }
+                                "
+                                placeholder="0"
+                                class="w-full pl-9 pr-3 py-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-[4px] font-bold text-amber-600 dark:text-amber-400 tabular-nums outline-none focus:border-amber-400">
                         </div>
                     </div>
                     <div class="space-y-3 pt-1">
@@ -662,8 +780,10 @@
                             async function() {
                                 let rawHarga  = parseInputID(harga_display);
                                 let rawBanyak = parseInputID(banyak_display);
+                                let rawTotal  = parseInputID(total_display);
                                 await $wire.set('harga',  rawHarga  === '' ? '' : rawHarga);
                                 await $wire.set('banyak', rawBanyak === '' ? '' : rawBanyak);
+                                await $wire.set('total',  rawTotal  === '' ? '' : rawTotal);
                                 await $wire.call('addItem');
                             }()
                         "
@@ -699,8 +819,9 @@
 
                 {{-- Header kolom --}}
                 <div class="grid gap-0 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-4 py-2"
-                    style="grid-template-columns: 1fr 70px 70px 130px 60px 190px">
+                    style="grid-template-columns: 1fr 120px 70px 70px 130px 60px 190px">
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Akun & Keterangan</div>
+                    <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. Dokumen</div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Qty</div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">M3</div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right pr-2">Harga</div>
@@ -713,7 +834,7 @@
                     <template x-for="(row, i) in items" :key="i">
                         <template x-if="row && row.no_akun && row.nama_akun">
                             <div class="grid gap-0 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 items-center group"
-                                style="grid-template-columns: 1fr 70px 70px 130px 60px 190px">
+                                style="grid-template-columns: 1fr 120px 70px 70px 130px 60px 190px">
 
                                 {{-- Kolom 1: Akun & Keterangan --}}
                                 <div class="min-w-0 pr-4">
@@ -741,7 +862,13 @@
                                     </div>
                                 </div>
 
-                                {{-- Kolom 2: Qty --}}
+                                {{-- Kolom 2: No. Dokumen --}}
+                                <div class="flex items-start pt-0.5 shrink-0">
+                                    <span class="text-xs font-bold text-gray-400 dark:text-gray-500 tabular-nums"
+                                        x-text="row.no_dokumen || '-'">
+                                    </span>
+                                </div>
+                                {{-- Kolom 3: Banyak --}}
                                 <div class="text-right shrink-0">
                                     <span class="text-sm font-bold text-gray-500 dark:text-gray-400 tabular-nums"
                                         x-text="(row.banyak !== null && row.banyak !== undefined && row.banyak !== '' && row.banyak != 0)
@@ -750,7 +877,7 @@
                                     </span>
                                 </div>
 
-                                {{-- Kolom 3: M3 --}}
+                                {{-- Kolom 4: M3 --}}
                                 <div class="text-right shrink-0">
                                     <span class="text-sm font-bold text-gray-500 dark:text-gray-400 tabular-nums"
                                         x-text="(row.m3 !== null && row.m3 !== undefined && row.m3 !== '' && parseFloat(row.m3) > 0)
@@ -759,14 +886,16 @@
                                     </span>
                                 </div>
 
-                                {{-- Kolom 4: Harga --}}
+                                {{-- Kolom 5: Harga --}}
                                 <div class="text-right pr-2 shrink-0">
                                     <span class="text-sm font-bold text-gray-500 dark:text-gray-400 tabular-nums"
                                         x-text="formatTotal(row.harga)">
                                     </span>
                                 </div>
 
-                                {{-- Kolom 5: Badge D/K --}}
+
+
+                                {{-- Kolom 6: Badge D/K --}}
                                 <div class="flex justify-center shrink-0">
                                     <span :class="row.map.toLowerCase() === 'd'
                                     ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
@@ -776,7 +905,7 @@
                                     </span>
                                 </div>
 
-                                {{-- Kolom 6: Total + Aksi --}}
+                                {{-- Kolom 7: Total + Aksi --}}
                                 <div class="flex items-center justify-end gap-2 shrink-0">
                                     <div :class="row.map.toLowerCase() === 'd' ? 'text-emerald-500' : 'text-rose-500'"
                                         class="font-black text-sm tabular-nums whitespace-nowrap"
@@ -1122,6 +1251,7 @@
                                 <th class="px-4 py-4 w-[110px]">No Akun</th>
                                 <th class="px-4 py-4 w-[180px]">Nama Akun</th>
                                 <th class="px-4 py-4 text-center w-[110px]">Nomor Jurnal</th>
+                                <th class="px-4 py-4 w-[140px]">No. Dokumen</th>
                                 <th class="px-4 py-4 w-[240px]">Keterangan</th>
                                 <th class="px-4 py-4 text-right w-[110px]">Kuantitas</th>
                                 <th class="px-4 py-4 text-right w-[140px]">Harga</th>
@@ -1139,6 +1269,9 @@
                                         <td class="px-4 py-5"></td>
                                         <td class="px-4 py-5">
                                             <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-24 bg-gray-200 dark:bg-gray-700"></div>
                                         </td>
                                         <td class="px-4 py-5">
                                             <div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div>
@@ -1198,6 +1331,9 @@
                                 <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500">{{ $hj->no_akun }}</td>
                                 <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100">{{ $hj->nama_akun }}</td>
                                 <td class="px-4 py-4 text-center text-gray-400 font-medium">{{ $hj->jurnal }}</td>
+                                <td class="px-4 py-4 text-gray-400 dark:text-gray-500 font-medium">
+                                    {{ $hj->no_dokumen ?? '-' }}
+                                </td>
                                 <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400 break-words whitespace-normal">{{ $hj->keterangan }}</td>
                                 <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500">{{ $hj->banyak == intval($hj->banyak)
                                 ? number_format($hj->banyak, 0, ',', '.')
@@ -1242,7 +1378,7 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="11" class="px-6 py-16 text-center">
+                                <td colspan="12" class="px-6 py-16 text-center">
                                     <div class="flex flex-col items-center gap-3 text-gray-400">
                                         <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1293,7 +1429,7 @@
                     <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1600px]">
                         <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                             <tr>
-                                <td colspan="8" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
+                                <td colspan="9" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
                                 <td class="px-4 py-5 text-right text-green-400 bg-green-50/10 text-base font-black">
                                     {{ number_format($totalDebitDB, 0, ',', '.') }}
                                 </td>
@@ -1303,7 +1439,7 @@
                                 <td></td>
                             </tr>
                             <tr class="border-t border-gray-200 dark:border-gray-700">
-                                <td colspan="11" class="px-4 py-3">
+                                <td colspan="12" class="px-4 py-3">
                                     @if($isHistoryBalanced)
                                     <div class="flex items-center justify-end gap-2">
                                         <div class="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-[4px]">
