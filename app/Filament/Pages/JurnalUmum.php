@@ -34,7 +34,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public $tgl, $jurnal, $no_dokumen, $no_akun, $nama_akun, $nama, $keterangan;
     public $harga = '';
-    public $banyak = '';
+    public $banyak = '1';
     public $mm = '';
     public $m3 = '';
     public $hit_kbk = 'b';
@@ -60,7 +60,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         $this->tgl        = session()->get('jurnal_draft_tgl', now()->format('Y-m-d'));
         $this->items      = session()->get('jurnal_draft_items', []);
-        $this->banyak     = session()->get('jurnal_draft_banyak', '');
+        $this->banyak     = session()->get('jurnal_draft_banyak', strtolower($this->hit_kbk) === 'b' ? 1 : '');
         $this->harga      = session()->get('jurnal_draft_harga', '');
         $this->no_dokumen = session()->get('jurnal_draft_nodok', '');
         $this->nama       = session()->get('jurnal_draft_nama', '');
@@ -213,6 +213,21 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->persistDraftState();
     }
 
+    public function updatedHitKbk($value): void
+    {
+        if (strtolower($value) === 'b') {
+            // Mode banyak: quantity langsung default 1, kubikasi dikosongkan
+            $this->banyak = 1;
+            $this->m3     = '';
+        } else {
+            // Mode kubikasi atau lainnya: user isi sendiri semua
+            $this->banyak = '';
+            $this->m3     = '';
+        }
+
+        $this->persistDraftState();
+    }
+
     // ---
     // ADD ITEM
     // ---
@@ -337,7 +352,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->wasBalanced = false;
         $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
         $this->harga   = '';
-        $this->banyak  = '';
+        $this->banyak  = 1;
         $this->map     = 'd';
         $this->hit_kbk = 'b';
         $this->perPage = 50;
@@ -359,6 +374,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->banyak  = '';
         $this->map     = 'd';
         $this->hit_kbk = 'b';
+        $this->banyak  = 1;
+        $this->m3      = '';
         $this->persistDraftState();
     }
 
