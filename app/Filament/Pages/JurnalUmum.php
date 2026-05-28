@@ -2,7 +2,6 @@
 
 namespace App\Filament\Pages;
 
-use App\Models\AnakAkun;
 use App\Models\SubAnakAkun;
 use App\Models\JurnalUmum as JurnalModel;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -106,9 +105,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // ---
     protected function getViewData(): array
     {
-        $sub  = SubAnakAkun::selectRaw("kode_sub_anak_akun as no, nama_sub_anak_akun as nama");
-        $anak = AnakAkun::selectRaw("kode_anak_akun as no, nama_anak_akun as nama");
-
         $query = JurnalModel::latest('id');
         if (!empty($this->filterTglDari))
             $query->whereDate('tgl', '>=', $this->filterTglDari);
@@ -139,7 +135,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $selisihDB         = abs($totalDebitDB - $totalKreditDB);
 
         return [
-            'accounts'          => $sub->unionAll($anak)->get(),
+            'accounts'          => SubAnakAkun::selectRaw("kode_sub_anak_akun as no, nama_sub_anak_akun as nama")->get(),
             'historyJurnals'    => $historyJurnals,
             'totalDebitDB'      => $totalDebitDB,
             'totalKreditDB'     => $totalKreditDB,
@@ -206,9 +202,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
             return;
         }
 
-        $this->nama_akun = SubAnakAkun::where('kode_sub_anak_akun', $value)->first()?->nama_sub_anak_akun
-            ?? AnakAkun::where('kode_anak_akun', $value)->first()?->nama_anak_akun
-            ?? '';
+        $this->nama_akun = SubAnakAkun::where('kode_sub_anak_akun', $value)
+            ->first()
+            ?->nama_sub_anak_akun ?? '';
 
         $this->persistDraftState();
     }
@@ -448,19 +444,15 @@ class JurnalUmum extends Page implements HasActions, HasForms
                         ->required()
                         ->searchable()
                         ->options(function () {
-                            $sub  = SubAnakAkun::all()->mapWithKeys(fn($item) => [
+                            return SubAnakAkun::all()->mapWithKeys(fn($item) => [
                                 $item->kode_sub_anak_akun => "{$item->kode_sub_anak_akun} - {$item->nama_sub_anak_akun}"
                             ]);
-                            $anak = AnakAkun::all()->mapWithKeys(fn($item) => [
-                                $item->kode_anak_akun => "{$item->kode_anak_akun} - {$item->nama_anak_akun}"
-                            ]);
-                            return $sub->merge($anak);
                         })
                         ->live()
                         ->afterStateUpdated(function ($state, Set $set) {
-                            $name = SubAnakAkun::where('kode_sub_anak_akun', $state)->first()?->nama_sub_anak_akun
-                                ?? AnakAkun::where('kode_anak_akun', $state)->first()?->nama_anak_akun
-                                ?? '';
+                            $name = SubAnakAkun::where('kode_sub_anak_akun', $state)
+                                ->first()
+                                ?->nama_sub_anak_akun ?? '';
                             $set('nama_akun', $name);
                         }),
                     TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
