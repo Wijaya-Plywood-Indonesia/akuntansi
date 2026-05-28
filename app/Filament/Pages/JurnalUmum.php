@@ -33,10 +33,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public $tgl, $jurnal, $no_dokumen, $no_akun, $nama_akun, $nama, $keterangan;
     public $harga = '';
+    public $total = '';
     public $banyak = '1';
     public $mm = '';
     public $m3 = '';
-    public $hit_kbk = 'b';
+    public $hit_kbk = '';
     public $map = 'd';
     public $items = [];
 
@@ -65,8 +66,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->nama       = session()->get('jurnal_draft_nama', '');
         $this->mm         = session()->get('jurnal_draft_mm', '');
         $this->m3         = session()->get('jurnal_draft_m3', '');
-        $this->hit_kbk    = session()->get('jurnal_draft_hitkbk', 'b');
+        $this->hit_kbk    = session()->get('jurnal_draft_hitkbk', '');
         $this->jurnal     = session()->get('jurnal_draft_kode', $this->getNextJurnalNumber());
+        $this->total = session()->get('jurnal_draft_total', '');
 
         $savedMap   = session()->get('jurnal_draft_map', 'd');
         $this->map  = in_array(strtolower($savedMap), ['d', 'k']) ? strtolower($savedMap) : 'd';
@@ -98,6 +100,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         session()->put('jurnal_draft_mm',      $this->mm);
         session()->put('jurnal_draft_m3',      $this->m3);
         session()->put('jurnal_draft_hitkbk',  $this->hit_kbk);
+        session()->put('jurnal_draft_total', $this->total);
     }
 
     // ---
@@ -211,16 +214,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function updatedHitKbk($value): void
     {
-        if (strtolower($value) === 'b') {
-            // Mode banyak: quantity langsung default 1, kubikasi dikosongkan
-            $this->banyak = 1;
-            $this->m3     = '';
-        } else {
-            // Mode kubikasi atau lainnya: user isi sendiri semua
-            $this->banyak = '';
-            $this->m3     = '';
-        }
-
         $this->persistDraftState();
     }
 
@@ -285,7 +278,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         // ── Reset hanya field per-baris, bukan harga/banyak/map ─
         // User tetap kontrol penuh atas semua field
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'no_dokumen']);
 
         $this->dispatch('toast', type: 'info', title: 'Item Ditambahkan', msg: 'Item berhasil masuk ke draft.');
 
@@ -342,6 +335,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'jurnal_draft_mm',
             'jurnal_draft_m3',
             'jurnal_draft_hitkbk',
+            'jurnal_draft_total',
         ]);
 
         $this->items      = [];
@@ -350,7 +344,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->harga   = '';
         $this->banyak  = 1;
         $this->map     = 'd';
-        $this->hit_kbk = 'b';
+        $this->hit_kbk = '';
+        $this->total = '';
         $this->perPage = 50;
         $this->hasMorePages = true;
 
@@ -369,9 +364,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->harga   = '';
         $this->banyak  = '';
         $this->map     = 'd';
-        $this->hit_kbk = 'b';
+        $this->hit_kbk = '';
         $this->banyak  = 1;
         $this->m3      = '';
+        $this->total = '';
         $this->persistDraftState();
     }
 
@@ -430,9 +426,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // EDIT & DELETE HISTORY ACTION
     // ══════════════════════════════════════════════════════════
 
-    public function editHistoryAction(): Action
+    public function editDraftAction(): Action
     {
-        return Action::make('editHistory')
+        return Action::make('editDraft')
             ->modalHeading('Edit Transaksi Riwayat')
             ->modalSubmitActionLabel('Simpan Perubahan')
             ->form([
@@ -465,13 +461,26 @@ class JurnalUmum extends Page implements HasActions, HasForms
                         ->required(),
                 ])
             ])
-            ->fillForm(fn(array $arguments) => JurnalModel::find($arguments['id'])?->toArray() ?? [])
+            ->fillForm(function (array $arguments) {
+                // Ambil item dari array $this->items berdasarkan index
+                $index = $arguments['index'];
+                return $this->items[$index];
+            })
             ->action(function (array $data, array $arguments): void {
-                $record = JurnalModel::find($arguments['id']);
-                if ($record) {
-                    $record->update($data);
-                    Notification::make()->title('Data riwayat berhasil diperbarui')->success()->send();
-                }
+                $index = $arguments['index'];
+
+                // Update data di array lokal
+                $this->items[$index] = array_merge($this->items[$index], $data);
+
+                // Hitung ulang total jika perlu (opsional)
+                $this->items[$index]['total'] = match ($this->items[$index]['hit_kbk']) {
+                    'b' => (float)$data['banyak'] * (float)$data['harga'],
+                    'm' => (float)$data['m3'] * (float)$data['harga'],
+                    default => (float)$data['harga'],
+                };
+
+                $this->persistDraftState();
+                Notification::make()->title('Draft berhasil diperbarui')->success()->send();
             });
     }
 
