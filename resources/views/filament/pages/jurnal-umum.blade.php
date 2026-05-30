@@ -1158,29 +1158,32 @@
                 </div>
 
                 {{-- Wrapper Container untuk Filter Kiri & Summary Total Kanan --}}
-                <div class="flex flex-col lg:flex-row items-start justify-between gap-4">
-                    {{-- Form Filter Tanggal --}}
-                    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] p-4 shadow-sm w-full lg:max-w-max">
-                        <div class="flex flex-wrap items-end gap-3">
-                            <div class="flex items-center gap-2 mr-1">
-                                <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <span class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Filter Tanggal</span>
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dari</label>
-                                <input type="text" x-ref="filterDariInput" readonly placeholder="Pilih tanggal..."
-                                    class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer w-40 outline-none focus:border-amber-400">
-                            </div>
-                            <div class="pb-2 text-gray-300 dark:text-gray-600 font-black text-lg">→</div>
-                            <div class="flex flex-col gap-1">
-                                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sampai</label>
-                                <input type="text" x-ref="filterSampaiInput" readonly placeholder="Pilih tanggal..."
-                                    class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer w-40 outline-none focus:border-amber-400">
-                            </div>
+                {{-- Wrapper Container untuk Filter Kiri & Summary Total Kanan --}}
+                {{-- Wrapper Container untuk Filter Kiri & Summary Total Kanan (1 Baris) --}}
+                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] p-3 lg:p-4 shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 w-full">
+                    
+                    {{-- KIRI: Form Filter Tanggal --}}
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex items-center gap-2 mr-1">
+                            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Filter:</span>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <input type="text" x-ref="filterDariInput" readonly placeholder="Dari Tanggal..."
+                                class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] text-xs font-bold text-gray-700 dark:text-gray-200 cursor-pointer w-32 outline-none focus:border-amber-400">
+                            
+                            <span class="text-gray-300 dark:text-gray-600 font-black">→</span>
+                            
+                            <input type="text" x-ref="filterSampaiInput" readonly placeholder="Sampai Tanggal..."
+                                class="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] text-xs font-bold text-gray-700 dark:text-gray-200 cursor-pointer w-32 outline-none focus:border-amber-400">
+                        </div>
+
+                        <div class="flex items-center gap-2">
                             <button type="button" @click="applyFilter()" :disabled="isFiltering"
-                                class="flex items-center gap-2 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none shadow-sm disabled:opacity-60 disabled:cursor-wait">
+                                class="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none shadow-sm disabled:opacity-60 disabled:cursor-wait">
                                 <span x-show="isFiltering" class="flex items-center gap-1">
                                     <span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>
                                 </span>
@@ -1194,7 +1197,7 @@
                             <button type="button" @click="resetFilter()"
                                 x-show="hasActiveFilter || filterDari || filterSampai"
                                 :disabled="isFiltering"
-                                class="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-rose-500 hover:border-rose-300 rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none disabled:opacity-60">
+                                class="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-rose-500 hover:border-rose-300 rounded-[4px] font-black text-[10px] uppercase tracking-widest transition-none disabled:opacity-60">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -1203,42 +1206,44 @@
                         </div>
                     </div>
 
-                    {{-- Container Summary Total & Jurnal Balanced di Atas Kanan --}}
-                    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] p-4 shadow-sm flex flex-col gap-3 shrink-0 w-full lg:w-auto">
-                        <div class="flex items-center justify-end gap-6">
-                            <div>
-                                <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 text-right">Total Debit</div>
-                                <div class="text-green-500 font-black text-base tabular-nums">Rp {{ number_format($totalDebitDB, 0, ',', '.') }}</div>
+                    {{-- KANAN: Summary Total & Badge --}}
+                    <div class="flex flex-wrap items-center gap-4 xl:gap-5 border-t xl:border-t-0 xl:border-l border-gray-100 dark:border-gray-800 pt-3 xl:pt-0 xl:pl-5 w-full xl:w-auto justify-between xl:justify-end">
+                        
+                        <div class="flex items-center gap-4">
+                            <div class="flex flex-col items-end">
+                                <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Debit</span>
+                                <span class="text-emerald-500 font-black text-sm tabular-nums">Rp {{ number_format($totalDebitDB, 0, ',', '.') }}</span>
                             </div>
-                            <div>
-                                <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 text-right">Total Kredit</div>
-                                <div class="text-red-500 font-black text-base tabular-nums">Rp {{ number_format($totalKreditDB, 0, ',', '.') }}</div>
+                            
+                            <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
+                            
+                            <div class="flex flex-col items-end">
+                                <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Kredit</span>
+                                <span class="text-rose-500 font-black text-sm tabular-nums">Rp {{ number_format($totalKreditDB, 0, ',', '.') }}</span>
                             </div>
                         </div>
 
-                        <div class="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-800">
+                        <div>
                             @if($isHistoryBalanced)
-                                <div class="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-[4px]">
-                                    <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div class="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-[4px] whitespace-nowrap">
+                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
                                     </svg>
-                                    <span class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Jurnal Balanced</span>
+                                    <span class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Balanced</span>
                                 </div>
                             @else
-                                <div class="flex items-center gap-2">
-                                    <div class="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-[4px]">
+                                <div class="flex flex-col items-end gap-1">
+                                    <div class="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-[4px] whitespace-nowrap">
                                         <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                                        <span class="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Unbalanced</span>
+                                        <span class="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Unbalanced</span>
                                     </div>
-                                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-[4px]">
-                                        <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold">Selisih: Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
-                                    </div>
+                                    <span class="text-[9px] text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap">Selisih: Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
                                 </div>
                             @endif
                         </div>
+
                     </div>
                 </div>
-            </div>
 
             {{-- ── BULK ACTION BAR — muncul hanya jika ada yang dipilih ─── --}}
             <div x-show="selectedIds.length > 0" x-cloak
