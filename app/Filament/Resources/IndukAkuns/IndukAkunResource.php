@@ -25,7 +25,7 @@ class IndukAkunResource extends Resource
 
     // protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Master';
+    protected static string|UnitEnum|null $navigationGroup = 'Master Data';
 
     protected static ?string $recordTitleAttribute = 'kode_induk_akun';
 

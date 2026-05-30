@@ -62,15 +62,7 @@ return new class extends Migration {
             $table->decimal('stok_sesudah', 15, 2)->change();
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | detail_surat_jalan — qty_kirim, qty_diterima
-        |--------------------------------------------------------------------------
-        */
-        Schema::table('detail_surat_jalan', function (Blueprint $table) {
-            $table->decimal('qty_kirim', 15, 2)->change();
-            $table->decimal('qty_diterima', 15, 2)->default(0)->change();
-        });
+        
 
         /*
         |--------------------------------------------------------------------------
@@ -111,10 +103,6 @@ return new class extends Migration {
             $table->integer('stok_sesudah')->change();
         });
 
-        Schema::table('detail_surat_jalan', function (Blueprint $table) {
-            $table->integer('qty_kirim')->change();
-            $table->integer('qty_diterima')->default(0)->change();
-        });
 
         Schema::table('penjualan_return_detail', function (Blueprint $table) {
             $table->integer('qty')->change();
