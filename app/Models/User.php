@@ -49,4 +49,14 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function daftarToko()
+    {
+        return $this->hasMany(ListAkun::class, 'id_akun');
+    }
+
+    public function tokoUtama()
+    {
+        return $this->hasOne(ListAkun::class, 'id_akun', 'id');
+    }
 }
