@@ -283,7 +283,11 @@ class LabaRugi extends Page
 
             foreach ($jurnals as $jurnal) {
                 $kode  = $jurnal->no_akun;
-                $nilai = (float) ($jurnal->banyak ?? 1) * (float) ($jurnal->harga ?? 0);
+                $nilai = match (strtolower($jurnal->hit_kbk ?? '')) {
+        'b'     => (float) ($jurnal->banyak ?? 0) * (float) ($jurnal->harga ?? 0),
+        'm'     => (float) ($jurnal->m3 ?? 0)     * (float) ($jurnal->harga ?? 0),
+        default => (float) ($jurnal->harga ?? 0),
+    };
 
                 $saldoNormal = strtolower($saldoNormalMap[$kode] ?? 'debit');
                 $isDebit     = strtolower($jurnal->map) === 'd';

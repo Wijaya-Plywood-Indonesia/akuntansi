@@ -4,11 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-// use Kalnoy\Nestedset\NodeTrait;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class IndukAkun extends Model
 {
-    // use NodeTrait;
     protected $fillable = [
         'kode_induk_akun',
         'nama_induk_akun',
@@ -26,12 +25,30 @@ class IndukAkun extends Model
 
     public function anakAkuns(): HasMany
     {
-        return $this->hasMany(AnakAkun::class, 'id_induk_akun');
+        return $this->hasMany(AnakAkun::class, 'id_induk_akun')
+            ->orderBy('kode_anak_akun');
     }
 
-    public function subAnakAkun()
+    /** Semua anak (untuk count, tanpa ordering overhead) */
+    // public function allAnakAkuns(): HasMany
+    // {
+    //     return $this->hasMany(AnakAkun::class, 'id_induk_akun');
+    // }
+
+    /**
+     * Sub Anak Akun melalui Anak Akun (hasManyThrough)
+     * Dipakai oleh SubAnakAkunRelationManager di IndukAkun view page.
+     */
+    public function subAnakAkuns(): HasManyThrough
     {
-        return $this->hasMany(AnakAkun::class, 'id_induk_akun'); // Sesuaikan foreign key-nya
+        return $this->hasManyThrough(
+            SubAnakAkun::class,   // target model
+            AnakAkun::class,      // intermediate model
+            'id_induk_akun',      // FK di anak_akuns → induk_akuns
+            'id_anak_akun',       // FK di sub_anak_akuns → anak_akuns
+            'id',                 // PK di induk_akuns
+            'id'                  // PK di anak_akuns
+        );
     }
 
     public function creator()
@@ -41,7 +58,7 @@ class IndukAkun extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Scope
+    | Scopes
     |--------------------------------------------------------------------------
     */
 
@@ -49,9 +66,15 @@ class IndukAkun extends Model
     {
         return $query->where('status', 'aktif');
     }
-    /** Semua anak (untuk count) */
-    public function allAnakAkuns()
+
+    public function isLeaf(): bool
     {
-        return $this->hasMany(AnakAkun::class, 'id_induk_akun');
+        // Contoh logika: mengembalikan true jika tidak punya anak akun
+        return $this->anakAkuns()->count() === 0;
+    }
+
+    public function subAnakAkun()
+    {
+        return $this->hasManyThrough(SubAnakAkun::class, AnakAkun::class);
     }
 }
