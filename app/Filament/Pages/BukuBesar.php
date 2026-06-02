@@ -82,6 +82,7 @@ class BukuBesar extends Page
 
     // ── Mutasi bulan terpilih dari jurnal_umums ──────────────────────────────
     // Simpan debit dan kredit GROSS terpisah — bukan net
+    // ── Mutasi bulan terpilih dari jurnal_umums ──────────────────────────────
     private function preloadSaldo(): void
     {
         $start = Carbon::parse($this->filterBulan)->startOfMonth();
@@ -90,8 +91,24 @@ class BukuBesar extends Page
         $rows = JurnalUmum::whereBetween('tgl', [$start, $end])
             ->selectRaw("
                 no_akun,
-                SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_debit,
-                SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_kredit
+                SUM(
+                    CASE WHEN LOWER(map) = 'd' THEN 
+                        CASE 
+                            WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                            WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                            ELSE COALESCE(harga, 0)
+                        END
+                    ELSE 0 END
+                ) as total_debit,
+                SUM(
+                    CASE WHEN LOWER(map) = 'k' THEN 
+                        CASE 
+                            WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                            WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                            ELSE COALESCE(harga, 0)
+                        END
+                    ELSE 0 END
+                ) as total_kredit
             ")
             ->groupBy('no_akun')
             ->get();
@@ -126,9 +143,14 @@ class BukuBesar extends Page
     }
 
     // ── Hitung nominal satu transaksi: cukup banyak × harga ─────────────────
+    // ── Hitung nominal satu transaksi ─────────────────
     public function hitungNominal($trx): float
     {
-        return (float) ($trx->banyak ?? 1) * (float) ($trx->harga ?? 0);
+        return match (strtolower($trx->hit_kbk ?? '')) {
+            'b'     => (float) ($trx->banyak ?? 0) * (float) ($trx->harga ?? 0),
+            'm'     => (float) ($trx->m3 ?? 0)     * (float) ($trx->harga ?? 0),
+            default => (float) ($trx->harga ?? 0),
+        };
     }
 
     // ── Saldo awal (dari snapshot buku_besar bulan sebelumnya) ───────────────
