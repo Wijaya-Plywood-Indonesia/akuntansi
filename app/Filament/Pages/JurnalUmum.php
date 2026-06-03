@@ -228,41 +228,57 @@ class JurnalUmum extends Page implements HasActions, HasForms
         if (blank($this->nama_akun)) $errors[] = 'Nama Akun belum terisi.';
         
         $harga = blank($this->harga) ? 0.0 : (float) $this->harga;
-        if ($harga < 0.01) {
-            $errors[] = 'Harga wajib diisi (minimal Rp 1).';
-        }
-
         $total = blank($this->total) ? 0.0 : (float) $this->total;
-        if ($total < 0.01) {
-            $errors[] = 'Total wajib diisi (minimal Rp 1).';
-        }
-
         $banyak = blank($this->banyak) ? 0.0 : (float) $this->banyak;
         $m3 = blank($this->m3) ? 0.0 : (float) $this->m3;
 
-        // Validasi Relasi Matematika berdasarkan Hit KBK
-        if ($this->hit_kbk === 'b') {
-            if ($banyak < 0.0001) {
-                $errors[] = 'Kuantitas (Banyak) harus diisi dan lebih dari 0.';
-            } else {
-                $expected = $banyak * $harga;
-                if (abs($total - $expected) >= 0.01) {
-                    $errors[] = 'Data tidak sesuai: Kuantitas (' . $banyak . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 0, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
-                }
+        // Logika baru untuk hit_kbk kosong (null)
+        if (blank($this->hit_kbk)) {
+            // Jika salah satu saja yang diisi
+            if ($harga < 0.01 && $total >= 0.01) {
+                $harga = $total;
+            } elseif ($total < 0.01 && $harga >= 0.01) {
+                $total = $harga;
             }
-        } elseif ($this->hit_kbk === 'm') {
-            if ($m3 < 0.000001) {
-                $errors[] = 'Kubikasi (M3) harus diisi dan lebih dari 0.';
-            } else {
-                $expected = $m3 * $harga;
-                if (abs($total - $expected) >= 0.01) {
-                    $errors[] = 'Data tidak sesuai: Kubikasi (' . $m3 . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 2, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
-                }
+
+            // Kuantitas (banyak) otomatis menjadi 1
+            $banyak = 1.0;
+
+            // Validasi kelayakan nominal
+            if ($harga < 0.01) {
+                $errors[] = 'Harga atau Total wajib diisi (minimal Rp 1).';
             }
-        } else {
-            // hit_kbk kosong
+
             if (abs($total - $harga) >= 0.01) {
                 $errors[] = 'Data tidak sesuai: Karena Hit KBK kosong, Total harus sama dengan Harga (Rp ' . number_format($harga, 0, ',', '.') . '), sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+            }
+        } else {
+            // Jika hit_kbk tidak kosong (Banyak atau Kubikasi)
+            if ($harga < 0.01) {
+                $errors[] = 'Harga wajib diisi (minimal Rp 1).';
+            }
+            if ($total < 0.01) {
+                $errors[] = 'Total wajib diisi (minimal Rp 1).';
+            }
+
+            if ($this->hit_kbk === 'b') {
+                if ($banyak < 0.0001) {
+                    $errors[] = 'Kuantitas (Banyak) harus diisi dan lebih dari 0.';
+                } else {
+                    $expected = $banyak * $harga;
+                    if (abs($total - $expected) >= 0.01) {
+                        $errors[] = 'Data tidak sesuai: Kuantitas (' . $banyak . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 0, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                    }
+                }
+            } elseif ($this->hit_kbk === 'm') {
+                if ($m3 < 0.000001) {
+                    $errors[] = 'Kubikasi (M3) harus diisi dan lebih dari 0.';
+                } else {
+                    $expected = $m3 * $harga;
+                    if (abs($total - $expected) >= 0.01) {
+                        $errors[] = 'Data tidak sesuai: Kubikasi (' . $m3 . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 2, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                    }
+                }
             }
         }
 
