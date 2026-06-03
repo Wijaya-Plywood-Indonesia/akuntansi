@@ -34,7 +34,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public $tgl, $jurnal, $no_dokumen, $no_akun, $nama_akun, $nama, $keterangan;
     public $harga = '';
     public $total = '';
-    public $banyak = '1';
+    public $banyak = '';
     public $mm = '';
     public $m3 = '';
     public $hit_kbk = '';
@@ -60,7 +60,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         $this->tgl        = session()->get('jurnal_draft_tgl', now()->format('Y-m-d'));
         $this->items      = session()->get('jurnal_draft_items', []);
-        $this->banyak     = session()->get('jurnal_draft_banyak', strtolower($this->hit_kbk) === 'b' ? 1 : '');
+        $this->banyak     = session()->get('jurnal_draft_banyak', '');
         $this->harga      = session()->get('jurnal_draft_harga', '');
         $this->no_dokumen = session()->get('jurnal_draft_nodok', '');
         $this->nama       = session()->get('jurnal_draft_nama', '');
@@ -68,7 +68,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->m3         = session()->get('jurnal_draft_m3', '');
         $this->hit_kbk    = session()->get('jurnal_draft_hitkbk', '');
         $this->jurnal     = session()->get('jurnal_draft_kode', $this->getNextJurnalNumber());
-        $this->total = session()->get('jurnal_draft_total', '');
+        $this->total      = session()->get('jurnal_draft_total', '');
 
         $savedMap   = session()->get('jurnal_draft_map', 'd');
         $this->map  = in_array(strtolower($savedMap), ['d', 'k']) ? strtolower($savedMap) : 'd';
@@ -276,11 +276,17 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'map'        => strtolower($this->map),
         ];
 
-        // ── Reset hanya field per-baris, bukan harga/banyak/map ─
-        // User tetap kontrol penuh atas semua field
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'no_dokumen']);
+        // ── Reset all fields to defaults after adding to draft ───
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'no_dokumen']);
+        $this->harga   = '';
+        $this->banyak  = '';
+        $this->map     = 'd';
+        $this->hit_kbk = '';
+        $this->m3      = '';
+        $this->total   = '';
 
         $this->dispatch('toast', type: 'info', title: 'Item Ditambahkan', msg: 'Item berhasil masuk ke draft.');
+        $this->dispatch('form-reset');
 
         $this->persistDraftState();
     }
@@ -340,12 +346,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $this->items      = [];
         $this->wasBalanced = false;
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm']);
         $this->harga   = '';
-        $this->banyak  = 1;
+        $this->banyak  = '';
         $this->map     = 'd';
         $this->hit_kbk = '';
-        $this->total = '';
+        $this->m3      = '';
+        $this->total   = '';
         $this->perPage = 50;
         $this->hasMorePages = true;
 
@@ -353,6 +360,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->jurnal = $this->getNextJurnalNumber();
 
         $this->dispatch('toast', type: 'success', title: 'Jurnal Diposting!', msg: 'Semua entri berhasil disimpan ke database.');
+        $this->dispatch('form-reset');
     }
 
     // ---
@@ -360,15 +368,15 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // ---
     public function resetForm(): void
     {
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm']);
         $this->harga   = '';
         $this->banyak  = '';
         $this->map     = 'd';
         $this->hit_kbk = '';
-        $this->banyak  = 1;
         $this->m3      = '';
-        $this->total = '';
+        $this->total   = '';
         $this->persistDraftState();
+        $this->dispatch('form-reset');
     }
 
     // ══════════════════════════════════════════════════════════
