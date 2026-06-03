@@ -737,11 +737,11 @@
                     </div>
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kubikasi (M3)</label>
-                        <input type="text" inputmode="decimal" x-model="m3" placeholder="0.0000"
+                        <input type="text" inputmode="decimal" x-model="m3" placeholder="0.000000"
                             @blur="
                                 if (m3 !== '') {
                                     let num = parseFloat(m3);
-                                    m3 = isNaN(num) ? '' : num.toFixed(4);
+                                    m3 = isNaN(num) ? '' : num.toFixed(6);
                                     $wire.set('m3', m3);
                                 }
                             "
@@ -753,7 +753,7 @@
                                 let t = parseFloat(parseInputID(total_display));
                                 if (!isNaN(h) && h > 0 && !isNaN(t)) {
                                     let res = t / h;
-                                    m3 = res.toFixed(4);
+                                    m3 = res.toFixed(6);
                                     $wire.set('m3', m3);
                                 } else {
                                     window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & lebih dari 0.');
@@ -1026,7 +1026,7 @@
                                 <div class="text-right shrink-0">
                                     <span class="text-sm font-bold text-gray-500 dark:text-gray-400 tabular-nums"
                                         x-text="(row.m3 !== null && row.m3 !== undefined && row.m3 !== '' && parseFloat(row.m3) > 0)
-                                    ? parseFloat(row.m3).toFixed(4)
+                                    ? parseFloat(row.m3).toFixed(6)
                                     : '-'">
                                     </span>
                                 </div>
