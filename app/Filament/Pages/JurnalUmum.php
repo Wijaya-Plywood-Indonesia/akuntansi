@@ -655,8 +655,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
             if ($harga < 0.01) {
                 $errors[] = 'Harga wajib diisi (minimal Rp 1).';
             }
-            if ($total < 0.01) {
-                $errors[] = 'Total wajib diisi (minimal Rp 1).';
+            if ($banyak < 0.01) {
+                $errors[] = 'Kuantitas wajib diisi (minimal 1).';
             }
             if ($hit_kbk === 'b') {
                 if ($banyak === null || $banyak < 0.0001) {
@@ -678,6 +678,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 }
             }
         }
+        
         return $errors;
     }
 }
