@@ -1548,6 +1548,7 @@
                                     @endif
                                 </td>
                                 <td class="px-4 py-4 text-center">
+                                    @if(auth()->user()?->hasRole('super_admin'))
                                     <div class="flex items-center justify-center gap-1">
                                         <button type="button" wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
                                             class="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded transition-colors" title="Edit">
@@ -1562,6 +1563,9 @@
                                             </svg>
                                         </button>
                                     </div>
+                                    @else
+                                    -
+                                    @endif
                                 </td>
                             </tr>
                             @empty
