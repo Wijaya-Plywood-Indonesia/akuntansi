@@ -721,7 +721,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             } elseif ($total < 0.01 && $harga >= 0.01) {
                 $total = $harga;
             }
-            $banyak = 1.0;
+            
             if ($harga < 0.01) {
                 $errors[] = 'Harga atau Total wajib diisi (minimal Rp 1).';
             }
@@ -732,29 +732,27 @@ class JurnalUmum extends Page implements HasActions, HasForms
             if ($harga < 0.01) {
                 $errors[] = 'Harga wajib diisi (minimal Rp 1).';
             }
-            if ($total < 0.01) {
-                $errors[] = 'Total wajib diisi (minimal Rp 1).';
+            if ($banyak < 0.01) {
+                $errors[] = 'Kuantitas wajib diisi (minimal 1).';
             }
-            if ($hit_kbk === 'b') {
-                if ($banyak < 0.0001) {
-                    $errors[] = 'Kuantitas (Banyak) harus diisi dan lebih dari 0.';
-                } else {
-                    $expected = $banyak * $harga;
-                    if (abs($total - $expected) >= 0.01) {
-                        $errors[] = 'Data tidak sesuai: Kuantitas (' . $banyak . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 0, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
-                    }
+            if ($m3 < 0.0001) {
+                $errors[] = 'M3 (Kubikasi) wajib diisi (minimal 0.0001).';
+            }
+            
+            // 🔥 PERBAIKAN: Pisahkan logika validasi berdasarkan pilihan Hit KBK
+            if (strtolower($hit_kbk) === 'b') { // Jika pilih "Banyak"
+                $calculatedTotal = $harga * $banyak;
+                if (abs($total - $calculatedTotal) >= 0.01) {
+                    $errors[] = 'Total tidak valid: Harus Rp ' . number_format($calculatedTotal, 0, ',', '.') . ' (Hasil dari Harga * Kuantitas).';
                 }
-            } elseif ($hit_kbk === 'm') {
-                if ($m3 < 0.000001) {
-                    $errors[] = 'Kubikasi (M3) harus diisi dan lebih dari 0.';
-                } else {
-                    $expected = $m3 * $harga;
-                    if (abs($total - $expected) >= 0.01) {
-                        $errors[] = 'Data tidak sesuai: Kubikasi (' . $m3 . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 2, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
-                    }
+            } elseif (strtolower($hit_kbk) === 'm') { // Jika pilih "Kubikasi"
+                $calculatedTotal = $harga * $m3;
+                if (abs($total - $calculatedTotal) >= 0.01) {
+                    $errors[] = 'Total tidak valid: Harus Rp ' . number_format($calculatedTotal, 0, ',', '.') . ' (Hasil dari Harga * M3).';
                 }
             }
         }
+        
         return $errors;
     }
 }

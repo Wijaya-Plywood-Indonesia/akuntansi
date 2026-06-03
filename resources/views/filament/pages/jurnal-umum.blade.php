@@ -715,7 +715,6 @@
                             "
                             placeholder="0 atau 1,5"
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300 tabular-nums">
-                        <!-- Button Cari Kuantitas -->
                         <button type="button" 
                             @click="
                                 let h = parseFloat(parseInputID(harga_display));
@@ -746,7 +745,6 @@
                                 }
                             "
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
-                        <!-- Button Cari Kubikasi -->
                         <button type="button" 
                             @click="
                                 let h = parseFloat(parseInputID(harga_display));
@@ -800,7 +798,6 @@
                                 placeholder=" 0"
                                 class="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300 tabular-nums">
                         </div>
-                        <!-- Button Cari Harga -->
                         <button type="button" 
                             @click="
                                 let t = parseFloat(parseInputID(total_display));
@@ -862,7 +859,6 @@
                                 placeholder="0"
                                 class="w-full pl-9 pr-3 py-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-[4px] font-bold text-amber-600 dark:text-amber-400 tabular-nums outline-none focus:border-amber-400">
                         </div>
-                        <!-- Button Cari Total -->
                         <button type="button" 
                             @click="
                                 let h = parseFloat(parseInputID(harga_display));
@@ -963,8 +959,8 @@
             <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] shadow-sm overflow-hidden">
 
                 {{-- Header kolom --}}
-                <div class="grid gap-0 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-4 py-2"
-                    style="grid-template-columns: 1fr 120px 70px 70px 130px 60px 190px">
+                <div class="grid gap-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-4 py-2"
+                    style="grid-template-columns: 1fr 120px 70px 110px 130px 60px 190px">
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Akun & Keterangan</div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. Dokumen</div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Qty</div>
@@ -978,8 +974,8 @@
                 <div class="divide-y divide-gray-100 dark:divide-gray-800">
                     <template x-for="(row, i) in items" :key="i">
                         <template x-if="row && row.no_akun && row.nama_akun">
-                            <div class="grid gap-0 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 items-center group"
-                                style="grid-template-columns: 1fr 120px 70px 70px 130px 60px 190px">
+                            <div class="grid gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 items-center group"
+                                style="grid-template-columns: 1fr 120px 70px 110px 130px 60px 190px">
 
                                 {{-- Kolom 1: Akun & Keterangan --}}
                                 <div class="min-w-0 pr-4">
