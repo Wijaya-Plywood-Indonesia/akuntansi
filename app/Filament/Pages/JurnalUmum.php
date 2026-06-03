@@ -251,7 +251,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 }
             }
         } elseif ($this->hit_kbk === 'm') {
-            if ($m3 < 0.0001) {
+            if ($m3 < 0.000001) {
                 $errors[] = 'Kubikasi (M3) harus diisi dan lebih dari 0.';
             } else {
                 $expected = $m3 * $harga;
