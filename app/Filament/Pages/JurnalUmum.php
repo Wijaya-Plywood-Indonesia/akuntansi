@@ -450,12 +450,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public function editDraftAction(): Action
     {
         return Action::make('editDraft')
-            ->modalHeading('Edit Transaksi Riwayat')
+            ->modalHeading('Edit Draft Transaksi')
             ->modalSubmitActionLabel('Simpan Perubahan')
             ->form([
                 Grid::make(2)->schema([
                     DatePicker::make('tgl')->label('Tanggal')->required()->native(false),
                     TextInput::make('jurnal')->label('No. Jurnal')->required(),
+                    
                     Select::make('no_akun')
                         ->label('Cari Nomor Akun')
                         ->required()
@@ -473,31 +474,51 @@ class JurnalUmum extends Page implements HasActions, HasForms
                             $set('nama_akun', $name);
                         }),
                     TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
-                    TextInput::make('keterangan')->label('Keterangan')->columnSpanFull(),
-                    TextInput::make('banyak')->label('Kuantitas')->numeric()->required(),
-                    TextInput::make('harga')->label('Harga Satuan')->numeric()->prefix('Rp')->required(),
+                    
+                    TextInput::make('mm')->label('MM (Tebal Plywood)')->numeric(),
+                    TextInput::make('keterangan')->label('Keterangan'),
+                    
+                    Select::make('hit_kbk')
+                        ->label('Hit KBK')
+                        ->options([
+                            'b' => 'Banyak',
+                            'm' => 'Kubikasi',
+                        ])
+                        ->placeholder('-- Tidak ada --'),
                     Select::make('map')
                         ->label('Posisi')
                         ->options(['d' => 'Debit', 'k' => 'Kredit'])
                         ->required(),
+                        
+                    TextInput::make('banyak')->label('Kuantitas (Banyak)')->numeric(),
+                    TextInput::make('m3')->label('Kubikasi (M3)')->numeric(),
+                    
+                    TextInput::make('harga')->label('Harga Satuan')->numeric()->prefix('Rp')->required()->columnSpanFull(),
                 ])
             ])
             ->fillForm(function (array $arguments) {
-                // Ambil item dari array $this->items berdasarkan index
-                $index = $arguments['index'];
-                return $this->items[$index];
+                return $this->items[$arguments['index']];
             })
             ->action(function (array $data, array $arguments): void {
                 $index = $arguments['index'];
 
+                
+                $data['hit_kbk']    = $data['hit_kbk'] ?? '';
+                $data['keterangan'] = $data['keterangan'] ?? '';
+
                 // Update data di array lokal
                 $this->items[$index] = array_merge($this->items[$index], $data);
 
-                // Hitung ulang total jika perlu (opsional)
-                $this->items[$index]['total'] = match ($this->items[$index]['hit_kbk']) {
-                    'b' => (float)$data['banyak'] * (float)$data['harga'],
-                    'm' => (float)$data['m3'] * (float)$data['harga'],
-                    default => (float)$data['harga'],
+                // Kalkulasi total dengan aman
+                $hit_kbk = $data['hit_kbk'];
+                $banyak  = (float) ($data['banyak'] ?? 0);
+                $m3      = (float) ($data['m3'] ?? 0);
+                $harga   = (float) ($data['harga'] ?? 0);
+
+                $this->items[$index]['total'] = match ($hit_kbk) {
+                    'b' => $banyak * $harga,
+                    'm' => $m3 * $harga,
+                    default => $harga,
                 };
 
                 $this->persistDraftState();
