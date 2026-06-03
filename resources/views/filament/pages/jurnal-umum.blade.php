@@ -1279,27 +1279,34 @@
             {{-- Tabel History --}}
             <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] shadow-sm overflow-hidden custom-scroll">
                 <div class="table-body-scroll" x-ref="tableScrollBody">
-                    <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1600px]">
+                    {{-- 🔥 Lebar tabel diperbesar jadi 1900px agar kolom baru muat --}}
+                    {{-- 🔥 Gunakan style="table-layout: auto; min-width: max-content;" agar kolom otomatis merenggang mengikuti isi teks dan tidak mungkin menumpuk --}}
+                    <table class="w-full text-left text-sm border-collapse" style="table-layout: auto; min-width: max-content;">
                         <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
-                            <tr class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest">
-                                {{-- Kolom Checkbox -- tambahan baru --}}
-                                <th class="px-4 py-4 w-[48px]">
+                            <tr class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest whitespace-nowrap">
+                                <th class="px-4 py-4">
                                     <input type="checkbox" class="row-checkbox"
                                         :checked="selectAll"
                                         @change="toggleSelectAll()"
                                         title="Pilih semua">
                                 </th>
-                                <th class="px-4 py-4 w-[110px]">Tanggal</th>
-                                <th class="px-4 py-4 w-[110px]">No Akun</th>
-                                <th class="px-4 py-4 w-[180px]">Nama Akun</th>
-                                <th class="px-4 py-4 text-center w-[110px]">Nomor Jurnal</th>
-                                <th class="px-4 py-4 w-[140px]">No. Dokumen</th>
-                                <th class="px-4 py-4 w-[240px]">Keterangan</th>
-                                <th class="px-4 py-4 text-right w-[110px]">Kuantitas</th>
-                                <th class="px-4 py-4 text-right w-[140px]">Harga</th>
-                                <th class="px-4 py-4 text-right w-[150px] text-green-400 bg-green-50/10 font-black">Debit (Rp)</th>
-                                <th class="px-4 py-4 text-right w-[150px] text-red-400 bg-red-50/10 font-black">Kredit (Rp)</th>
-                                <th class="px-4 py-4 text-center w-[100px]">Aksi</th>
+                                <th class="px-4 py-4">Tanggal</th>
+                                <th class="px-4 py-4">No Akun</th>
+                                <th class="px-4 py-4">Nama Akun</th>
+                                <th class="px-4 py-4 text-center">Nomor Jurnal</th>
+                                <th class="px-4 py-4">No. Dokumen</th>
+                                <th class="px-4 py-4 min-w-[240px]">Keterangan</th>
+                                
+                                {{-- 🔥 MM dan Hit KBK tidak akan bertumpuk lagi --}}
+                                <th class="px-4 py-4 text-center">MM</th>
+                                <th class="px-4 py-4 text-center">Hit KBK</th>
+                                
+                                <th class="px-4 py-4 text-right">Kuantitas</th>
+                                <th class="px-4 py-4 text-right">M3</th>
+                                <th class="px-4 py-4 text-right">Harga</th>
+                                <th class="px-4 py-4 text-right text-green-400 bg-green-50/10 font-black">Debit (Rp)</th>
+                                <th class="px-4 py-4 text-right text-red-400 bg-red-50/10 font-black">Kredit (Rp)</th>
+                                <th class="px-4 py-4 text-center">Aksi</th>
                             </tr>
                         </thead>
 
@@ -1309,39 +1316,22 @@
                                 <template x-for="n in 8" :key="n">
                                     <tr class="skeleton-row">
                                         <td class="px-4 py-5"></td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-24 bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-28 bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-12 mx-auto bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-36 bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-10 ml-auto bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-16 ml-auto bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
-                                        <td class="px-4 py-5">
-                                            <div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700"></div>
-                                        </td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-24 bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-28 bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-12 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-36 bg-gray-200 dark:bg-gray-700"></div></td>
+                                        
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-6 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-10 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-10 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-12 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-16 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5"><div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
                                     </tr>
                                 </template>
                             </template>
@@ -1350,19 +1340,17 @@
 
                             @php
                             $totalRow = match(strtolower($hj->hit_kbk ?? '')) {
-                            'b' => $hj->banyak * $hj->harga,
-                            'm' => $hj->m3 * $hj->harga,
-                            default => $hj->harga,
+                                'b' => $hj->banyak * $hj->harga,
+                                'm' => $hj->m3 * $hj->harga,
+                                default => $hj->harga,
                             };
                             @endphp
 
-                            {{-- data-row-id dipakai Alpine untuk kumpulkan visibleIds --}}
                             <tr data-row-id="{{ $hj->id }}"
                                 :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
                                 class="hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top transition-none row-fadein"
                                 style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
-                                {{-- Checkbox per baris --}}
                                 <td class="px-4 py-4 text-center">
                                     <input type="checkbox" class="row-checkbox"
                                         :checked="isSelected({{ $hj->id }})"
@@ -1370,20 +1358,35 @@
                                 </td>
 
                                 <td class="px-4 py-4 text-gray-500 font-medium whitespace-nowrap">{{ $hj->tgl->format('d-m-Y') }}</td>
-                                <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500">{{ $hj->no_akun }}</td>
-                                <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100">{{ $hj->nama_akun }}</td>
+                                <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{{ $hj->no_akun }}</td>
+                                <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 whitespace-nowrap">{{ $hj->nama_akun }}</td>
                                 <td class="px-4 py-4 text-center text-gray-400 font-medium">{{ $hj->jurnal }}</td>
-                                <td class="px-4 py-4 text-gray-400 dark:text-gray-500 font-medium">
+                                <td class="px-4 py-4 text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
                                     {{ $hj->no_dokumen ?? '-' }}
                                 </td>
-                                <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400 break-words whitespace-normal">{{ $hj->keterangan }}</td>
-                                <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500">{{ $hj->banyak == intval($hj->banyak)
+                                {{-- Keterangan dibatasi maksimal lebarnya agar tidak memanjang terus jika teksnya banyak --}}
+                                <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400 break-words whitespace-normal max-w-[300px]">{{ $hj->keterangan }}</td>
+                                
+                                <td class="px-4 py-4 text-center font-bold text-gray-500">
+                                    {{ $hj->mm ?? '-' }}
+                                </td>
+                                <td class="px-4 py-4 text-center text-gray-400 font-bold uppercase tracking-wider">
+                                    {{ $hj->hit_kbk ?? '-' }}
+                                </td>
+                                
+                                <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">{{ $hj->banyak == intval($hj->banyak)
                                 ? number_format($hj->banyak, 0, ',', '.')
                                 : number_format($hj->banyak, 2, ',', '.') }}</td>
-                                <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono">{{ $hj->harga == intval($hj->harga)
+                                
+                                <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                    {{ (float)$hj->m3 > 0 ? number_format((float)$hj->m3, 4, ',', '.') : '-' }}
+                                </td>
+
+                                <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">{{ $hj->harga == intval($hj->harga)
                                 ? number_format($hj->harga, 0, ',', '.')
                                 : number_format($hj->harga, 2, ',', '.') }}</td>
-                                <td class="px-4 py-4 text-right font-bold text-green-400 bg-green-50/5">
+                                
+                                <td class="px-4 py-4 text-right font-bold text-green-400 bg-green-50/5 whitespace-nowrap">
                                     @if(in_array(strtolower($hj->map), ['d', 'debit']))
                                     {{ $totalRow == intval($totalRow)
                                     ? number_format($totalRow, 0, ',', '.')
@@ -1392,7 +1395,7 @@
                                     0
                                     @endif
                                 </td>
-                                <td class="px-4 py-4 text-right font-bold text-red-400 bg-red-50/5">
+                                <td class="px-4 py-4 text-right font-bold text-red-400 bg-red-50/5 whitespace-nowrap">
                                     @if(in_array(strtolower($hj->map), ['k', 'kredit']))
                                     {{ $totalRow == intval($totalRow)
                                     ? number_format($totalRow, 0, ',', '.')
@@ -1420,7 +1423,7 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="12" class="px-6 py-16 text-center">
+                                <td colspan="15" class="px-6 py-16 text-center">
                                     <div class="flex flex-col items-center gap-3 text-gray-400">
                                         <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1433,6 +1436,47 @@
                             </tr>
                             @endforelse
                         </tbody>
+                        
+                        <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
+                            <tr>
+                                <td colspan="12" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
+                                <td class="px-4 py-5 text-right text-green-400 bg-green-50/10 text-base font-black whitespace-nowrap">
+                                    {{ number_format($totalDebitDB, 0, ',', '.') }}
+                                </td>
+                                <td class="px-4 py-5 text-right text-red-400 bg-red-50/10 text-base font-black whitespace-nowrap">
+                                    {{ number_format($totalKreditDB, 0, ',', '.') }}
+                                </td>
+                                <td></td>
+                            </tr>
+                            <tr class="border-t border-gray-200 dark:border-gray-700">
+                                <td colspan="15" class="px-4 py-3">
+                                    @if($isHistoryBalanced)
+                                    <div class="flex items-center justify-end gap-2">
+                                        <div class="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-[4px]">
+                                            <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <span class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Jurnal Balanced</span>
+                                            <span class="text-[10px] text-green-500 font-medium normal-case tracking-normal">— Debit = Kredit</span>
+                                        </div>
+                                    </div>
+                                    @else
+                                    <div class="flex items-center justify-end gap-3">
+                                        <div class="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-[4px]">
+                                            <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                            <span class="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Jurnal Unbalanced</span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-[4px]">
+                                            <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold normal-case tracking-normal whitespace-nowrap">Selisih: Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
+                                        </div>
+                                    </div>
+                                    @endif
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
 
                     <div x-ref="scrollSentinel" class="h-1"></div>
