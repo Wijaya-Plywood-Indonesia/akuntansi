@@ -739,8 +739,8 @@
                         <input type="text" inputmode="decimal" x-model="m3" placeholder="0.000000"
                             @blur="
                                 if (m3 !== '') {
-                                    let num = parseFloat(m3);
-                                    m3 = isNaN(num) ? '' : num.toFixed(6);
+                                    let num = parseFloat(m3.toString().replace(',', '.'));
+                                    m3 = isNaN(num) ? '' : parseFloat(num.toFixed(6)).toString().replace('.', ',');
                                     $wire.set('m3', m3);
                                 }
                             "
@@ -751,7 +751,7 @@
                                 let t = parseFloat(parseInputID(total_display));
                                 if (!isNaN(h) && h > 0 && !isNaN(t)) {
                                     let res = t / h;
-                                    m3 = res.toFixed(6);
+                                    m3 = parseFloat(res.toFixed(6)).toString().replace('.', ',');
                                     $wire.set('m3', m3);
                                 } else {
                                     window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & lebih dari 0.');
@@ -804,7 +804,7 @@
                                 let divisor = 0;
                                 let label = '';
                                 if (hit_kbk === 'm') {
-                                    divisor = parseFloat(m3);
+                                    divisor = parseFloat(m3.toString().replace(',', '.'));
                                     label = 'Kubikasi';
                                 } else {
                                     divisor = parseFloat(parseInputID(banyak_display));
@@ -865,7 +865,7 @@
                                 let multiplier = 0;
                                 let label = '';
                                 if (hit_kbk === 'm') {
-                                    multiplier = parseFloat(m3);
+                                    multiplier = parseFloat(m3.toString().replace(',', '.'));
                                     label = 'Kubikasi';
                                 } else {
                                     multiplier = parseFloat(parseInputID(banyak_display));
@@ -924,6 +924,8 @@
                                 let rawTotal  = parseInputID(total_display);
                                 await $wire.set('harga',  rawHarga  === '' ? '' : rawHarga);
                                 await $wire.set('banyak', rawBanyak === '' ? '' : rawBanyak);
+                                let rawM3 = m3.toString().replace(',', '.');
+                                    await $wire.set('m3',     rawM3 === '' ? '' : rawM3);
                                 await $wire.set('total',  rawTotal  === '' ? '' : rawTotal);
                                 await $wire.call('addItem');
                             }()
@@ -1022,7 +1024,7 @@
                                 <div class="text-right shrink-0">
                                     <span class="text-sm font-bold text-gray-500 dark:text-gray-400 tabular-nums"
                                         x-text="(row.m3 !== null && row.m3 !== undefined && row.m3 !== '' && parseFloat(row.m3) > 0)
-                                    ? parseFloat(row.m3).toFixed(6)
+                                    ? parseFloat(parseFloat(row.m3).toFixed(6)).toString().replace('.', ',')
                                     : '-'">
                                     </span>
                                 </div>
@@ -1513,12 +1515,14 @@
                                     {{ $hj->hit_kbk ?? '-' }}
                                 </td>
                                 
-                                <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">{{ $hj->banyak == intval($hj->banyak)
-                                ? number_format($hj->banyak, 0, ',', '.')
-                                : number_format($hj->banyak, 2, ',', '.') }}</td>
+                                <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                    {{ ($hj->banyak !== null && $hj->banyak !== '')
+                                    ? ($hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.'))
+                                    : '-' }}
+                                </td>
                                 
                                 <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                    {{ (float)$hj->m3 > 0 ? number_format((float)$hj->m3, 4, ',', '.') : '-' }}
+                                    {{ (float)$hj->m3 > 0 ? rtrim(rtrim(number_format((float)$hj->m3, 6, ',', '.'), '0'), ',') : '-' }}
                                 </td>
 
                                 <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">{{ $hj->harga == intval($hj->harga)

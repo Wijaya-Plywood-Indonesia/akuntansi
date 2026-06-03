@@ -34,7 +34,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public $tgl, $jurnal, $no_dokumen, $no_akun, $nama_akun, $nama, $keterangan;
     public $harga = '';
     public $total = '';
-    public $banyak = '1';
+    public $banyak = '';
     public $mm = '';
     public $m3 = '';
     public $hit_kbk = '';
@@ -214,88 +214,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function updatedHitKbk($value): void
     {
-        if ($value === 'b') {
-            $this->banyak = '1';
-            $this->m3 = '';
-        } elseif ($value === 'm') {
-            $this->banyak = '';
-            $this->m3 = '';
-        } else {
-            $this->banyak = '';
-            $this->m3 = '';
+        if (blank($value)) {
             $this->total = $this->harga;
         }
     }
 
-    public function updatedHarga($value): void
-    {
-        $h = blank($value) ? 0.0 : (float) $value;
 
-        if ($this->hit_kbk === 'b') {
-            $b = blank($this->banyak) ? 0.0 : (float) $this->banyak;
-            if ($b > 0) {
-                $this->total = (string) ($b * $h);
-            }
-        } elseif ($this->hit_kbk === 'm') {
-            $m = blank($this->m3) ? 0.0 : (float) $this->m3;
-            if ($m > 0) {
-                $this->total = (string) ($m * $h);
-            }
-        } else {
-            $this->total = $value;
-        }
-    }
-
-    public function updatedTotal($value): void
-    {
-        $t = blank($value) ? 0.0 : (float) $value;
-
-        if ($this->hit_kbk === 'b') {
-            $b = blank($this->banyak) ? 0.0 : (float) $this->banyak;
-            if ($b > 0) {
-                $this->harga = (string) ($t / $b);
-            }
-        } elseif ($this->hit_kbk === 'm') {
-            $m = blank($this->m3) ? 0.0 : (float) $this->m3;
-            if ($m > 0) {
-                $this->harga = (string) ($t / $m);
-            }
-        } else {
-            $this->harga = $value;
-        }
-    }
-
-    public function updatedBanyak($value): void
-    {
-        $b = blank($value) ? 0.0 : (float) $value;
-
-        if ($this->hit_kbk === 'b' && $b > 0) {
-            $t = blank($this->total) ? 0.0 : (float) $this->total;
-            $h = blank($this->harga) ? 0.0 : (float) $this->harga;
-
-            if ($t > 0) {
-                $this->harga = (string) ($t / $b);
-            } elseif ($h > 0) {
-                $this->total = (string) ($b * $h);
-            }
-        }
-    }
-
-    public function updatedM3($value): void
-    {
-        $m = blank($value) ? 0.0 : (float) $value;
-
-        if ($this->hit_kbk === 'm' && $m > 0) {
-            $t = blank($this->total) ? 0.0 : (float) $this->total;
-            $h = blank($this->harga) ? 0.0 : (float) $this->harga;
-
-            if ($t > 0) {
-                $this->harga = (string) ($t / $m);
-            } elseif ($h > 0) {
-                $this->total = (string) ($m * $h);
-            }
-        }
-    }
 
     public function updated($propertyName): void
     {
@@ -325,15 +249,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         // ── Hitung total setelah harga dipastikan valid ──────────
         $harga  = (float) $this->harga;
 
-        $banyak = null;
-        if ($this->hit_kbk === 'b') {
-            $banyak = blank($this->banyak) ? null : (float) $this->banyak;
-        }
-
-        $m3 = null;
-        if ($this->hit_kbk === 'm') {
-            $m3 = blank($this->m3) ? null : (float) $this->m3;
-        }
+        $banyak = blank($this->banyak) ? null : (float) $this->banyak;
+        $m3     = blank($this->m3) ? null : (float) str_replace(',', '.', $this->m3);
 
         $total = match ($this->hit_kbk) {
             'b'     => ($banyak ?? 0.0) * $harga,
@@ -382,7 +299,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'total',
             'hit_kbk'
         ]);
-        $this->banyak = '1';
+        $this->banyak = '';
 
         $this->dispatch('toast', type: 'info', title: 'Item Ditambahkan', msg: 'Item berhasil masuk ke draft.');
 
@@ -446,7 +363,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->wasBalanced = false;
         $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
         $this->harga   = '';
-        $this->banyak  = 1;
+        $this->banyak  = '';
         $this->map     = 'd';
         $this->hit_kbk = '';
         $this->total = '';
@@ -469,7 +386,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->banyak  = '';
         $this->map     = 'd';
         $this->hit_kbk = '';
-        $this->banyak  = 1;
         $this->m3      = '';
         $this->total = '';
         $this->persistDraftState();
@@ -608,13 +524,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 $data['nama']       = $data['nama'] ?? '';
 
                 $harga  = blank($data['harga'] ?? null) ? 0.0 : (float) $data['harga'];
-                $banyak = blank($data['banyak'] ?? null) ? 0.0 : (float) $data['banyak'];
-                $m3     = blank($data['m3'] ?? null) ? 0.0 : (float) $data['m3'];
+                $banyak = blank($data['banyak'] ?? null) ? null : (float) $data['banyak'];
+                $m3     = blank($data['m3'] ?? null) ? null : (float) str_replace(',', '.', $data['m3']);
                 $hit_kbk = $data['hit_kbk'];
 
                 $total = match ($hit_kbk) {
-                    'b' => $banyak * $harga,
-                    'm' => $m3 * $harga,
+                    'b' => ($banyak ?? 0.0) * $harga,
+                    'm' => ($m3 ?? 0.0) * $harga,
                     default => $harga,
                 };
 
@@ -627,6 +543,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 }
 
                 $data['banyak'] = $banyak;
+                $data['m3']     = $m3;
                 $data['harga']  = $harga;
                 $data['total']  = $total;
 
@@ -666,13 +583,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 $data['nama']       = $data['nama'] ?? '';
 
                 $harga  = blank($data['harga'] ?? null) ? 0.0 : (float) $data['harga'];
-                $banyak = blank($data['banyak'] ?? null) ? 0.0 : (float) $data['banyak'];
-                $m3     = blank($data['m3'] ?? null) ? 0.0 : (float) $data['m3'];
+                $banyak = blank($data['banyak'] ?? null) ? null : (float) $data['banyak'];
+                $m3     = blank($data['m3'] ?? null) ? null : (float) str_replace(',', '.', $data['m3']);
                 $hit_kbk = $data['hit_kbk'];
 
                 $total = match ($hit_kbk) {
-                    'b' => $banyak * $harga,
-                    'm' => $m3 * $harga,
+                    'b' => ($banyak ?? 0.0) * $harga,
+                    'm' => ($m3 ?? 0.0) * $harga,
                     default => $harga,
                 };
 
@@ -685,6 +602,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 }
 
                 $data['banyak'] = $banyak;
+                $data['m3']     = $m3;
                 $data['harga']  = $harga;
                 $data['total']  = $total;
 
@@ -712,7 +630,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             });
     }
 
-    protected function validateJurnalData(string $hit_kbk, float &$harga, float &$total, float &$banyak, float $m3): array
+    protected function validateJurnalData(string $hit_kbk, float &$harga, float &$total, ?float &$banyak, ?float &$m3): array
     {
         $errors = [];
         if (blank($hit_kbk)) {
@@ -721,7 +639,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
             } elseif ($total < 0.01 && $harga >= 0.01) {
                 $total = $harga;
             }
-            
+            if ($banyak === '' || $banyak === null) {
+                $banyak = null;
+            }
+            if ($m3 === '' || $m3 === null) {
+                $m3 = null;
+            }
             if ($harga < 0.01) {
                 $errors[] = 'Harga atau Total wajib diisi (minimal Rp 1).';
             }
@@ -735,20 +658,23 @@ class JurnalUmum extends Page implements HasActions, HasForms
             if ($banyak < 0.01) {
                 $errors[] = 'Kuantitas wajib diisi (minimal 1).';
             }
-            if ($m3 < 0.0001) {
-                $errors[] = 'M3 (Kubikasi) wajib diisi (minimal 0.0001).';
-            }
-            
-            // 🔥 PERBAIKAN: Pisahkan logika validasi berdasarkan pilihan Hit KBK
-            if (strtolower($hit_kbk) === 'b') { // Jika pilih "Banyak"
-                $calculatedTotal = $harga * $banyak;
-                if (abs($total - $calculatedTotal) >= 0.01) {
-                    $errors[] = 'Total tidak valid: Harus Rp ' . number_format($calculatedTotal, 0, ',', '.') . ' (Hasil dari Harga * Kuantitas).';
+            if ($hit_kbk === 'b') {
+                if ($banyak === null || $banyak < 0.0001) {
+                    $errors[] = 'Kuantitas (Banyak) harus diisi dan lebih dari 0.';
+                } else {
+                    $expected = $banyak * $harga;
+                    if (abs($total - $expected) >= 0.01) {
+                        $errors[] = 'Data tidak sesuai: Kuantitas (' . $banyak . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 0, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                    }
                 }
-            } elseif (strtolower($hit_kbk) === 'm') { // Jika pilih "Kubikasi"
-                $calculatedTotal = $harga * $m3;
-                if (abs($total - $calculatedTotal) >= 0.01) {
-                    $errors[] = 'Total tidak valid: Harus Rp ' . number_format($calculatedTotal, 0, ',', '.') . ' (Hasil dari Harga * M3).';
+            } elseif ($hit_kbk === 'm') {
+                if ($m3 === null || $m3 < 0.000001) {
+                    $errors[] = 'Kubikasi (M3) harus diisi dan lebih dari 0.';
+                } else {
+                    $expected = $m3 * $harga;
+                    if (abs($total - $expected) >= 0.01) {
+                        $errors[] = 'Data tidak sesuai: Kubikasi (' . $m3 . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 2, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                    }
                 }
             }
         }
