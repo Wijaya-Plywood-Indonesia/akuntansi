@@ -452,18 +452,10 @@
                 harga_display = formatRupiah(value);
             });
             $watch('$wire.banyak', value => {
-                // Jika server set ke kosong (resetForm, dll)
-                if (value === '' || value === null || value === undefined) {
-                    banyak_display = '';
-                    return;
-                }
-                // Konversi dari format PHP (titik desimal) ke format ID (koma desimal)
-                // Hanya update jika banyak_display kosong — hindari overwrite saat user mengetik
-                if (banyak_display === '') {
-                    let str = value.toString();
-                    banyak_display = str.includes('.') 
-                        ? str.replace('.', ',') 
-                        : str;
+                // Jika Livewire mengupdate banyak (misal dari server/reset), update tampilan
+                // Tapi jangan paksa jika user sedang fokus mengetik
+                if (document.activeElement !== $refs.banyakInput) { 
+                    banyak_display = value !== null ? value.toString().replace('.', ',') : '';
                 }
             });
             $watch('no_akun', value => {
@@ -486,6 +478,11 @@
 
             $wire.on('toast', ({ type, title, msg }) => {
                 window.showToast(type, title, msg ?? '');
+            });
+
+            $wire.on('reset-kalkulasi', () => { 
+                resetKalkulasi(); 
+                banyak_display = ''; 
             });
         ">
 
@@ -564,8 +561,30 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hit KBK <span class="text-amber-500">*</span></label>
-                        <select x-model="hit_kbk" @change="$wire.set('hit_kbk', hit_kbk)"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
+                        <select x-model="hit_kbk" @change="
+                            $wire.set('hit_kbk', hit_kbk);
+                            
+                            // Logika untuk 'Banyak'
+                            if (hit_kbk === 'b') {
+                                banyak = 1; 
+                                banyak_display = '1';
+                                $wire.set('banyak', 1);
+                            } 
+                            // Logika untuk 'Kubikasi'
+                            else if (hit_kbk === 'm') {
+                                banyak = ''; banyak_display = '';
+                                m3 = ''; // Inisialisasi awal agar tidak kosong
+                                $wire.set('m3', '');
+                            }
+                            // Reset jika pilih 'Tidak ada'
+                            else {
+                                banyak = ''; banyak_display = '';
+                                m3 = '';
+                                $wire.set('banyak', '');
+                                $wire.set('m3', '');
+                            }
+                        "
+                            class=" w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
                             style="background-image:url('data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e');background-position:right 10px center;background-repeat:no-repeat;background-size:16px;padding-right:36px;-webkit-appearance:none">
                             <option value="">-- Tidak ada --</option>
                             <option value="b">Banyak</option>
