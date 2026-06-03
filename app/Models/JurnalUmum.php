@@ -22,6 +22,7 @@ class JurnalUmum extends Model
         'keterangan',
         'hit_kbk',
         'no-dokumen',
+        'no_dokumen',
         'map'
     ];
 
@@ -33,6 +34,17 @@ class JurnalUmum extends Model
         'banyak' => 'decimal:4',
         'harga' => 'decimal:2',
     ];
+
+    // Accessor and Mutator to map no_dokumen (used in PHP/Blade/Livewire) to no-dokumen (database column)
+    public function getNoDokumenAttribute()
+    {
+        return $this->attributes['no-dokumen'] ?? null;
+    }
+
+    public function setNoDokumenAttribute($value)
+    {
+        $this->attributes['no-dokumen'] = $value;
+    }
 
     // RelationShip
     public function subAkun()
