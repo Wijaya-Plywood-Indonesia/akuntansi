@@ -490,17 +490,130 @@
                 }
             });
 
-            {{-- GANTI baris harga_display = formatRupiah(...) menjadi ini --}}
+            const saveLocal = (key, val) => {
+                localStorage.setItem('jurnal_draft_' + key, val ?? '');
+            };
+
+            const clearLocal = () => {
+                const keys = ['no_dokumen', 'no_akun', 'nama_akun', 'nama', 'mm', 'keterangan', 'hit_kbk', 'm3', 'map', 'harga_display', 'banyak_display', 'total_display'];
+                keys.forEach(key => localStorage.removeItem('jurnal_draft_' + key));
+            };
+
+            $watch('no_dokumen', value => { saveLocal('no_dokumen', value); });
+            $watch('no_akun', value => { saveLocal('no_akun', value); });
+            $watch('nama_akun', value => { saveLocal('nama_akun', value); });
+            $watch('nama', value => { saveLocal('nama', value); });
+            $watch('mm', value => { saveLocal('mm', value); });
+            $watch('keterangan', value => { saveLocal('keterangan', value); });
+            $watch('hit_kbk', value => { saveLocal('hit_kbk', value); });
+            $watch('m3', value => { saveLocal('m3', value); });
+            $watch('map', value => { saveLocal('map', value); });
+            $watch('harga_display', value => { saveLocal('harga_display', value); });
+            $watch('banyak_display', value => { saveLocal('banyak_display', value); });
+            $watch('total_display', value => { saveLocal('total_display', value); });
+
             $nextTick(() => {
-                harga_display = formatRupiah($wire.harga ?? '');
-                banyak_display = $wire.banyak !== '' && $wire.banyak !== null
-                ? $wire.banyak.toString().replace('.', ',')
-                : '';
-                total_display = formatRupiah($wire.total ?? '');
+                // Load from localStorage on page load if present
+                const localHarga = localStorage.getItem('jurnal_draft_harga_display');
+                if (localHarga !== null) {
+                    harga_display = localHarga;
+                    $wire.set('harga', parseInputID(localHarga));
+                } else {
+                    harga_display = formatRupiah($wire.harga ?? '');
+                }
+
+                const localBanyak = localStorage.getItem('jurnal_draft_banyak_display');
+                if (localBanyak !== null) {
+                    banyak_display = localBanyak;
+                    $wire.set('banyak', parseInputID(localBanyak));
+                } else {
+                    banyak_display = $wire.banyak !== '' && $wire.banyak !== null
+                        ? $wire.banyak.toString().replace('.', ',')
+                        : '';
+                }
+
+                const localTotal = localStorage.getItem('jurnal_draft_total_display');
+                if (localTotal !== null) {
+                    total_display = localTotal;
+                    $wire.set('total', parseInputID(localTotal));
+                } else {
+                    total_display = formatRupiah($wire.total ?? '');
+                }
+
+                const localHitKbk = localStorage.getItem('jurnal_draft_hit_kbk');
+                if (localHitKbk !== null) {
+                    hit_kbk = localHitKbk;
+                    $wire.set('hit_kbk', localHitKbk);
+                }
+
+                const localM3 = localStorage.getItem('jurnal_draft_m3');
+                if (localM3 !== null) {
+                    m3 = localM3;
+                    $wire.set('m3', localM3);
+                }
+
+                const localMap = localStorage.getItem('jurnal_draft_map');
+                if (localMap !== null) {
+                    map = localMap;
+                    $wire.set('map', localMap);
+                }
+
+                const localNoDokumen = localStorage.getItem('jurnal_draft_no_dokumen');
+                if (localNoDokumen !== null) {
+                    no_dokumen = localNoDokumen;
+                    $wire.set('no_dokumen', localNoDokumen);
+                }
+
+                const localNoAkun = localStorage.getItem('jurnal_draft_no_akun');
+                if (localNoAkun !== null) {
+                    no_akun = localNoAkun;
+                    $wire.set('no_akun', localNoAkun);
+                }
+
+                const localNamaAkun = localStorage.getItem('jurnal_draft_nama_akun');
+                if (localNamaAkun !== null) {
+                    nama_akun = localNamaAkun;
+                    $wire.set('nama_akun', localNamaAkun);
+                }
+
+                const localNama = localStorage.getItem('jurnal_draft_nama');
+                if (localNama !== null) {
+                    nama = localNama;
+                    $wire.set('nama', localNama);
+                }
+
+                const localMm = localStorage.getItem('jurnal_draft_mm');
+                if (localMm !== null) {
+                    mm = localMm;
+                    $wire.set('mm', localMm);
+                }
+
+                const localKeterangan = localStorage.getItem('jurnal_draft_keterangan');
+                if (localKeterangan !== null) {
+                    keterangan = localKeterangan;
+                    $wire.set('keterangan', localKeterangan);
+                }
             });
 
             $wire.on('toast', ({ type, title, msg }) => {
                 window.showToast(type, title, msg ?? '');
+            });
+
+            $wire.on('form-reset', () => {
+                if (document.activeElement) {
+                    document.activeElement.blur();
+                }
+                clearLocal();
+                setTimeout(() => {
+                    harga_display = formatRupiah($wire.harga ?? '');
+                    banyak_display = $wire.banyak !== '' && $wire.banyak !== null
+                        ? $wire.banyak.toString().replace('.', ',')
+                        : '';
+                    total_display = formatRupiah($wire.total ?? '');
+                    hit_kbk = $wire.hit_kbk ?? '';
+                    m3 = $wire.m3 ?? '';
+                    map = $wire.map ?? 'd';
+                }, 50);
             });
         ">
 
@@ -865,10 +978,22 @@
                 </div>
 
                 <div class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-6">
-                    <button type="button" wire:click="resetForm" class="px-6 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-none">Batal</button>
+                    <button type="button"
+                        @click="
+                            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                                document.activeElement.blur();
+                            }
+                            setTimeout(() => { $wire.call('resetForm'); }, 50);
+                        "
+                        class="px-6 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-[4px] font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-none">Batal</button>
                     <button type="button"
                         x-on:click="
                             async function() {
+                                if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                                    document.activeElement.blur();
+                                }
+                                await new Promise(resolve => setTimeout(resolve, 50));
+                                
                                 let rawHarga  = parseInputID(harga_display);
                                 let rawBanyak = parseInputID(banyak_display);
                                 let rawTotal  = parseInputID(total_display);
