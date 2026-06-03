@@ -251,7 +251,7 @@
                     @if(!$tampilkanSaldoNol && !$hasNilai($section, $buls, $pKey))
                         {{-- skip section saldo nol --}}
                     @else
-                        @include('filament.pages.partials.laba-rugi-telur-node', [
+                        @include('filament.pages.partials.laba-rugi-node', [
                             'node'              => $section,
                             'depth'             => 0,
                             'buls'              => $buls,
@@ -262,7 +262,7 @@
                     @endif
 
                     @if($idx === $lastPendapatanIdx)
-                        @include('filament.pages.partials.laba-rugi-telur-subtotal', [
+                        @include('filament.pages.partials.laba-rugi-subtotal', [
                             'label' => 'Pendapatan Bruto',
                             'key'   => 'total_pendapatan',
                             'style' => 'pendapatan_bruto',
@@ -271,7 +271,7 @@
                         ])
                     @endif
                     @if($idx === $lastReturIdx)
-                        @include('filament.pages.partials.laba-rugi-telur-subtotal', [
+                        @include('filament.pages.partials.laba-rugi-subtotal', [
                             'label' => 'Penjualan Bersih',
                             'key'   => 'penjualan_bersih',
                             'style' => 'penjualan_bersih',
@@ -280,14 +280,14 @@
                         ])
                     @endif
                     @if($idx === $lastHppIdx)
-                        @include('filament.pages.partials.laba-rugi-telur-subtotal', [
+                        @include('filament.pages.partials.laba-rugi-subtotal', [
                             'label' => 'Total HPP & Biaya Produksi',
                             'key'   => 'total_hpp',
                             'style' => 'total_hpp',
                             'rumus' => 'HPP + Biaya Produksi',
                             'buls'  => $buls, 'r' => $r, 'pKey' => $pKey,
                         ])
-                        @include('filament.pages.partials.laba-rugi-telur-subtotal', [
+                        @include('filament.pages.partials.laba-rugi-subtotal', [
                             'label' => 'Laba Kotor',
                             'key'   => 'laba_kotor',
                             'style' => 'laba_kotor',
@@ -296,14 +296,14 @@
                         ])
                     @endif
                     @if($idx === $lastBebanIdx)
-                        @include('filament.pages.partials.laba-rugi-telur-subtotal', [
+                        @include('filament.pages.partials.laba-rugi-subtotal', [
                             'label' => 'Total Beban Usaha',
                             'key'   => 'total_beban_usaha',
                             'style' => 'total_beban',
                             'rumus' => 'Total semua akun beban usaha',
                             'buls'  => $buls, 'r' => $r, 'pKey' => $pKey,
                         ])
-                        @include('filament.pages.partials.laba-rugi-telur-subtotal', [
+                        @include('filament.pages.partials.laba-rugi-subtotal', [
                             'label' => 'Laba (Rugi) Usaha',
                             'key'   => 'laba_usaha',
                             'style' => 'laba_usaha',
@@ -312,7 +312,7 @@
                         ])
                     @endif
                     @if($idx === $lastLainIdx)
-                        @include('filament.pages.partials.laba-rugi-telur-subtotal', [
+                        @include('filament.pages.partials.laba-rugi-subtotal', [
                             'label' => 'Laba (Rugi) Sebelum Pajak',
                             'key'   => 'laba_sebelum_pajak',
                             'style' => 'laba_sebelum_pajak',
@@ -322,7 +322,7 @@
                     @endif
 
                     @if($idx === count($laporanData) - 1)
-                        @include('filament.pages.partials.laba-rugi-telur-subtotal', [
+                        @include('filament.pages.partials.laba-rugi-subtotal', [
                             'label' => 'Laba (Rugi) Bersih',
                             'key'   => 'laba_sebelum_pajak',
                             'style' => 'laba_sebelum_pajak',

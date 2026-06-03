@@ -214,6 +214,91 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function updatedHitKbk($value): void
     {
+        if ($value === 'b') {
+            $this->banyak = '1';
+            $this->m3 = '';
+        } elseif ($value === 'm') {
+            $this->banyak = '';
+            $this->m3 = '';
+        } else {
+            $this->banyak = '';
+            $this->m3 = '';
+            $this->total = $this->harga;
+        }
+    }
+
+    public function updatedHarga($value): void
+    {
+        $h = blank($value) ? 0.0 : (float) $value;
+
+        if ($this->hit_kbk === 'b') {
+            $b = blank($this->banyak) ? 0.0 : (float) $this->banyak;
+            if ($b > 0) {
+                $this->total = (string) ($b * $h);
+            }
+        } elseif ($this->hit_kbk === 'm') {
+            $m = blank($this->m3) ? 0.0 : (float) $this->m3;
+            if ($m > 0) {
+                $this->total = (string) ($m * $h);
+            }
+        } else {
+            $this->total = $value;
+        }
+    }
+
+    public function updatedTotal($value): void
+    {
+        $t = blank($value) ? 0.0 : (float) $value;
+
+        if ($this->hit_kbk === 'b') {
+            $b = blank($this->banyak) ? 0.0 : (float) $this->banyak;
+            if ($b > 0) {
+                $this->harga = (string) ($t / $b);
+            }
+        } elseif ($this->hit_kbk === 'm') {
+            $m = blank($this->m3) ? 0.0 : (float) $this->m3;
+            if ($m > 0) {
+                $this->harga = (string) ($t / $m);
+            }
+        } else {
+            $this->harga = $value;
+        }
+    }
+
+    public function updatedBanyak($value): void
+    {
+        $b = blank($value) ? 0.0 : (float) $value;
+
+        if ($this->hit_kbk === 'b' && $b > 0) {
+            $t = blank($this->total) ? 0.0 : (float) $this->total;
+            $h = blank($this->harga) ? 0.0 : (float) $this->harga;
+
+            if ($t > 0) {
+                $this->harga = (string) ($t / $b);
+            } elseif ($h > 0) {
+                $this->total = (string) ($b * $h);
+            }
+        }
+    }
+
+    public function updatedM3($value): void
+    {
+        $m = blank($value) ? 0.0 : (float) $value;
+
+        if ($this->hit_kbk === 'm' && $m > 0) {
+            $t = blank($this->total) ? 0.0 : (float) $this->total;
+            $h = blank($this->harga) ? 0.0 : (float) $this->harga;
+
+            if ($t > 0) {
+                $this->harga = (string) ($t / $m);
+            } elseif ($h > 0) {
+                $this->total = (string) ($m * $h);
+            }
+        }
+    }
+
+    public function updated($propertyName): void
+    {
         $this->persistDraftState();
     }
 
@@ -239,12 +324,20 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         // ── Hitung total setelah harga dipastikan valid ──────────
         $harga  = (float) $this->harga;
-        $banyak = (float) $this->banyak;
-        $m3     = (float) $this->m3;
+
+        $banyak = null;
+        if ($this->hit_kbk === 'b') {
+            $banyak = blank($this->banyak) ? null : (float) $this->banyak;
+        }
+
+        $m3 = null;
+        if ($this->hit_kbk === 'm') {
+            $m3 = blank($this->m3) ? null : (float) $this->m3;
+        }
 
         $total = match ($this->hit_kbk) {
-            'b'     => $banyak * $harga,
-            'm'     => $m3     * $harga,
+            'b'     => ($banyak ?? 0.0) * $harga,
+            'm'     => ($m3     ?? 0.0) * $harga,
             default => $harga,
         };
 
@@ -276,9 +369,20 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'map'        => strtolower($this->map),
         ];
 
-        // ── Reset hanya field per-baris, bukan harga/banyak/map ─
-        // User tetap kontrol penuh atas semua field
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'no_dokumen']);
+        // ── Reset semua field input agar bisa input yang lain ───────
+        $this->reset([
+            'no_akun',
+            'nama_akun',
+            'nama',
+            'keterangan',
+            'mm',
+            'm3',
+            'no_dokumen',
+            'harga',
+            'total',
+            'hit_kbk'
+        ]);
+        $this->banyak = '1';
 
         $this->dispatch('toast', type: 'info', title: 'Item Ditambahkan', msg: 'Item berhasil masuk ke draft.');
 
@@ -425,67 +529,174 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // EDIT & DELETE HISTORY ACTION
     // ══════════════════════════════════════════════════════════
 
+    protected function getJurnalFormSchema(): array
+    {
+        return [
+            Grid::make(2)->schema([
+                DatePicker::make('tgl')->label('Tanggal')->required()->native(false),
+                TextInput::make('jurnal')->label('No. Jurnal')->required(),
+                
+                TextInput::make('no_dokumen')->label('No. Dokumen'),
+                TextInput::make('nama')->label('Nama'),
+
+                Select::make('no_akun')
+                    ->label('Cari Nomor Akun')
+                    ->required()
+                    ->searchable()
+                    ->options(function () {
+                        return SubAnakAkun::all()->mapWithKeys(fn($item) => [
+                            $item->kode_sub_anak_akun => "{$item->kode_sub_anak_akun} - {$item->nama_sub_anak_akun}"
+                        ]);
+                    })
+                    ->live()
+                    ->afterStateUpdated(function ($state, Set $set) {
+                        $name = SubAnakAkun::where('kode_sub_anak_akun', $state)
+                            ->first()
+                            ?->nama_sub_anak_akun ?? '';
+                        $set('nama_akun', $name);
+                    }),
+                TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
+                
+                TextInput::make('mm')->label('MM (Tebal Plywood)')->numeric(),
+                TextInput::make('keterangan')->label('Keterangan'),
+                
+                Select::make('hit_kbk')
+                    ->label('Hit KBK')
+                    ->options([
+                        'b' => 'Banyak',
+                        'm' => 'Kubikasi',
+                    ])
+                    ->placeholder('-- Tidak ada --'),
+                Select::make('map')
+                    ->label('Posisi')
+                    ->options(['d' => 'Debit', 'k' => 'Kredit'])
+                    ->required(),
+                    
+                TextInput::make('banyak')
+                    ->label('Kuantitas (Banyak)')
+                    ->numeric(),
+                TextInput::make('m3')
+                    ->label('Kubikasi (M3)')
+                    ->numeric(),
+                
+                TextInput::make('harga')
+                    ->label('Harga Satuan')
+                    ->numeric()
+                    ->prefix('Rp')
+                    ->required()
+                    ->columnSpanFull(),
+            ])
+        ];
+    }
+
     public function editDraftAction(): Action
     {
         return Action::make('editDraft')
-            ->modalHeading('Edit Transaksi Riwayat')
+            ->modalHeading('Edit Draft Transaksi')
             ->modalSubmitActionLabel('Simpan Perubahan')
-            ->form([
-                Grid::make(2)->schema([
-                    DatePicker::make('tgl')->label('Tanggal')->required()->native(false),
-                    TextInput::make('jurnal')->label('No. Jurnal')->required(),
-                    Select::make('no_akun')
-                        ->label('Cari Nomor Akun')
-                        ->required()
-                        ->searchable()
-                        ->options(function () {
-                            return SubAnakAkun::all()->mapWithKeys(fn($item) => [
-                                $item->kode_sub_anak_akun => "{$item->kode_sub_anak_akun} - {$item->nama_sub_anak_akun}"
-                            ]);
-                        })
-                        ->live()
-                        ->afterStateUpdated(function ($state, Set $set) {
-                            $name = SubAnakAkun::where('kode_sub_anak_akun', $state)
-                                ->first()
-                                ?->nama_sub_anak_akun ?? '';
-                            $set('nama_akun', $name);
-                        }),
-                    TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
-                    TextInput::make('keterangan')->label('Keterangan')->columnSpanFull(),
-                    TextInput::make('banyak')->label('Kuantitas')->numeric()->required(),
-                    TextInput::make('harga')->label('Harga Satuan')->numeric()->prefix('Rp')->required(),
-                    Select::make('map')
-                        ->label('Posisi')
-                        ->options(['d' => 'Debit', 'k' => 'Kredit'])
-                        ->required(),
-                ])
-            ])
+            ->form($this->getJurnalFormSchema())
             ->fillForm(function (array $arguments) {
-                // Ambil item dari array $this->items berdasarkan index
-                $index = $arguments['index'];
-                return $this->items[$index];
+                return $this->items[$arguments['index']];
             })
-            ->action(function (array $data, array $arguments): void {
+            ->action(function (array $data, array $arguments, Action $action): void {
                 $index = $arguments['index'];
 
-                // Update data di array lokal
-                $this->items[$index] = array_merge($this->items[$index], $data);
+                $data['hit_kbk']    = $data['hit_kbk'] ?? '';
+                $data['keterangan'] = $data['keterangan'] ?? '';
+                $data['no_dokumen'] = $data['no_dokumen'] ?? '';
+                $data['nama']       = $data['nama'] ?? '';
 
-                // Hitung ulang total jika perlu (opsional)
-                $this->items[$index]['total'] = match ($this->items[$index]['hit_kbk']) {
-                    'b' => (float)$data['banyak'] * (float)$data['harga'],
-                    'm' => (float)$data['m3'] * (float)$data['harga'],
-                    default => (float)$data['harga'],
+                $harga  = blank($data['harga'] ?? null) ? 0.0 : (float) $data['harga'];
+                $banyak = blank($data['banyak'] ?? null) ? 0.0 : (float) $data['banyak'];
+                $m3     = blank($data['m3'] ?? null) ? 0.0 : (float) $data['m3'];
+                $hit_kbk = $data['hit_kbk'];
+
+                $total = match ($hit_kbk) {
+                    'b' => $banyak * $harga,
+                    'm' => $m3 * $harga,
+                    default => $harga,
                 };
+
+                $errors = $this->validateJurnalData($hit_kbk, $harga, $total, $banyak, $m3);
+
+                if (!empty($errors)) {
+                    Notification::make()->title('Validasi Gagal')->body($errors[0])->danger()->send();
+                    $action->halt();
+                    return;
+                }
+
+                $data['banyak'] = $banyak;
+                $data['harga']  = $harga;
+                $data['total']  = $total;
+
+                $this->items[$index] = array_merge($this->items[$index], $data);
 
                 $this->persistDraftState();
                 Notification::make()->title('Draft berhasil diperbarui')->success()->send();
             });
     }
 
+    public function editHistoryAction(): Action
+    {
+        return Action::make('editHistory')
+            ->visible(fn() => auth()->user()?->hasRole('super_admin'))
+            ->modalHeading('Edit Transaksi Riwayat')
+            ->modalSubmitActionLabel('Simpan Perubahan')
+            ->form($this->getJurnalFormSchema())
+            ->fillForm(function (array $arguments) {
+                $record = JurnalModel::find($arguments['id']);
+                if (!$record) return [];
+
+                $data = $record->toArray();
+                $data['no_dokumen'] = $record->no_dokumen;
+
+                return $data;
+            })
+            ->action(function (array $data, array $arguments, Action $action): void {
+                $record = JurnalModel::find($arguments['id']);
+                if (!$record) {
+                    Notification::make()->title('Error')->body('Data tidak ditemukan.')->danger()->send();
+                    return;
+                }
+
+                $data['hit_kbk']    = $data['hit_kbk'] ?? '';
+                $data['keterangan'] = $data['keterangan'] ?? '';
+                $data['no_dokumen'] = $data['no_dokumen'] ?? '';
+                $data['nama']       = $data['nama'] ?? '';
+
+                $harga  = blank($data['harga'] ?? null) ? 0.0 : (float) $data['harga'];
+                $banyak = blank($data['banyak'] ?? null) ? 0.0 : (float) $data['banyak'];
+                $m3     = blank($data['m3'] ?? null) ? 0.0 : (float) $data['m3'];
+                $hit_kbk = $data['hit_kbk'];
+
+                $total = match ($hit_kbk) {
+                    'b' => $banyak * $harga,
+                    'm' => $m3 * $harga,
+                    default => $harga,
+                };
+
+                $errors = $this->validateJurnalData($hit_kbk, $harga, $total, $banyak, $m3);
+
+                if (!empty($errors)) {
+                    Notification::make()->title('Validasi Gagal')->body($errors[0])->danger()->send();
+                    $action->halt();
+                    return;
+                }
+
+                $data['banyak'] = $banyak;
+                $data['harga']  = $harga;
+                $data['total']  = $total;
+
+                $record->update($data);
+
+                Notification::make()->title('Data riwayat berhasil diperbarui')->success()->send();
+            });
+    }
+
     public function deleteHistoryAction(): Action
     {
         return Action::make('deleteHistory')
+            ->visible(fn() => auth()->user()?->hasRole('super_admin'))
             ->requiresConfirmation()
             ->modalHeading('Hapus Transaksi')
             ->modalDescription('Yakin ingin menghapus data ini secara permanen?')
@@ -498,5 +709,51 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     Notification::make()->title('Data riwayat berhasil dihapus')->success()->send();
                 }
             });
+    }
+
+    protected function validateJurnalData(string $hit_kbk, float &$harga, float &$total, float &$banyak, float $m3): array
+    {
+        $errors = [];
+        if (blank($hit_kbk)) {
+            if ($harga < 0.01 && $total >= 0.01) {
+                $harga = $total;
+            } elseif ($total < 0.01 && $harga >= 0.01) {
+                $total = $harga;
+            }
+            $banyak = 1.0;
+            if ($harga < 0.01) {
+                $errors[] = 'Harga atau Total wajib diisi (minimal Rp 1).';
+            }
+            if (abs($total - $harga) >= 0.01) {
+                $errors[] = 'Data tidak sesuai: Karena Hit KBK kosong, Total harus sama dengan Harga (Rp ' . number_format($harga, 0, ',', '.') . '), sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+            }
+        } else {
+            if ($harga < 0.01) {
+                $errors[] = 'Harga wajib diisi (minimal Rp 1).';
+            }
+            if ($total < 0.01) {
+                $errors[] = 'Total wajib diisi (minimal Rp 1).';
+            }
+            if ($hit_kbk === 'b') {
+                if ($banyak < 0.0001) {
+                    $errors[] = 'Kuantitas (Banyak) harus diisi dan lebih dari 0.';
+                } else {
+                    $expected = $banyak * $harga;
+                    if (abs($total - $expected) >= 0.01) {
+                        $errors[] = 'Data tidak sesuai: Kuantitas (' . $banyak . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 0, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                    }
+                }
+            } elseif ($hit_kbk === 'm') {
+                if ($m3 < 0.000001) {
+                    $errors[] = 'Kubikasi (M3) harus diisi dan lebih dari 0.';
+                } else {
+                    $expected = $m3 * $harga;
+                    if (abs($total - $expected) >= 0.01) {
+                        $errors[] = 'Data tidak sesuai: Kubikasi (' . $m3 . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 2, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                    }
+                }
+            }
+        }
+        return $errors;
     }
 }

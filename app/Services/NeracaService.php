@@ -51,8 +51,24 @@ class NeracaService
             $mutasiLalu = JurnalUmum::where('tgl', '<', $start->format('Y-m-d'))
                 ->selectRaw("
                     no_akun,
-                    SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_debit,
-                    SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_kredit
+                    SUM(
+                        CASE WHEN LOWER(map) = 'd' THEN 
+                            CASE 
+                                WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                                WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                                ELSE COALESCE(harga, 0)
+                            END
+                        ELSE 0 END
+                    ) as total_debit,
+                    SUM(
+                        CASE WHEN LOWER(map) = 'k' THEN 
+                            CASE 
+                                WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                                WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                                ELSE COALESCE(harga, 0)
+                            END
+                        ELSE 0 END
+                    ) as total_kredit
                 ")
                 ->groupBy('no_akun')
                 ->get()
@@ -78,8 +94,24 @@ class NeracaService
         $mutasi = JurnalUmum::whereBetween('tgl', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->selectRaw("
                 no_akun,
-                SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_debit,
-                SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_kredit
+                SUM(
+                    CASE WHEN LOWER(map) = 'd' THEN 
+                        CASE 
+                            WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                            WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                            ELSE COALESCE(harga, 0)
+                        END
+                    ELSE 0 END
+                ) as total_debit,
+                SUM(
+                    CASE WHEN LOWER(map) = 'k' THEN 
+                        CASE 
+                            WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                            WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                            ELSE COALESCE(harga, 0)
+                        END
+                    ELSE 0 END
+                ) as total_kredit
             ")
             ->groupBy('no_akun')
             ->get()
@@ -186,8 +218,24 @@ class NeracaService
             ->whereIn('no_akun', $akunLabaRugi->keys()->toArray())
             ->selectRaw("
                 no_akun,
-                SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_debit,
-                SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(banyak * harga, harga, 0) ELSE 0 END) as total_kredit
+                SUM(
+                    CASE WHEN LOWER(map) = 'd' THEN 
+                        CASE 
+                            WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                            WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                            ELSE COALESCE(harga, 0)
+                        END
+                    ELSE 0 END
+                ) as total_debit,
+                SUM(
+                    CASE WHEN LOWER(map) = 'k' THEN 
+                        CASE 
+                            WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                            WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                            ELSE COALESCE(harga, 0)
+                        END
+                    ELSE 0 END
+                ) as total_kredit
             ")
             ->groupBy('no_akun')->get()->keyBy('no_akun');
 

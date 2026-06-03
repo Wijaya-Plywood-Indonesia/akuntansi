@@ -12,14 +12,14 @@ use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
-class LabaRugiTelur extends Page
+class LabaRugi extends Page
 {
     use HasPageShield;
 
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
     protected static ?string $title = 'Laba Rugi Telur';
-    protected static ?string $navigationLabel = 'Laba Rugi Telur';
-    protected string $view = 'filament.pages.laba-rugi-telur';
+    protected static ?string $navigationLabel = 'Laba Rugi ';
+    protected string $view = 'filament.pages.laba-rugi';
 
     // ── PROPERTI FILTER DINAMIS ──
     public string $jenisFilter = 'bulan'; // Default bulanan
@@ -283,7 +283,11 @@ class LabaRugiTelur extends Page
 
             foreach ($jurnals as $jurnal) {
                 $kode  = $jurnal->no_akun;
-                $nilai = (float) ($jurnal->banyak ?? 1) * (float) ($jurnal->harga ?? 0);
+                $nilai = match (strtolower($jurnal->hit_kbk ?? '')) {
+        'b'     => (float) ($jurnal->banyak ?? 0) * (float) ($jurnal->harga ?? 0),
+        'm'     => (float) ($jurnal->m3 ?? 0)     * (float) ($jurnal->harga ?? 0),
+        default => (float) ($jurnal->harga ?? 0),
+    };
 
                 $saldoNormal = strtolower($saldoNormalMap[$kode] ?? 'debit');
                 $isDebit     = strtolower($jurnal->map) === 'd';

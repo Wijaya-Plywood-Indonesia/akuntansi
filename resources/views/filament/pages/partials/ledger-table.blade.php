@@ -7,7 +7,14 @@ $totalKredit = 0.0;
 $totalQty    = 0.0;
 
 $rows = $transaksis->map(function ($trx) use (&$running, &$totalDebit, &$totalKredit, &$totalQty, $isKredit) {
-    $nominal = (float) ($trx->banyak ?? 1) * (float) ($trx->harga ?? 0);
+    
+    // Perbaikan logika nominal mengikuti hit_kbk
+    $nominal = match (strtolower($trx->hit_kbk ?? '')) {
+        'b'     => (float) ($trx->banyak ?? 0) * (float) ($trx->harga ?? 0),
+        'm'     => (float) ($trx->m3 ?? 0)     * (float) ($trx->harga ?? 0),
+        default => (float) ($trx->harga ?? 0),
+    };
+
     $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
     $qty     = (float) ($trx->banyak ?? 0);
 
