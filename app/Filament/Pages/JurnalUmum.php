@@ -267,9 +267,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         }
 
         if (!empty($errors)) {
-            foreach ($errors as $err) {
-                $this->dispatch('toast', type: 'error', title: 'Validasi Gagal', msg: $err);
-            }
+            $this->dispatch('toast', type: 'error', title: 'Validasi Gagal', msg: $errors[0]);
             return;
         }
 

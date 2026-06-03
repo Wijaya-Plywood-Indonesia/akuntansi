@@ -724,7 +724,6 @@
                                     let res = t / h;
                                     banyak_display = res.toString().replace('.', ',');
                                     $wire.set('banyak', res);
-                                    window.showToast('info', 'Dihitung', 'Kuantitas = Total ÷ Harga');
                                 } else {
                                     window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & lebih dari 0.');
                                 }
@@ -756,7 +755,6 @@
                                     let res = t / h;
                                     m3 = res.toFixed(4);
                                     $wire.set('m3', m3);
-                                    window.showToast('info', 'Dihitung', 'Kubikasi = Total ÷ Harga');
                                 } else {
                                     window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & lebih dari 0.');
                                 }
@@ -819,7 +817,6 @@
                                     let res = t / divisor;
                                     harga_display = formatRupiah(res);
                                     $wire.set('harga', res);
-                                    window.showToast('info', 'Dihitung', 'Harga = Total ÷ ' + label);
                                 } else {
                                     window.showToast('error', 'Gagal', 'Total dan Kuantitas/Kubikasi harus diisi & lebih dari 0.');
                                 }
@@ -882,7 +879,6 @@
                                     if (!isNaN(h)) {
                                         total_display = harga_display;
                                         $wire.set('total', h);
-                                        window.showToast('info', 'Dihitung', 'Total = Harga');
                                     } else {
                                         window.showToast('error', 'Gagal', 'Harga harus diisi.');
                                     }
@@ -890,7 +886,6 @@
                                     let res = multiplier * h;
                                     total_display = formatRupiah(res);
                                     $wire.set('total', res);
-                                    window.showToast('info', 'Dihitung', 'Total = ' + label + ' × Harga');
                                 } else {
                                     window.showToast('error', 'Gagal', 'Harga dan Kuantitas/Kubikasi harus diisi & lebih dari 0.');
                                 }
@@ -1245,9 +1240,6 @@
 
                 // Tutup modal konfirmasi setelah bulk delete selesai
                 $wire.on('bulk-delete-done', () => { showConfirm = false; });
-                $wire.on('toast', ({ type, title, msg }) => {
-                    window.showToast(type, title, msg ?? '');
-                });
             ">
 
             {{-- ── MODAL KONFIRMASI BULK DELETE ─────────────────────────── --}}
