@@ -452,19 +452,17 @@
                 harga_display = formatRupiah(value);
             });
             $watch('$wire.banyak', value => {
+                if (document.activeElement === $refs.banyakInput) return; // user masih ngetik, skip
                 // Jika server set ke kosong (resetForm, dll)
                 if (value === '' || value === null || value === undefined) {
                     banyak_display = '';
                     return;
                 }
                 // Konversi dari format PHP (titik desimal) ke format ID (koma desimal)
-                // Hanya update jika banyak_display kosong — hindari overwrite saat user mengetik
-                if (banyak_display === '') {
-                    let str = value.toString();
-                    banyak_display = str.includes('.') 
-                        ? str.replace('.', ',') 
-                        : str;
-                }
+                let str = value.toString();
+                banyak_display = str.includes('.') 
+                    ? str.replace('.', ',') 
+                    : str;
             });
             $watch('no_akun', value => {
                 if (!value) { searchTerm = ''; }
@@ -473,6 +471,23 @@
             $watch('$wire.total', value => {
                 if (document.activeElement === $refs.totalInput) return;
                 total_display = formatRupiah(value);
+            });
+            $watch('hit_kbk', value => {
+                const b = parseFloat(parseInputID(banyak_display));
+                const m = parseFloat(m3);
+                const h = parseFloat(parseInputID(harga_display));
+                if (value === 'b' && !isNaN(b) && !isNaN(h)) {
+                    const newTotal = b * h;
+                    total_display = formatRupiah(newTotal);
+                    $wire.set('total', newTotal);
+                } else if (value === 'm' && !isNaN(m) && !isNaN(h)) {
+                    const newTotal = m * h;
+                    total_display = formatRupiah(newTotal);
+                    $wire.set('total', newTotal);
+                } else if (value === '' && !isNaN(h)) {
+                    total_display = formatRupiah(h);
+                    $wire.set('total', h);
+                }
             });
 
             {{-- GANTI baris harga_display = formatRupiah(...) menjadi ini --}}
@@ -575,6 +590,7 @@
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kuantitas (Banyak)</label>
                         <input type="text" inputmode="decimal"
+                            x-ref="banyakInput"
                             :value="banyak_display"
 
                             @input="
@@ -673,6 +689,41 @@
                                     const newLen    = formatted.length;
                                     const newPos    = cursorPos + (newLen - oldLen);
                                     el.setSelectionRange(newPos, newPos);
+
+                                    const parsed = parseInputID(formatted);
+                                    $wire.set('harga', parsed === '' ? '' : parsed);
+
+                                    // Realtime calculation for Total display
+                                    const h = parseFloat(parsed);
+                                    if (hit_kbk === 'b') {
+                                        const b = parseFloat(parseInputID(banyak_display));
+                                        if (!isNaN(b) && b > 0 && !isNaN(h)) {
+                                            const newTotal = b * h;
+                                            total_display = formatRupiah(newTotal);
+                                            $wire.set('total', newTotal);
+                                        } else {
+                                            total_display = '';
+                                            $wire.set('total', '');
+                                        }
+                                    } else if (hit_kbk === 'm') {
+                                        const m = parseFloat(m3);
+                                        if (!isNaN(m) && m > 0 && !isNaN(h)) {
+                                            const newTotal = m * h;
+                                            total_display = formatRupiah(newTotal);
+                                            $wire.set('total', newTotal);
+                                        } else {
+                                            total_display = '';
+                                            $wire.set('total', '');
+                                        }
+                                    } else if (hit_kbk === '') {
+                                        if (!isNaN(h)) {
+                                            total_display = formatted;
+                                            $wire.set('total', parsed);
+                                        } else {
+                                            total_display = '';
+                                            $wire.set('total', '');
+                                        }
+                                    }
                                 "
                                 @blur="
                                     const parsed = parseInputID(harga_display);
@@ -681,17 +732,23 @@
 
                                     // Kalkulasi dua arah
                                     const h = parseFloat(parsed);
-                                    const t = parseFloat(parseInputID(total_display));
 
-                                    if (hit_kbk === 'b' && !isNaN(h) && h > 0 && !isNaN(t) && t > 0) {
-                                        // harga diisi → banyak menyesuaikan
-                                        const newBanyak = t / h;
-                                        banyak_display = newBanyak.toString().replace('.', ',');
-                                        $wire.set('banyak', newBanyak);
-                                    } else if (hit_kbk === 'm' && !isNaN(h) && h > 0 && !isNaN(t) && t > 0) {
-                                        // harga diisi → m3 menyesuaikan
-                                        const newM3 = t / h;
-                                        $wire.set('m3', newM3);
+                                    if (hit_kbk === 'b' && !isNaN(h) && h > 0) {
+                                        // harga diisi → total menyesuaikan (kuantitas tetap)
+                                        const b = parseFloat(parseInputID(banyak_display));
+                                        if (!isNaN(b) && b > 0) {
+                                            const newTotal = b * h;
+                                            total_display = formatRupiah(newTotal);
+                                            $wire.set('total', newTotal);
+                                        }
+                                    } else if (hit_kbk === 'm' && !isNaN(h) && h > 0) {
+                                        // harga diisi → total menyesuaikan (m3 tetap)
+                                        const m = parseFloat(m3);
+                                        if (!isNaN(m) && m > 0) {
+                                            const newTotal = m * h;
+                                            total_display = formatRupiah(newTotal);
+                                            $wire.set('total', newTotal);
+                                        }
                                     } else if (hit_kbk === '') {
                                         // tidak ada hit_kbk → total ikut harga
                                         total_display = formatRupiah(parsed);
@@ -724,6 +781,41 @@
                                     const newLen = formatted.length;
                                     const newPos = cursorPos + (newLen - oldLen);
                                     el.setSelectionRange(newPos, newPos);
+
+                                    // Realtime calculation for Harga display
+                                    const parsed = parseInputID(formatted);
+                                    $wire.set('total', parsed === '' ? '' : parsed);
+                                    const t = parseFloat(parsed);
+
+                                    if (hit_kbk === 'b') {
+                                        const b = parseFloat(parseInputID(banyak_display));
+                                        if (!isNaN(t) && t > 0 && !isNaN(b) && b > 0) {
+                                            const newHarga = t / b;
+                                            harga_display = formatRupiah(newHarga);
+                                            $wire.set('harga', newHarga);
+                                        } else {
+                                            harga_display = '';
+                                            $wire.set('harga', '');
+                                        }
+                                    } else if (hit_kbk === 'm') {
+                                        const m = parseFloat(m3);
+                                        if (!isNaN(t) && t > 0 && !isNaN(m) && m > 0) {
+                                            const newHarga = t / m;
+                                            harga_display = formatRupiah(newHarga);
+                                            $wire.set('harga', newHarga);
+                                        } else {
+                                            harga_display = '';
+                                            $wire.set('harga', '');
+                                        }
+                                    } else if (hit_kbk === '') {
+                                        if (!isNaN(t)) {
+                                            harga_display = formatted;
+                                            $wire.set('harga', parsed);
+                                        } else {
+                                            harga_display = '';
+                                            $wire.set('harga', '');
+                                        }
+                                    }
                                 "
                                 @blur="
                                     const parsed = parseInputID(total_display);

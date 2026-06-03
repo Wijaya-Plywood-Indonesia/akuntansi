@@ -32,11 +32,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
     protected static ?string $title = 'Jurnal Umum';
 
     public $tgl, $jurnal, $no_dokumen, $no_akun, $nama_akun, $nama, $keterangan;
-    public $harga = '';
-    public $total = '';
-    public $banyak = '1';
+    public $harga = 200000;
+    public $total = 200000;
+    public $banyak = 5;
     public $mm = '';
-    public $m3 = '';
+    public $m3 = '0.0000';
     public $hit_kbk = '';
     public $map = 'd';
     public $items = [];
@@ -60,15 +60,15 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         $this->tgl        = session()->get('jurnal_draft_tgl', now()->format('Y-m-d'));
         $this->items      = session()->get('jurnal_draft_items', []);
-        $this->banyak     = session()->get('jurnal_draft_banyak', strtolower($this->hit_kbk) === 'b' ? 1 : '');
-        $this->harga      = session()->get('jurnal_draft_harga', '');
+        $this->banyak     = session()->get('jurnal_draft_banyak', 5);
+        $this->harga      = session()->get('jurnal_draft_harga', 200000);
         $this->no_dokumen = session()->get('jurnal_draft_nodok', '');
         $this->nama       = session()->get('jurnal_draft_nama', '');
         $this->mm         = session()->get('jurnal_draft_mm', '');
-        $this->m3         = session()->get('jurnal_draft_m3', '');
+        $this->m3         = session()->get('jurnal_draft_m3', '0.0000');
         $this->hit_kbk    = session()->get('jurnal_draft_hitkbk', '');
         $this->jurnal     = session()->get('jurnal_draft_kode', $this->getNextJurnalNumber());
-        $this->total = session()->get('jurnal_draft_total', '');
+        $this->total      = session()->get('jurnal_draft_total', 200000);
 
         $savedMap   = session()->get('jurnal_draft_map', 'd');
         $this->map  = in_array(strtolower($savedMap), ['d', 'k']) ? strtolower($savedMap) : 'd';
@@ -340,12 +340,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $this->items      = [];
         $this->wasBalanced = false;
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
-        $this->harga   = '';
-        $this->banyak  = 1;
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm']);
+        $this->harga   = 200000;
+        $this->banyak  = 5;
         $this->map     = 'd';
         $this->hit_kbk = '';
-        $this->total = '';
+        $this->m3      = '0.0000';
+        $this->total   = 200000;
         $this->perPage = 50;
         $this->hasMorePages = true;
 
@@ -360,14 +361,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // ---
     public function resetForm(): void
     {
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
-        $this->harga   = '';
-        $this->banyak  = '';
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm']);
+        $this->harga   = 200000;
+        $this->banyak  = 5;
         $this->map     = 'd';
         $this->hit_kbk = '';
-        $this->banyak  = 1;
-        $this->m3      = '';
-        $this->total = '';
+        $this->m3      = '0.0000';
+        $this->total   = 200000;
         $this->persistDraftState();
     }
 
