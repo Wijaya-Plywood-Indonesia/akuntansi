@@ -472,23 +472,7 @@
                 if (document.activeElement === $refs.totalInput) return;
                 total_display = formatRupiah(value);
             });
-            $watch('hit_kbk', value => {
-                const b = parseFloat(parseInputID(banyak_display));
-                const m = parseFloat(m3);
-                const h = parseFloat(parseInputID(harga_display));
-                if (value === 'b' && !isNaN(b) && !isNaN(h)) {
-                    const newTotal = b * h;
-                    total_display = formatRupiah(newTotal);
-                    $wire.set('total', newTotal);
-                } else if (value === 'm' && !isNaN(m) && !isNaN(h)) {
-                    const newTotal = m * h;
-                    total_display = formatRupiah(newTotal);
-                    $wire.set('total', newTotal);
-                } else if (value === '' && !isNaN(h)) {
-                    total_display = formatRupiah(h);
-                    $wire.set('total', h);
-                }
-            });
+
 
             const saveLocal = (key, val) => {
                 localStorage.setItem('jurnal_draft_' + key, val ?? '');
@@ -728,57 +712,61 @@
                                     let num = parseFloat(parseInputID(banyak_display));
                                     banyak_display = isNaN(num) ? '' : (Number.isInteger(num) ? num.toString() : banyak_display);
                                 }
-
-                                // Kalkulasi dua arah — banyak diisi
-                                if (hit_kbk === 'b') {
-                                    const b = parseFloat(parseInputID(banyak_display));
-                                    const t = parseFloat(parseInputID(total_display));
-                                    const h = parseFloat(parseInputID(harga_display));
-
-                                    if (!isNaN(b) && b > 0) {
-                                        if (!isNaN(t) && t > 0) {
-                                            // total sudah ada → harga menyesuaikan
-                                            const newHarga = t / b;
-                                            $wire.set('harga', newHarga);
-                                            harga_display = formatRupiah(newHarga);
-                                        } else if (!isNaN(h) && h > 0) {
-                                            // harga sudah ada → total menyesuaikan
-                                            const newTotal = b * h;
-                                            total_display = formatRupiah(newTotal);
-                                            $wire.set('total', newTotal);
-                                        }
-                                    }
-                                }
                             "
                             placeholder="0 atau 1,5"
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300 tabular-nums">
-
+                        <!-- Button Cari Kuantitas -->
+                        <button type="button" 
+                            @click="
+                                let h = parseFloat(parseInputID(harga_display));
+                                let t = parseFloat(parseInputID(total_display));
+                                if (!isNaN(h) && h > 0 && !isNaN(t)) {
+                                    let res = t / h;
+                                    banyak_display = res.toString().replace('.', ',');
+                                    $wire.set('banyak', res);
+                                    window.showToast('info', 'Dihitung', 'Kuantitas = Total ÷ Harga');
+                                } else {
+                                    window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & lebih dari 0.');
+                                }
+                            "
+                            class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
+                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Cari Kuantitas
+                        </button>
                     </div>
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kubikasi (M3)</label>
                         <input type="text" inputmode="decimal" x-model="m3" placeholder="0.0000"
                             @blur="
-                            if (hit_kbk === 'm') {
-                                const m = parseFloat(m3);
-                                const t = parseFloat(parseInputID(total_display));
-                                const h = parseFloat(parseInputID(harga_display));
-
-                                if (!isNaN(m) && m > 0) {
-                                    if (!isNaN(t) && t > 0) {
-                                        // total sudah ada → harga menyesuaikan
-                                        const newHarga = t / m;
-                                        $wire.set('harga', newHarga);
-                                        harga_display = formatRupiah(newHarga);
-                                    } else if (!isNaN(h) && h > 0) {
-                                        // harga sudah ada → total menyesuaikan
-                                        const newTotal = m * h;
-                                        total_display = formatRupiah(newTotal);
-                                        $wire.set('total', newTotal);
-                                    }
+                                if (m3 !== '') {
+                                    let num = parseFloat(m3);
+                                    m3 = isNaN(num) ? '' : num.toFixed(4);
+                                    $wire.set('m3', m3);
                                 }
-                            }
-                        "
+                            "
                             class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300">
+                        <!-- Button Cari Kubikasi -->
+                        <button type="button" 
+                            @click="
+                                let h = parseFloat(parseInputID(harga_display));
+                                let t = parseFloat(parseInputID(total_display));
+                                if (!isNaN(h) && h > 0 && !isNaN(t)) {
+                                    let res = t / h;
+                                    m3 = res.toFixed(4);
+                                    $wire.set('m3', m3);
+                                    window.showToast('info', 'Dihitung', 'Kubikasi = Total ÷ Harga');
+                                } else {
+                                    window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & lebih dari 0.');
+                                }
+                            "
+                            class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
+                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Cari Kubikasi
+                        </button>
                     </div>
                 </div>
 
@@ -805,72 +793,43 @@
 
                                     const parsed = parseInputID(formatted);
                                     $wire.set('harga', parsed === '' ? '' : parsed);
-
-                                    // Realtime calculation for Total display
-                                    const h = parseFloat(parsed);
-                                    if (hit_kbk === 'b') {
-                                        const b = parseFloat(parseInputID(banyak_display));
-                                        if (!isNaN(b) && b > 0 && !isNaN(h)) {
-                                            const newTotal = b * h;
-                                            total_display = formatRupiah(newTotal);
-                                            $wire.set('total', newTotal);
-                                        } else {
-                                            total_display = '';
-                                            $wire.set('total', '');
-                                        }
-                                    } else if (hit_kbk === 'm') {
-                                        const m = parseFloat(m3);
-                                        if (!isNaN(m) && m > 0 && !isNaN(h)) {
-                                            const newTotal = m * h;
-                                            total_display = formatRupiah(newTotal);
-                                            $wire.set('total', newTotal);
-                                        } else {
-                                            total_display = '';
-                                            $wire.set('total', '');
-                                        }
-                                    } else if (hit_kbk === '') {
-                                        if (!isNaN(h)) {
-                                            total_display = formatted;
-                                            $wire.set('total', parsed);
-                                        } else {
-                                            total_display = '';
-                                            $wire.set('total', '');
-                                        }
-                                    }
                                 "
                                 @blur="
                                     const parsed = parseInputID(harga_display);
                                     $wire.set('harga', parsed === '' ? '' : parsed);
                                     harga_display = formatRupiah(parsed === '' ? '' : parsed);
-
-                                    // Kalkulasi dua arah
-                                    const h = parseFloat(parsed);
-
-                                    if (hit_kbk === 'b' && !isNaN(h) && h > 0) {
-                                        // harga diisi → total menyesuaikan (kuantitas tetap)
-                                        const b = parseFloat(parseInputID(banyak_display));
-                                        if (!isNaN(b) && b > 0) {
-                                            const newTotal = b * h;
-                                            total_display = formatRupiah(newTotal);
-                                            $wire.set('total', newTotal);
-                                        }
-                                    } else if (hit_kbk === 'm' && !isNaN(h) && h > 0) {
-                                        // harga diisi → total menyesuaikan (m3 tetap)
-                                        const m = parseFloat(m3);
-                                        if (!isNaN(m) && m > 0) {
-                                            const newTotal = m * h;
-                                            total_display = formatRupiah(newTotal);
-                                            $wire.set('total', newTotal);
-                                        }
-                                    } else if (hit_kbk === '') {
-                                        // tidak ada hit_kbk → total ikut harga
-                                        total_display = formatRupiah(parsed);
-                                        $wire.set('total', parsed === '' ? '' : parsed);
-                                    }
                                 "
                                 placeholder=" 0"
                                 class="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-[4px] font-bold text-gray-500 dark:text-gray-300 tabular-nums">
                         </div>
+                        <!-- Button Cari Harga -->
+                        <button type="button" 
+                            @click="
+                                let t = parseFloat(parseInputID(total_display));
+                                let divisor = 0;
+                                let label = '';
+                                if (hit_kbk === 'm') {
+                                    divisor = parseFloat(m3);
+                                    label = 'Kubikasi';
+                                } else {
+                                    divisor = parseFloat(parseInputID(banyak_display));
+                                    label = 'Kuantitas';
+                                }
+                                if (!isNaN(t) && !isNaN(divisor) && divisor > 0) {
+                                    let res = t / divisor;
+                                    harga_display = formatRupiah(res);
+                                    $wire.set('harga', res);
+                                    window.showToast('info', 'Dihitung', 'Harga = Total ÷ ' + label);
+                                } else {
+                                    window.showToast('error', 'Gagal', 'Total dan Kuantitas/Kubikasi harus diisi & lebih dari 0.');
+                                }
+                            "
+                            class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
+                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Cari Harga
+                        </button>
                     </div>
                     {{-- Kolom 1: Total --}}
                     <div class="space-y-1.5">
@@ -895,78 +854,53 @@
                                     const newPos = cursorPos + (newLen - oldLen);
                                     el.setSelectionRange(newPos, newPos);
 
-                                    // Realtime calculation for Harga display
                                     const parsed = parseInputID(formatted);
                                     $wire.set('total', parsed === '' ? '' : parsed);
-                                    const t = parseFloat(parsed);
-
-                                    if (hit_kbk === 'b') {
-                                        const b = parseFloat(parseInputID(banyak_display));
-                                        if (!isNaN(t) && t > 0 && !isNaN(b) && b > 0) {
-                                            const newHarga = t / b;
-                                            harga_display = formatRupiah(newHarga);
-                                            $wire.set('harga', newHarga);
-                                        } else {
-                                            harga_display = '';
-                                            $wire.set('harga', '');
-                                        }
-                                    } else if (hit_kbk === 'm') {
-                                        const m = parseFloat(m3);
-                                        if (!isNaN(t) && t > 0 && !isNaN(m) && m > 0) {
-                                            const newHarga = t / m;
-                                            harga_display = formatRupiah(newHarga);
-                                            $wire.set('harga', newHarga);
-                                        } else {
-                                            harga_display = '';
-                                            $wire.set('harga', '');
-                                        }
-                                    } else if (hit_kbk === '') {
-                                        if (!isNaN(t)) {
-                                            harga_display = formatted;
-                                            $wire.set('harga', parsed);
-                                        } else {
-                                            harga_display = '';
-                                            $wire.set('harga', '');
-                                        }
-                                    }
                                 "
                                 @blur="
                                     const parsed = parseInputID(total_display);
                                     $wire.set('total', parsed === '' ? '' : parsed);
                                     total_display = formatRupiah(parsed === '' ? '' : parsed);
-
-                                    {{-- Jika hit_kbk kosong, total = harga --}}
-                                    if (hit_kbk === '') {
-                                        const newHarga = parsed;
-                                        $wire.set('harga', newHarga);
-                                        harga_display = formatRupiah(newHarga);
-                                    }
-
-                                    {{-- Jika hit_kbk = b, harga = total / banyak --}}
-                                    if (hit_kbk === 'b') {
-                                        const t = parseFloat(parsed);
-                                        const b = parseFloat(parseInputID(banyak_display));
-                                        if (!isNaN(t) && t > 0 && !isNaN(b) && b > 0) {
-                                            const newHarga = t / b;
-                                            $wire.set('harga', newHarga);
-                                            harga_display = formatRupiah(newHarga);
-                                        }
-                                    }
-
-                                    {{-- Jika hit_kbk = m, harga = total / m3 --}}
-                                    if (hit_kbk === 'm') {
-                                        const t = parseFloat(parsed);
-                                        const m = parseFloat(m3);
-                                        if (!isNaN(t) && t > 0 && !isNaN(m) && m > 0) {
-                                            const newHarga = t / m;
-                                            $wire.set('harga', newHarga);
-                                            harga_display = formatRupiah(newHarga);
-                                        }
-                                    }
                                 "
                                 placeholder="0"
                                 class="w-full pl-9 pr-3 py-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-[4px] font-bold text-amber-600 dark:text-amber-400 tabular-nums outline-none focus:border-amber-400">
                         </div>
+                        <!-- Button Cari Total -->
+                        <button type="button" 
+                            @click="
+                                let h = parseFloat(parseInputID(harga_display));
+                                let multiplier = 0;
+                                let label = '';
+                                if (hit_kbk === 'm') {
+                                    multiplier = parseFloat(m3);
+                                    label = 'Kubikasi';
+                                } else {
+                                    multiplier = parseFloat(parseInputID(banyak_display));
+                                    label = 'Kuantitas';
+                                }
+                                if (hit_kbk === '') {
+                                    if (!isNaN(h)) {
+                                        total_display = harga_display;
+                                        $wire.set('total', h);
+                                        window.showToast('info', 'Dihitung', 'Total = Harga');
+                                    } else {
+                                        window.showToast('error', 'Gagal', 'Harga harus diisi.');
+                                    }
+                                } else if (!isNaN(h) && !isNaN(multiplier) && multiplier > 0) {
+                                    let res = multiplier * h;
+                                    total_display = formatRupiah(res);
+                                    $wire.set('total', res);
+                                    window.showToast('info', 'Dihitung', 'Total = ' + label + ' × Harga');
+                                } else {
+                                    window.showToast('error', 'Gagal', 'Harga dan Kuantitas/Kubikasi harus diisi & lebih dari 0.');
+                                }
+                            "
+                            class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
+                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Cari Total
+                        </button>
                     </div>
                     <div class="space-y-3 pt-1">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider block text-center">Tipe Mutasi</label>
