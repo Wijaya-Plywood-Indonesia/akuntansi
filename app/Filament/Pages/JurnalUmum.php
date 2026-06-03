@@ -222,39 +222,52 @@ class JurnalUmum extends Page implements HasActions, HasForms
     // ---
     public function addItem(): void
     {
-        // ── Validasi field wajib dulu, early return ──────────────
         $errors = [];
 
         if (blank($this->no_akun))   $errors[] = 'No. Akun wajib dipilih.';
         if (blank($this->nama_akun)) $errors[] = 'Nama Akun belum terisi.';
-        if (blank($this->harga) || (float) $this->harga < 0.01)
+        
+        $harga = blank($this->harga) ? 0.0 : (float) $this->harga;
+        if ($harga < 0.01) {
             $errors[] = 'Harga wajib diisi (minimal Rp 1).';
-
-        if (!empty($errors)) {
-            foreach ($errors as $err) {
-                $this->dispatch('toast', type: 'error', title: 'Validasi Gagal', msg: $err);
-            }
-            return; // stop di sini, jangan hitung total dulu
         }
 
-        // ── Hitung total setelah harga dipastikan valid ──────────
-        $harga  = (float) $this->harga;
-        $banyak = (float) $this->banyak;
-        $m3     = (float) $this->m3;
-
-        $total = match ($this->hit_kbk) {
-            'b'     => $banyak * $harga,
-            'm'     => $m3     * $harga,
-            default => $harga,
-        };
-
-        // ── Validasi total ───────────────────────────────────────
+        $total = blank($this->total) ? 0.0 : (float) $this->total;
         if ($total < 0.01) {
-            $this->dispatch('toast', type: 'error', title: 'Validasi Gagal', msg: match ($this->hit_kbk) {
-                'b'     => 'Kuantitas harus lebih dari 0.',
-                'm'     => 'Kubikasi (M3) harus lebih dari 0.',
-                default => 'Harga harus lebih dari 0.',
-            });
+            $errors[] = 'Total wajib diisi (minimal Rp 1).';
+        }
+
+        $banyak = blank($this->banyak) ? 0.0 : (float) $this->banyak;
+        $m3 = blank($this->m3) ? 0.0 : (float) $this->m3;
+
+        // Validasi Relasi Matematika berdasarkan Hit KBK
+        if ($this->hit_kbk === 'b') {
+            if ($banyak < 0.0001) {
+                $errors[] = 'Kuantitas (Banyak) harus diisi dan lebih dari 0.';
+            } else {
+                $expected = $banyak * $harga;
+                if (abs($total - $expected) >= 0.01) {
+                    $errors[] = 'Data tidak sesuai: Kuantitas (' . $banyak . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 0, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                }
+            }
+        } elseif ($this->hit_kbk === 'm') {
+            if ($m3 < 0.0001) {
+                $errors[] = 'Kubikasi (M3) harus diisi dan lebih dari 0.';
+            } else {
+                $expected = $m3 * $harga;
+                if (abs($total - $expected) >= 0.01) {
+                    $errors[] = 'Data tidak sesuai: Kubikasi (' . $m3 . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 2, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                }
+            }
+        } else {
+            // hit_kbk kosong
+            if (abs($total - $harga) >= 0.01) {
+                $errors[] = 'Data tidak sesuai: Karena Hit KBK kosong, Total harus sama dengan Harga (Rp ' . number_format($harga, 0, ',', '.') . '), sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+            }
+        }
+
+        if (!empty($errors)) {
+            $this->dispatch('toast', type: 'error', title: 'Validasi Gagal', msg: $errors[0]);
             return;
         }
 
