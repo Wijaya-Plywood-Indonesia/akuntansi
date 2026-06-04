@@ -736,7 +736,7 @@
                     </div>
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kubikasi (M3)</label>
-                        <input type="text" inputmode="decimal" x-model="m3" placeholder="0.000000"
+                        <input type="text" inputmode="decimal" x-model="m3" placeholder="0,0000"
                             @blur="
                                 if (m3 !== '') {
                                     let num = parseFloat(m3.toString().replace(',', '.'));
@@ -941,20 +941,61 @@
         </div>
 
         {{-- ══════════════════════════════════════════════════════════════ --}}
-        {{-- TABLE DRAFT                                                    --}}
+        {{-- TABLE DRAFT                                                      --}}
         {{-- ══════════════════════════════════════════════════════════════ --}}
         <div x-show="items.length > 0" x-cloak class="space-y-4 mb-10">
-            <div class="flex items-center justify-between px-1">
-                <div :class="isBalanced
-                ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400'
-                : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400'"
-                    class="px-4 py-2 rounded-[4px] border flex items-center gap-2.5 font-black text-[11px] uppercase tracking-[.2em] shadow-sm">
-                    <div :class="isBalanced ? 'bg-green-500' : 'bg-red-500 animate-pulse'"
-                        class="w-1.5 h-1.5 rounded-full flex-shrink-0"></div>
-                    <span x-text="isBalanced ? 'Jurnal Balanced' : 'Jurnal Unbalanced'"></span>
+            
+            {{-- Header & Summary Total Draft (Dipindah ke atas) --}}
+            <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] p-3 lg:p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+                
+                {{-- KIRI: Info Item --}}
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Draft Jurnal</span>
+                        <span class="text-sm font-bold text-gray-700 dark:text-gray-200"><span x-text="items.length"></span> Item</span>
+                    </div>
                 </div>
-                <div class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                    <span x-text="items.length"></span> item dalam draft
+
+                {{-- KANAN: Summary Total & Badge --}}
+                <div class="flex flex-wrap items-center gap-4 xl:gap-5 border-t sm:border-t-0 sm:border-l border-gray-100 dark:border-gray-800 pt-3 sm:pt-0 sm:pl-5 w-full sm:w-auto justify-between sm:justify-end">
+                    <div class="flex items-center gap-4">
+                        <div class="flex flex-col items-end">
+                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Debit</span>
+                            <span class="text-emerald-500 font-black text-sm tabular-nums" x-text="'Rp ' + formatTotal(totalDebit)"></span>
+                        </div>
+                        
+                        <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
+                        
+                        <div class="flex flex-col items-end">
+                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Kredit</span>
+                            <span class="text-rose-500 font-black text-sm tabular-nums" x-text="'Rp ' + formatTotal(totalKredit)"></span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <template x-if="isBalanced">
+                            <div class="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-[4px] whitespace-nowrap">
+                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Balanced</span>
+                            </div>
+                        </template>
+                        <template x-if="!isBalanced">
+                            <div class="flex flex-col items-end gap-1">
+                                <div class="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-[4px] whitespace-nowrap">
+                                    <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                    <span class="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Unbalanced</span>
+                                </div>
+                                <span class="text-[9px] text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap" x-text="'Selisih: Rp ' + formatTotal(Math.abs(totalDebit - totalKredit))"></span>
+                            </div>
+                        </template>
+                    </div>
                 </div>
             </div>
 
@@ -1081,34 +1122,7 @@
                     </template>
                 </div>
 
-                {{-- Footer total --}}
-                <div class="border-t-2 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
-                    <div class="grid grid-cols-2 divide-x divide-gray-200 dark:divide-gray-700">
-                        <div class="px-6 py-3 text-right">
-                            <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Debit</div>
-                            <div class="font-black text-emerald-500 text-base tabular-nums"
-                                x-text="'Rp ' + formatTotal(totalDebit)"></div>
-                        </div>
-                        <div class="px-6 py-3 text-right">
-                            <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Kredit</div>
-                            <div class="font-black text-rose-500 text-base tabular-nums"
-                                x-text="'Rp ' + formatTotal(totalKredit)"></div>
-                        </div>
-                    </div>
-
-                    {{-- Baris selisih — hanya muncul jika tidak balance --}}
-                    <div x-show="!isBalanced"
-                        class="px-6 py-2 border-t border-dashed border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 flex items-center justify-end gap-2">
-                        <svg class="w-3 h-3 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span class="text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">Selisih</span>
-                        <span class="text-[11px] font-black text-amber-700 dark:text-amber-300 tabular-nums"
-                            x-text="'Rp ' + formatTotal(Math.abs(totalDebit - totalKredit))">
-                        </span>
-                    </div>
-                </div>
+                
 
                 {{-- Tombol Posting --}}
                 <div class="p-4 bg-amber-50 dark:bg-amber-900/10 border-t border-amber-100 dark:border-gray-800 flex justify-end">
