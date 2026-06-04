@@ -65,7 +65,7 @@ class JurnalPembelianService
                     'map'                => 'd',
                     'keterangan'         => "{$detail->nama_barang} | Nota: {$nota}",
                     'no_dokumen'         => $nota,
-                    'total_nilai'        => $detail->subtotal,
+                    'total_nilai'        => $detail->subtotal, // INI BENAR (JIKA BERUBAH JADI HARGA, CEK OBSERVER)
                     'status'             => JurnalPembantuHeader::STATUS_DRAFT,
                     'dibuat_oleh'        => $userId,
                 ]);
@@ -77,8 +77,9 @@ class JurnalPembelianService
                     'nama_pihak'   => $supplier,
                     'nama_barang'  => $detail->nama_barang,
                     'no_dokumen'   => $nota,
-                    'keterangan'   => "Masuk Gudang {$detail->qty} {$detail->satuan}",
+                    'keterangan'   => "Masuk Gudang " . (float)$detail->qty . " {$detail->satuan}",
                     'banyak'       => $detail->qty,
+                    'm3'           => $detail->kubikasi ?? 0, // <--- TAMBAHAN M3
                     'harga'        => $detail->harga_beli,
                     'jumlah'       => $detail->subtotal,
                     'status'       => true,
@@ -147,32 +148,26 @@ class JurnalPembelianService
 
             // ─── LOGIKA UTAMA: EVALUASI BERDASARKAN METODE ───
             if ($methodString === PembelianMetodePembayaran::METODE_TUNAI) {
-                // 1. JIKA TUNAI: Ambil nilai Grand Total penuh, sisa hutang = 0
                 $totalUangMuka = $grandTotal;
                 $sisaHutang    = 0;
             } else {
-                // 2. JIKA TRANSFER, CICILAN, ATAU DP: Ambil nominal asli yang di-input
                 $nominalTerbayar = (float) $pembelian->metodePembayarans->sum('amount');
-
                 $totalUangMuka = $nominalTerbayar;
                 $sisaHutang    = max(0, $grandTotal - $nominalTerbayar);
             }
 
             // ─── KREDIT 1: KAS / BANK MENCATAT PENGELUARAN ───
             if ($totalUangMuka > 0) {
-                // Tentukan kode akun penampung
                 $metodeUtama = ($methodString === PembelianMetodePembayaran::METODE_TRANSFER)
                     ? self::KODE_BANK_INTAN
                     : self::KODE_KAS_DEFAULT;
 
                 $namaKas = $this->getNamaAkun($metodeUtama);
-
                 if (empty($namaKas)) {
                     $namaKas = ($metodeUtama === self::KODE_BANK_INTAN) ? 'bank PT INTAN' : 'kas Tunai Mut';
                 }
 
                 $keteranganHeaderKas = "Pembayaran via " . strtoupper($namaKas) . " | Nota: {$nota} | {$supplier}";
-
                 if (!empty($pembayaranDetail?->reference_number)) {
                     $keteranganHeaderKas .= " [Ref: #{$pembayaranDetail->reference_number}]";
                 }
@@ -196,7 +191,6 @@ class JurnalPembelianService
                     'dibuat_oleh'        => $userId,
                 ]);
 
-                // Tentukan keterangan teks label item yang sesuai realita
                 $labelKeteranganItem = "Pelunasan Transaksi secara " . strtoupper($methodString);
                 if ($methodString === PembelianMetodePembayaran::METODE_LAINNYA) {
                     $labelKeteranganItem = "Pembayaran Uang Muka (Down Payment)";
@@ -211,6 +205,7 @@ class JurnalPembelianService
                     'nama_barang'  => null,
                     'keterangan'   => $labelKeteranganItem,
                     'banyak'       => 1,
+                    'm3'           => 0, // <--- TAMBAHAN M3
                     'harga'        => $totalUangMuka,
                     'jumlah'       => $totalUangMuka,
                     'status'       => true,
@@ -268,6 +263,7 @@ class JurnalPembelianService
             'no_dokumen'   => $nota,
             'keterangan'   => $ket,
             'banyak'       => 1,
+            'm3'           => 0, // <--- TAMBAHAN M3
             'harga'        => $nominal,
             'jumlah'       => $nominal,
             'status'       => true,

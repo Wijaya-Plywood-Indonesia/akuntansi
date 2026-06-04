@@ -32,7 +32,7 @@ class JurnalPembantuItem extends Model
     ];
 
     protected $casts = [
-        'banyak' => 'decimal:2',
+        'banyak' => 'float',
         'm3' => 'decimal:4',
         'harga' => 'decimal:6',
         'jumlah' => 'decimal:4',
