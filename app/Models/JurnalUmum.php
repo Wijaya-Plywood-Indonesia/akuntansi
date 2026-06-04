@@ -22,7 +22,6 @@ class JurnalUmum extends Model
         'keterangan',
         'hit_kbk',
         'no-dokumen',
-        'no_dokumen',
         'map'
     ];
 
