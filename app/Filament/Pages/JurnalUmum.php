@@ -383,7 +383,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
         $this->harga   = '';
-        $this->banyak  = '';
         $this->map     = 'd';
         $this->hit_kbk = '';
         $this->m3      = '';

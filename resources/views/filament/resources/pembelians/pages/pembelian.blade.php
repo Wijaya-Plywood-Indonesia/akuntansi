@@ -1,5 +1,5 @@
 <x-filament-panels::page>
-    @vite(['resources/css/app.css'])
+    <!-- @vite(['resources/css/app.css']) -->
 
     <div class="min-h-full pb-10 transition-colors duration-300">
 
@@ -101,7 +101,7 @@
                 }
             }">
 
-            <form wire:submit.prevent="simpan" 
+            <form wire:submit.prevent="simpan"
                 @input.debounce.500ms="saveToLocalStorage()"
                 @change="saveToLocalStorage()"
                 class="pos-pro-dashboard flex flex-col gap-4 lg:gap-6">
@@ -114,7 +114,7 @@
                             <div class="flex flex-col">
                                 <input type="text" x-model="nomorNota" required class="px-2 py-1 bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded text-sm font-black text-primary-600 font-mono focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 w-36 transition-all" />
                                 @error('nomor_nota')
-                                    <span class="text-[10px] text-red-500 font-bold mt-0.5">{{ $message }}</span>
+                                <span class="text-[10px] text-red-500 font-bold mt-0.5">{{ $message }}</span>
                                 @enderror
                             </div>
                         </div>
@@ -124,7 +124,7 @@
                             <div class="flex flex-col">
                                 <input type="date" x-model="tanggal" required class="px-2 py-1 bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded text-xs font-medium text-gray-600 dark:text-gray-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
                                 @error('tanggal')
-                                    <span class="text-[10px] text-red-500 font-bold mt-0.5">{{ $message }}</span>
+                                <span class="text-[10px] text-red-500 font-bold mt-0.5">{{ $message }}</span>
                                 @enderror
                             </div>
                         </div>
@@ -231,7 +231,7 @@
                                         </div>
                                     </div>
                                     @error('supplier_id')
-                                        <span class="text-xs text-red-500 font-bold mt-1 block">{{ $message }}</span>
+                                    <span class="text-xs text-red-500 font-bold mt-1 block">{{ $message }}</span>
                                     @enderror
                                 </div>
 
@@ -244,7 +244,7 @@
                                             class="w-full bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-xs focus:ring-2 focus:ring-primary-500/20 dark:text-white" />
                                     </div>
                                     @error('supplier_name')
-                                        <span class="text-xs text-red-500 font-bold mt-1 block">{{ $message }}</span>
+                                    <span class="text-xs text-red-500 font-bold mt-1 block">{{ $message }}</span>
                                     @enderror
                                 </div>
 
@@ -352,7 +352,7 @@
 
                                                 <td class="px-2 py-2 align-middle">
                                                     <div class="flex items-center justify-center bg-gray-100/50 dark:bg-gray-800 rounded-md p-0.5 border border-gray-200 dark:border-gray-700"
-                                                         x-data="{
+                                                        x-data="{
                                                              get qty() {
                                                                 return items[{{ $index }}].qty;
                                                              },
@@ -373,29 +373,29 @@
                                                                 return parts[1] !== undefined ? integerPart + ',' + parts[1] : integerPart;
                                                              }
                                                          }">
-                                                         <button @click="
+                                                        <button @click="
                                                                  let q = Math.max(0.01, parseFloat(qty || 1) - 1);
                                                                  qty = q;
                                                              " type="button" class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-primary-600">
-                                                             <x-heroicon-o-minus class="w-3 h-3" />
-                                                         </button>
-                                                         <input type="text"
-                                                             :value="format(qty)"
-                                                             @input="
+                                                            <x-heroicon-o-minus class="w-3 h-3" />
+                                                        </button>
+                                                        <input type="text"
+                                                            :value="format(qty)"
+                                                            @input="
                                                                  let inputVal = $event.target.value;
                                                                  let clean = inputVal.replace(/[^0-9,]/g, '');
                                                                  let raw = clean.replace(',', '.');
                                                                  qty = raw ? parseFloat(raw) : 0;
                                                                  $el.value = format(clean);
                                                              "
-                                                             class="w-28 text-center border-none bg-transparent p-0 text-xs font-bold focus:ring-0 dark:text-white" />
-                                                         <button @click="
+                                                            class="w-28 text-center border-none bg-transparent p-0 text-xs font-bold focus:ring-0 dark:text-white" />
+                                                        <button @click="
                                                                  let q = parseFloat(qty || 1) + 1;
                                                                  qty = q;
                                                              " type="button" class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-primary-600">
-                                                             <x-heroicon-o-plus class="w-3 h-3" />
-                                                         </button>
-                                                     </div>
+                                                            <x-heroicon-o-plus class="w-3 h-3" />
+                                                        </button>
+                                                    </div>
                                                 </td>
 
                                                 <td class="px-2 py-2 text-center align-middle">
@@ -446,7 +446,7 @@
                                 {{-- Mobile Cards --}}
                                 <div class="md:hidden divide-y divide-gray-50 dark:divide-gray-800">
                                     @foreach($items as $index => $item)
-                                     <div class="p-4 space-y-3" x-data="{
+                                    <div class="p-4 space-y-3" x-data="{
                                              get qty() {
                                                 return items[{{ $index }}].qty;
                                              },
@@ -481,48 +481,48 @@
                                                 return cleaned.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                                              }
                                          }">
-                                         <div class="flex justify-between items-start gap-3">
-                                             <div class="flex-grow">
-                                                 <div class="font-bold text-sm text-gray-900 dark:text-white leading-tight">{{ $item['nama_barang'] }}</div>
-                                                 <div class="text-[10px] text-gray-400 font-bold uppercase mt-1">{{ $item['satuan'] }}</div>
-                                             </div>
-                                             <button wire:click="removeItem({{ $index }})" type="button" class="text-gray-300 hover:text-red-500 p-1"><x-heroicon-o-trash class="w-4 h-4" /></button>
-                                         </div>
-                                         <div class="grid grid-cols-2 gap-4">
-                                             <div class="space-y-1">
-                                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Qty</label>
-                                                 <div class="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
-                                                     <button @click="qty = Math.max(0.01, parseFloat(qty || 1) - 1)" type="button" class="w-8 h-8 flex items-center justify-center text-gray-400"><x-heroicon-o-minus class="w-3.5 h-3.5" /></button>
-                                                     <input type="text"
-                                                         :value="formatQty(qty)"
-                                                         @input="
+                                        <div class="flex justify-between items-start gap-3">
+                                            <div class="flex-grow">
+                                                <div class="font-bold text-sm text-gray-900 dark:text-white leading-tight">{{ $item['nama_barang'] }}</div>
+                                                <div class="text-[10px] text-gray-400 font-bold uppercase mt-1">{{ $item['satuan'] }}</div>
+                                            </div>
+                                            <button wire:click="removeItem({{ $index }})" type="button" class="text-gray-300 hover:text-red-500 p-1"><x-heroicon-o-trash class="w-4 h-4" /></button>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div class="space-y-1">
+                                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Qty</label>
+                                                <div class="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+                                                    <button @click="qty = Math.max(0.01, parseFloat(qty || 1) - 1)" type="button" class="w-8 h-8 flex items-center justify-center text-gray-400"><x-heroicon-o-minus class="w-3.5 h-3.5" /></button>
+                                                    <input type="text"
+                                                        :value="formatQty(qty)"
+                                                        @input="
                                                              let inputVal = $event.target.value;
                                                              let clean = inputVal.replace(/[^0-9,]/g, '');
                                                              let raw = clean.replace(',', '.');
                                                              qty = raw ? parseFloat(raw) : 0;
                                                              $el.value = formatQty(clean);
                                                          "
-                                                         class="w-full text-center border-none bg-transparent p-0 text-xs font-black focus:ring-0 dark:text-white" />
-                                                     <button @click="qty = parseFloat(qty || 1) + 1" type="button" class="w-8 h-8 flex items-center justify-center text-gray-400"><x-heroicon-o-plus class="w-3.5 h-3.5" /></button>
-                                                 </div>
-                                             </div>
-                                             <div class="space-y-1">
-                                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Harga Beli</label>
-                                                 <input type="text"
-                                                     :value="formatHarga(harga)"
-                                                     @input="
+                                                        class="w-full text-center border-none bg-transparent p-0 text-xs font-black focus:ring-0 dark:text-white" />
+                                                    <button @click="qty = parseFloat(qty || 1) + 1" type="button" class="w-8 h-8 flex items-center justify-center text-gray-400"><x-heroicon-o-plus class="w-3.5 h-3.5" /></button>
+                                                </div>
+                                            </div>
+                                            <div class="space-y-1">
+                                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Harga Beli</label>
+                                                <input type="text"
+                                                    :value="formatHarga(harga)"
+                                                    @input="
                                                          let raw = $event.target.value.replace(/\D/g, '');
                                                          harga = raw ? parseInt(raw) : 0;
                                                          $el.value = formatHarga(harga);
                                                      "
-                                                     class="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-xl py-2 px-3 text-sm font-black text-right focus:ring-2 focus:ring-primary-500/10 dark:text-white transition-all outline-none" />
-                                             </div>
-                                             <div class="space-y-1 text-right col-span-2 bg-gray-50 dark:bg-gray-800/30 p-2.5 rounded-xl">
-                                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</label>
-                                                 <div class="text-sm font-black text-primary-600 dark:text-primary-400" x-text="'Rp ' + fmt(subtotal)"></div>
-                                             </div>
-                                         </div>
-                                     </div>
+                                                    class="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-xl py-2 px-3 text-sm font-black text-right focus:ring-2 focus:ring-primary-500/10 dark:text-white transition-all outline-none" />
+                                            </div>
+                                            <div class="space-y-1 text-right col-span-2 bg-gray-50 dark:bg-gray-800/30 p-2.5 rounded-xl">
+                                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</label>
+                                                <div class="text-sm font-black text-primary-600 dark:text-primary-400" x-text="'Rp ' + fmt(subtotal)"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     @endforeach
                                 </div>
                             </div>
@@ -597,7 +597,7 @@
 
                                     {{-- Ongkir --}}
                                     <div class="flex justify-between items-center"
-                                         x-data="{
+                                        x-data="{
                                              ongkirInput: format(ongkir),
                                              init() {
                                                  this.$watch('ongkir', v => {
@@ -621,7 +621,7 @@
 
                                     {{-- Biaya Lain --}}
                                     <div class="flex justify-between items-center"
-                                         x-data="{
+                                        x-data="{
                                              biayaLainInput: format(biayaLain),
                                              init() {
                                                  this.$watch('biayaLain', v => {
@@ -679,7 +679,7 @@
 
                                     {{-- Nominal Bayar & Kurang/Kembali Card (Gaya POS) --}}
                                     <div class="space-y-1.5 bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800"
-                                         x-data="{
+                                        x-data="{
                                              bayarInput: format(bayar),
                                              init() {
                                                  this.$watch('bayar', v => {
@@ -707,7 +707,7 @@
                                         </div>
 
                                         <div class="pt-0.5 flex justify-between items-center" x-show="grandTotal > 0">
-                                            <span class="text-[9px] font-bold text-gray-400 uppercase ml-1" 
+                                            <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
                                                 x-text="sisaBayar > 0 ? 'Kurang (Hutang)' : (sisaBayar < 0 ? 'Kembali' : 'Pas')"></span>
                                             <span class="text-base lg:text-lg font-bold"
                                                 :class="sisaBayar > 0 ? 'text-red-500' : (sisaBayar < 0 ? 'text-green-500' : 'text-primary-600')"
@@ -752,7 +752,9 @@
                 try {
                     const state = JSON.parse(savedState);
                     if (state && state.items && Object.keys(state.items).length > 0) {
-                        @this.dispatch('restoreState', { state: state });
+                        @this.dispatch('restoreState', {
+                            state: state
+                        });
                     }
                 } catch (e) {
                     console.error('Failed to parse Pembelian state:', e);
@@ -760,7 +762,10 @@
             }
 
             // 2. Automatically save the full state to localStorage on every Livewire update/render using dynamic properties
-            Livewire.hook('commit', ({ component, succeed }) => {
+            Livewire.hook('commit', ({
+                component,
+                succeed
+            }) => {
                 succeed(() => {
                     if (component.id === @this.id) {
                         const state = {
