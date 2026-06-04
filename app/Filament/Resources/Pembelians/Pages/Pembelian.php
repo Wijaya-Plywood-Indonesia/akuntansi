@@ -24,9 +24,6 @@ class Pembelian extends Page
 
     protected static ?string $title = 'Tambah Pembelian';
 
-    // =====================================
-    // 1. STATE: HEADER PEMBELIAN
-    // =====================================
     public $nomor_nota;
     public $created_by;
     public $created_by_name;
@@ -40,66 +37,32 @@ class Pembelian extends Page
 
     public $catatan;
     public $foto_nota = [];
-
-    // =====================================
-    // 2. STATE: DETAIL BARANG (KERANJANG)
-    // =====================================
     public $items = [];
 
-    // =====================================
-    // 3. STATE: SEARCH BAR GAYA POS
-    // =====================================
     public string $search        = '';
     public array  $searchResults = [];
     public bool   $showDropdown  = false;
 
-    // =====================================
-    // 4. STATE: NOMINAL GLOBAL
-    // =====================================
     public $sub_total    = 0;
     public $total_diskon = null;
     public $total_ppn    = null;
     public $ongkir       = null;
     public $biaya_lain   = null;
 
-    // =====================================
-    // 5. STATE: PEMBAYARAN
-    // =====================================
     public $payment_method    = PembelianMetodePembayaran::METODE_TUNAI;
     public $payment_amount    = null;
     public $tanggal_bayar;
     public $payment_reference = '';
     public $payment_catatan   = '';
 
-    // =====================================
-    // MOUNT
-    // =====================================
     public function mount(): void
     {
         $this->created_by      = auth()->id();
         $this->created_by_name = auth()->user()->name ?? 'User';
         $this->tanggal         = now()->format('Y-m-d');
         $this->tanggal_bayar   = now()->format('Y-m-d');
-
-        // Tidak perlu addItem() — tabel mulai kosong,
-        // barang masuk lewat search bar di atas
     }
 
-    // =====================================
-    // HANDLER: SEARCH BAR (GAYA POS)
-    // =====================================
-
-    /**
-     * Dipanggil otomatis Livewire setiap $search berubah.
-     *
-     * Logika:
-     *   - Kosong / kurang dari 1 karakter → tutup dropdown
-     *   - Sebaliknya → query DB dengan LIKE, limit 10 hasil
-     *
-     * Kenapa limit(10)?
-     *   Supaya dropdown tidak jadi scroll panjang yang membingungkan.
-     *   Kasir dilatih untuk mengetik lebih spesifik kalau tidak ketemu.
-     */
     public function updatedSearch(): void
     {
         $keyword = trim($this->search);
@@ -130,15 +93,13 @@ class Pembelian extends Page
         $this->showDropdown = !empty($this->searchResults);
     }
 
-    /** Buka dropdown saat input difokus (jika sudah ada keyword) */
     public function openDropdown(): void
     {
         $this->showDropdown = true;
 
-        // Jika search bar kosong, kita muat daftar barang default (misal 10 barang teratas)
         if (empty(trim($this->search))) {
             $this->searchResults = Barang::with('satuan')
-                ->orderBy('nama_barang', 'asc') // atau berdasarkan yang paling sering dibeli
+                ->orderBy('nama_barang', 'asc')
                 ->limit(10)
                 ->get()
                 ->map(fn($b) => [
@@ -154,23 +115,12 @@ class Pembelian extends Page
         }
     }
 
-    /** Tutup dropdown — dipanggil dari @click.outside di Blade */
     public function closeDropdown(): void
     {
         $this->showDropdown  = false;
         $this->searchResults = [];
     }
 
-    /**
-     * Dipanggil saat user klik salah satu hasil pencarian.
-     *
-     * Aturan:
-     *   1. Kalau barang sudah ada di keranjang → tambah qty (tidak duplikat baris)
-     *   2. Kalau belum ada → push baris baru ke $items
-     *   3. Setelah selesai → bersihkan search + tutup dropdown
-     *
-     * @param int $barangId  ID dari tabel barang
-     */
     public function selectBarang(int $barangId): void
     {
         $barang = Barang::with('satuan')->find($barangId);
@@ -182,16 +132,19 @@ class Pembelian extends Page
 
         $harga = floatval($barang->harga_beli ?? 0);
 
-        // ── Cek apakah barang sudah ada di keranjang ──
         foreach ($this->items as $index => $item) {
             if ((int) ($item['barang_id'] ?? 0) === $barangId) {
-
                 $qty        = floatval($this->items[$index]['qty'] ?? 0) + 1;
+                $kubikasi   = floatval($this->items[$index]['kubikasi'] ?? 0);
                 $hargaItem  = floatval($this->items[$index]['harga_beli'] ?? 0);
                 $diskon     = floatval($this->items[$index]['diskon'] ?? 0);
+                $hitungDari = $this->items[$index]['hitung_dari'] ?? 'qty';
 
                 $subtotalLama = floatval($this->items[$index]['subtotal'] ?? 0);
-                $subtotalBaru = max(0.0, ($qty * $hargaItem) - $diskon);
+                
+                // Menentukan pengali (Qty atau M3)
+                $pengali = ($hitungDari === 'm3') ? $kubikasi : $qty;
+                $subtotalBaru = max(0.0, ($pengali * $hargaItem) - $diskon);
 
                 $this->items[$index]['qty']      = $qty;
                 $this->items[$index]['subtotal'] = $subtotalBaru;
@@ -203,8 +156,7 @@ class Pembelian extends Page
             }
         }
 
-        // ── Barang belum ada → tambah baris baru ──
-        $subtotal = $harga; // qty awal = 1, diskon = 0
+        $subtotal = $harga;
 
         $this->items[] = [
             'barang_id'   => $barang->id,
@@ -212,6 +164,8 @@ class Pembelian extends Page
             'nama_barang' => $barang->nama_barang,
             'satuan'      => $satuan,
             'qty'         => 1,
+            'kubikasi'    => 0,
+            'hitung_dari' => 'qty', // Default hitung berdasar Qty
             'harga_beli'  => $harga,
             'diskon'      => 0,
             'subtotal'    => $subtotal,
@@ -223,9 +177,6 @@ class Pembelian extends Page
         $this->showDropdown  = false;
     }
 
-    // =====================================
-    // HANDLER: SUPPLIER
-    // =====================================
     public function updatedSupplierId($value): void
     {
         $supplier = Supplier::find($value);
@@ -238,14 +189,6 @@ class Pembelian extends Page
         }
     }
 
-    // =====================================
-    // HANDLER: KERANJANG (ITEMS)
-    // =====================================
-
-    /**
-     * Masih dipertahankan untuk fallback tombol "Tambah Baris Manual"
-     * (opsional, bisa dihapus kalau tidak dipakai)
-     */
     public function addItem(): void
     {
         $this->items[] = [
@@ -254,6 +197,8 @@ class Pembelian extends Page
             'nama_barang' => '',
             'satuan'      => '',
             'qty'         => 1,
+            'kubikasi'    => 0,
+            'hitung_dari' => 'qty',
             'harga_beli'  => null,
             'diskon'      => null,
             'subtotal'    => 0,
@@ -267,7 +212,6 @@ class Pembelian extends Page
 
         $this->items[$index]['qty'] = $qty;
         $this->items[$index]['harga_beli'] = $harga;
-        $this->items[$index]['subtotal'] = max(0.0, $qty * $harga);
         $this->recalculateSubTotal();
     }
 
@@ -281,13 +225,6 @@ class Pembelian extends Page
         $this->items = array_values($this->items);
     }
 
-    /**
-     * Dipanggil otomatis Livewire saat data dalam $items berubah.
-     *
-     * Bayangkan seperti "watcher" — setiap kali user mengedit qty,
-     * harga, atau diskon di baris tertentu, method ini dipanggil
-     * dengan parameter $key = "0.qty" / "1.harga_beli", dst.
-     */
     public function updatedItems($value, $key): void
     {
         $parts = explode('.', $key);
@@ -295,7 +232,6 @@ class Pembelian extends Page
 
         [$index, $field] = [$parts[0], $parts[1]];
 
-        // Jika barang dipilih manual (baris kosong), isi data otomatis
         if ($field === 'barang_id' && !empty($value)) {
             $barang = Barang::with('satuan')->find($value);
             if ($barang) {
@@ -308,15 +244,7 @@ class Pembelian extends Page
             }
         }
 
-        $qty    = $this->parseNumber($this->items[$index]['qty']        ?? 0);
-        $harga  = $this->parseNumber($this->items[$index]['harga_beli'] ?? 0);
-        $diskon = $this->parseNumber($this->items[$index]['diskon']      ?? 0);
-
-        $subtotalLama = floatval($this->items[$index]['subtotal'] ?? 0);
-        $subtotalBaru = max(0.0, ($qty * $harga) - $diskon);
-
-        $this->items[$index]['subtotal'] = $subtotalBaru;
-        $this->sub_total = max(0.0, $this->sub_total - $subtotalLama + $subtotalBaru);
+        $this->recalculateSubTotal();
     }
 
     public function recalculateSubTotal(): void
@@ -324,14 +252,16 @@ class Pembelian extends Page
         $total = 0.0;
 
         foreach ($this->items as $index => $item) {
-            // Hitung ulang dari qty & harga — jangan percaya nilai subtotal yang lama
-            // karena bisa stale kalau Alpine belum sempat sync ke server
-            $qty      = $this->parseNumber($item['qty'] ?? 0);
-            $harga    = $this->parseNumber($item['harga_beli'] ?? 0);
-            $diskon   = $this->parseNumber($item['diskon'] ?? 0);
-            $subtotal = max(0.0, ($qty * $harga) - $diskon);
+            $qty         = $this->parseNumber($item['qty'] ?? 0);
+            $kubikasi    = $this->parseNumber($item['kubikasi'] ?? 0);
+            $harga       = $this->parseNumber($item['harga_beli'] ?? 0);
+            $diskon      = $this->parseNumber($item['diskon'] ?? 0);
+            $hitung_dari = $item['hitung_dari'] ?? 'qty';
 
-            // Update subtotal per baris juga, biar konsisten
+            // Menentukan pengali (Qty atau M3)
+            $pengali = ($hitung_dari === 'm3') ? $kubikasi : $qty;
+            $subtotal = max(0.0, ($pengali * $harga) - $diskon);
+
             $this->items[$index]['subtotal'] = $subtotal;
             $total += $subtotal;
         }
@@ -339,9 +269,6 @@ class Pembelian extends Page
         $this->sub_total = $total;
     }
 
-    // =====================================
-    // GRAND TOTAL
-    // =====================================
     #[Computed]
     public function grandTotal(): float
     {
@@ -365,9 +292,6 @@ class Pembelian extends Page
         $this->payment_amount = $grand > 0 ? $grand : null;
     }
 
-    // =====================================
-    // HELPER: PARSE NUMBER
-    // =====================================
     private function parseNumber(mixed $value): float
     {
         if (is_null($value) || $value === '') return 0.0;
@@ -402,28 +326,22 @@ class Pembelian extends Page
         return (float) ($str ?: 0);
     }
 
-    // =====================================
-    // SIMPAN TRANSAKSI
-    // =====================================
     public function simpan(): void
     {
         $this->recalculateSubTotal();
 
-        $paths = [];
-        foreach ($this->foto_nota as $foto) {
-            $paths[] = $foto->store('pembelian', 'public');
-        }
-
         try {
             $this->validate([
-                'nomor_nota'         => 'required',
-                'tanggal'            => 'required|date',
-                'supplier_id'        => 'required_unless:is_new_supplier,true',
-                'supplier_name'      => 'required_if:is_new_supplier,true',
-                'items'              => 'required|array|min:1',
-                'items.*.barang_id'  => 'required',
-                'items.*.qty'        => 'required|numeric|min:0.01',
-                'items.*.harga_beli' => 'required|numeric|min:0',
+                'nomor_nota'           => 'required',
+                'tanggal'              => 'required|date',
+                'supplier_id'          => 'required_unless:is_new_supplier,true',
+                'supplier_name'        => 'required_if:is_new_supplier,true',
+                'items'                => 'required|array|min:1',
+                'items.*.barang_id'    => 'required',
+                'items.*.qty'          => 'required|numeric|min:0.01',
+                'items.*.kubikasi'     => 'nullable|numeric|min:0', // Validasi kubikasi
+                'items.*.hitung_dari'  => 'required|in:qty,m3',     // Validasi pilihan dropdown
+                'items.*.harga_beli'   => 'required|numeric|min:0',
             ], [
                 'nomor_nota.required'         => 'Nomor nota/invoice wajib diisi.',
                 'tanggal.required'            => 'Tanggal pembelian wajib diisi.',
@@ -448,12 +366,11 @@ class Pembelian extends Page
         $grand   = $this->grandTotal();
         $dibayar = $this->parseNumber($this->payment_amount);
 
-        // Validasi khusus: Metode Tunai & Transfer wajib lunas (>= grand total)
         if (($this->payment_method === PembelianMetodePembayaran::METODE_TUNAI || $this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER) && $grand > 0) {
             if ($dibayar < $grand) {
                 Notification::make()
                     ->title('Pembayaran Kurang')
-                    ->body('Untuk metode pembayaran ' . ($this->payment_method === PembelianMetodePembayaran::METODE_TUNAI ? 'Tunai' : 'Transfer Bank') . ', nominal pembayaran harus lunas (lebih dari atau sama dengan total Rp ' . number_format($grand, 0, ',', '.') . '). Silakan gunakan metode Cicilan atau Down Payment (DP) jika ingin membayar sebagian.')
+                    ->body('Untuk metode pembayaran ' . ($this->payment_method === PembelianMetodePembayaran::METODE_TUNAI ? 'Tunai' : 'Transfer Bank') . ', nominal pembayaran harus lunas. Silakan gunakan metode Cicilan atau Down Payment (DP) jika ingin membayar sebagian.')
                     ->danger()
                     ->send();
                 return;
@@ -477,9 +394,6 @@ class Pembelian extends Page
             foreach ($this->foto_nota as $foto) {
                 $paths[] = $foto->store('pembelian', 'public');
             }
-
-            $grand   = $this->grandTotal();
-            $dibayar = $this->parseNumber($this->payment_amount);
 
             $this->status = match (true) {
                 $grand > 0 && $dibayar >= $grand  => ModelsPembelian::STATUS_LUNAS,
@@ -509,6 +423,7 @@ class Pembelian extends Page
             $detailData = [];
             foreach ($this->items as $item) {
                 if (empty($item['barang_id'])) continue;
+                
                 $detailData[] = [
                     'pembelian_id' => $pembelian->id,
                     'barang_id'    => $item['barang_id'],
@@ -516,6 +431,8 @@ class Pembelian extends Page
                     'nama_barang'  => $item['nama_barang'],
                     'satuan'       => $item['satuan'],
                     'qty'          => $this->parseNumber($item['qty']),
+                    'kubikasi'     => $this->parseNumber($item['kubikasi']), // Insert kubikasi
+                    'hitung_dari'  => $item['hitung_dari'] ?? 'qty',         // Insert dasar perhitungan
                     'harga_beli'   => $this->parseNumber($item['harga_beli']),
                     'diskon'       => $this->parseNumber($item['diskon']),
                     'subtotal'     => $this->parseNumber($item['subtotal']),
