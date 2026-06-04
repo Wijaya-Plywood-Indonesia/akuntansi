@@ -8,22 +8,26 @@
             'nama' => $barang->nama_barang,
             'satuan' => $barang->satuan?->nama_satuan ?? 'pcs',
             'akun' => $barang->subAnakAkun?->kode_sub_anak_akun ?? '',
-            'qty' => $stok[$barang->id]->stok ?? 0.0
+            'qty' => $stok[$barang->id]->stok ?? 0.0,
+            'm3' => $stok[$barang->id]->m3 ?? 0.0
         ])),
         get filteredItems() {
             return this.items.filter(item => {
                 const matchesSearch = item.nama.toLowerCase().includes(this.search.toLowerCase()) || 
-                                      item.akun.toLowerCase().includes(this.search.toLowerCase());
+                                       item.akun.toLowerCase().includes(this.search.toLowerCase());
                 
                 const matchesStatus = this.filterStatus === 'all' || 
-                                      (this.filterStatus === 'available' && item.qty > 0) || 
-                                      (this.filterStatus === 'empty' && item.qty <= 0);
-                                      
+                                       (this.filterStatus === 'available' && (item.qty > 0 || item.m3 > 0)) || 
+                                       (this.filterStatus === 'empty' && item.qty <= 0 && item.m3 <= 0);
+                                       
                 return matchesSearch && matchesStatus;
             });
         },
         formatQty(val) {
-            return Number(val).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return Number(val).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 6 });
+        },
+        formatM3(val) {
+            return Number(val).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 6 });
         }
     }" class="space-y-4">
 
@@ -70,7 +74,7 @@
                     class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5"
                 >
                     Tersedia
-                    <span class="bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 rounded text-[9px] font-mono text-emerald-600 dark:text-emerald-400" x-text="items.filter(i => i.qty > 0).length"></span>
+                    <span class="bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 rounded text-[9px] font-mono text-emerald-600 dark:text-emerald-400" x-text="items.filter(i => i.qty > 0 || i.m3 > 0).length"></span>
                 </button>
                 <button 
                     @click="filterStatus = 'empty'"
@@ -78,7 +82,7 @@
                     class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5"
                 >
                     Habis
-                    <span class="bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded text-[9px] font-mono text-rose-600 dark:text-rose-400" x-text="items.filter(i => i.qty <= 0).length"></span>
+                    <span class="bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded text-[9px] font-mono text-rose-600 dark:text-rose-400" x-text="items.filter(i => i.qty <= 0 && i.m3 <= 0).length"></span>
                 </button>
             </div>
 
@@ -96,9 +100,15 @@
                     </div>
                     
                     {{-- Quantities and Units --}}
-                    <div class="text-right flex-shrink-0">
-                        <span class="font-mono font-bold text-xs" :class="item.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'" x-text="formatQty(item.qty)"></span>
-                        <span class="text-[9px] font-bold text-gray-400 dark:text-gray-500 block uppercase tracking-wider" x-text="item.satuan"></span>
+                    <div class="text-right flex-shrink-0 flex flex-col justify-center space-y-1">
+                        <div class="leading-none">
+                            <span class="font-mono font-bold text-xs" :class="item.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'" x-text="formatQty(item.qty)"></span>
+                            <span class="text-[9px] font-bold text-gray-400 dark:text-gray-500 block uppercase tracking-wider" x-text="item.satuan"></span>
+                        </div>
+                        <div class="leading-none pt-1 border-t border-gray-100 dark:border-gray-800/80">
+                            <span class="font-mono font-bold text-[11px]" :class="item.m3 > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600/80 dark:text-rose-400/80'" x-text="formatM3(item.m3)"></span>
+                            <span class="text-[8px] font-bold text-gray-400 dark:text-gray-500 block uppercase tracking-wider">m³</span>
+                        </div>
                     </div>
 
                 </div>

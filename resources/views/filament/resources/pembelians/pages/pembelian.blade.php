@@ -763,6 +763,8 @@
 
     <script>
         document.addEventListener('livewire:initialized', () => {
+            let isSavingOrSaved = false;
+
             const savedState = localStorage.getItem('pembelian_state');
             if (savedState) {
                 try {
@@ -782,6 +784,9 @@
                 succeed
             }) => {
                 succeed(() => {
+                    if (isSavingOrSaved) {
+                        return;
+                    }
                     if (component.id === @this.id) {
                         const state = {
                             items: component.$wire.items,
@@ -810,6 +815,7 @@
             });
 
             window.addEventListener('clearLocalStorage', () => {
+                isSavingOrSaved = true;
                 localStorage.removeItem('pembelian_state');
             });
         });
