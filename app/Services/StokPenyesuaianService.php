@@ -62,71 +62,31 @@ class StokPenyesuaianService
     }
 
     public function lunas(int $id_penjualan): void
-    {
-        DB::transaction(function () use ($id_penjualan) {
+{
+    DB::transaction(function () use ($id_penjualan) {
 
-            $tokoId = DB::table('penjualans')
-                ->where('id', $id_penjualan)
-                ->value('toko_id');
+        $details = DB::table('penjualan_details')
+            ->where('penjualan_id', $id_penjualan)
+            ->select(['barang_id', 'qty', 'nama_barang'])
+            ->get();
 
-            $details = DB::table('penjualan_details')
-                ->where('penjualan_id', $id_penjualan)
-                ->select(['barang_id', 'qty', 'nama_barang'])
-                ->get();
-            foreach ($details as $detail) {
-                $barang = \App\Models\Barang::find($detail->barang_id);
-                $stokBukuBesar = $barang ? $barang->stok_buku_besar : 0;
+        foreach ($details as $detail) {
+            $barang = \App\Models\Barang::find($detail->barang_id);
+            $stokBukuBesar = $barang ? $barang->stok_buku_besar : 0;
 
-                if ($stokBukuBesar - (float) $detail->qty < 0) {
-                    throw ValidationException::withMessages([
-                        'stok' => "Stok {$detail->nama_barang} tidak mencukupi"
-                    ]);
-                }
-
-                $stok = StokBarangToko::where('barang_id', $detail->barang_id)
-                    ->where('toko_id', $tokoId)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$stok) {
-                    $stok = StokBarangToko::create([
-                        'barang_id' => $detail->barang_id,
-                        'toko_id' => $tokoId,
-                        'stok' => 0,
-                    ]);
-                }
-
-                $stokSebelum = (float) $stok->stok;
-                $stokSesudah = $stokSebelum - (float) $detail->qty;
-
-                $stok->update([
-                    'stok' => $stokSesudah,
+            if ($stokBukuBesar - (float) $detail->qty < 0) {
+                throw ValidationException::withMessages([
+                    'stok' => "Stok {$detail->nama_barang} tidak mencukupi"
                 ]);
-
-                StokLogService::buatLog(
-                    barangId: $detail->barang_id,
-                    tokoId: $tokoId,
-                    tipe: 'penjualan',
-                    qty: -(float) $detail->qty,
-                    refType: "penjualans",
-                    refId: $id_penjualan,
-                    stokTerakhir: $stokSebelum,
-                    stokSesudah: $stokSesudah
-                );
-
-                Notification::make()
-                    ->title("Stok {$detail->nama_barang} berkurang")
-                    ->body("Sisa stok: $stokSesudah")
-                    ->success()
-                    ->send();
             }
+        }
 
-            Notification::make()
-                ->title('Transaksi Lunas')
-                ->success()
-                ->send();
-        });
-    }
+        Notification::make()
+            ->title('Transaksi Lunas')
+            ->success()
+            ->send();
+    });
+}
 
     public function batalLunas(int $id_penjualan): void
     {

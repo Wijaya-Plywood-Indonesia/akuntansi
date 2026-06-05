@@ -11,11 +11,9 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('pembelis', function (Blueprint $table) {
-            //
-            // 
-            // $table->string('nik', 15)
-            //     ->nullable()
-            //     ->after('nama');
+            $table->string('nik', 15)
+                ->nullable()
+                ->after('nama');
         });
     }
 
