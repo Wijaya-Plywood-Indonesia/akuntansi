@@ -9,7 +9,6 @@ use App\Models\Pembeli;
 use App\Models\Penjualan;
 use App\Models\DetailPenjualan;
 use App\Models\RekeningPerusahaan;
-use App\Models\StokBarangToko;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Illuminate\Support\Collection;
@@ -417,6 +416,15 @@ class PosPenjualan extends Page
     /* ================= SIMPAN ================= */
     public function simpanPenjualan(): void
     {
+
+    if (empty($this->no_nota)) {
+        Notification::make()
+            ->title('No Nota Kosong')
+            ->body('No nota tidak boleh kosong')
+            ->danger()
+            ->send();
+        return;
+    }
         if (empty($this->cart)) {
             Notification::make()->title('Keranjang Kosong')->danger()->send();
             return;
@@ -502,21 +510,6 @@ class PosPenjualan extends Page
                     if ($stokBukuBesar < $item['qty']) {
                         throw new \Exception("Stok {$item['nama_barang']} tidak mencukupi.");
                     }
-
-                    $stokToko = StokBarangToko::where('barang_id', $item['barang_id'])
-                        ->where('toko_id', $this->toko_id)
-                        ->lockForUpdate()
-                        ->first();
-
-                    if (!$stokToko) {
-                        $stokToko = StokBarangToko::create([
-                            'barang_id' => $item['barang_id'],
-                            'toko_id' => $this->toko_id,
-                            'stok' => 0,
-                        ]);
-                    }
-
-                    $stokToko->kurang($item['qty']);
 
                     DetailPenjualan::create([
                         'penjualan_id' => $penjualan->id,

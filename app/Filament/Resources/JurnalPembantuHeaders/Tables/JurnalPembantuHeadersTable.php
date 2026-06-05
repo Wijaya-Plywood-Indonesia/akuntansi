@@ -70,8 +70,8 @@ class JurnalPembantuHeadersTable
                     ->color(
                         fn($state) =>
                         strtolower($state) === 'd'
-                        ? 'info'
-                        : 'warning'
+                            ? 'info'
+                            : 'warning'
                     )
                     ->formatStateUsing(
                         fn($state) => strtoupper($state)
@@ -244,7 +244,7 @@ class JurnalPembantuHeadersTable
 
                                     ->with([
                                         'items' => fn($q) =>
-                                            $q->where('status', true)
+                                        $q->where('status', true)
                                     ])
 
                                     ->where('jurnal', $record->jurnal)
@@ -311,15 +311,15 @@ class JurnalPembantuHeadersTable
 
                                 if ($sudahAda) {
 
-                                    $maxJU = (int) 
-                                        (JurnalUmum::query()
-                                            ->lockForUpdate()
-                                            ->max('jurnal') ?? 0);
+                                    $maxJU = (int)
+                                    (JurnalUmum::query()
+                                        ->lockForUpdate()
+                                        ->max('jurnal') ?? 0);
 
-                                    $maxJP = (int) 
-                                        (JurnalPembantuHeader::query()
-                                            ->lockForUpdate()
-                                            ->max('jurnal') ?? 0);
+                                    $maxJP = (int)
+                                    (JurnalPembantuHeader::query()
+                                        ->lockForUpdate()
+                                        ->max('jurnal') ?? 0);
 
                                     $nomorFinal = max($maxJU, $maxJP) + 1;
 
@@ -340,11 +340,11 @@ class JurnalPembantuHeadersTable
 
                                     $items = $header->items;
 
-                                    $totalBanyak = (float) 
-                                        $items->sum('banyak');
+                                    $totalBanyak = (float)
+                                    $items->sum('banyak');
 
-                                    $totalJumlah = (float) 
-                                        $items->sum('jumlah');
+                                    $totalJumlah = (float)
+                                    $items->sum('jumlah');
 
                                     $banyak =
                                         $totalBanyak > 0
@@ -374,7 +374,7 @@ class JurnalPembantuHeadersTable
                                         'nama_akun' => $header->nama_akun,
 
                                         'nama' =>
-                                            $header->no_dokumen
+                                        $header->no_dokumen
                                             ?? (JurnalPembantuHeader::JENIS[$header->jenis_transaksi] ?? null),
 
                                         'keterangan' => $header->keterangan,
@@ -396,13 +396,13 @@ class JurnalPembantuHeadersTable
                                     $header->update([
 
                                         'status' =>
-                                            JurnalPembantuHeader::STATUS_DIPOSTING,
+                                        JurnalPembantuHeader::STATUS_DIPOSTING,
 
                                         'diposting_oleh' =>
-                                            Auth::id() ?? 1,
+                                        Auth::id() ?? 1,
 
                                         'tgl_posting' =>
-                                            now(),
+                                        now(),
 
                                     ]);
                                 }
@@ -485,7 +485,7 @@ class JurnalPembantuHeadersTable
 
                                     ->with([
                                         'items' => fn($q) =>
-                                            $q->where('status', true)
+                                        $q->where('status', true)
                                     ])
 
                                     ->where('jurnal', $record->jurnal)
@@ -524,15 +524,15 @@ class JurnalPembantuHeadersTable
                                 |--------------------------------------------------------------------------
                                 */
 
-                                $maxJurnal = (int) 
-                                    (JurnalPembantuHeader::query()
-                                        ->lockForUpdate()
-                                        ->max('jurnal') ?? 0);
+                                $maxJurnal = (int)
+                                (JurnalPembantuHeader::query()
+                                    ->lockForUpdate()
+                                    ->max('jurnal') ?? 0);
 
-                                $maxNoJP = (int) 
-                                    (JurnalPembantuHeader::query()
-                                        ->lockForUpdate()
-                                        ->max('no_jurnal_pembantu') ?? 0);
+                                $maxNoJP = (int)
+                                (JurnalPembantuHeader::query()
+                                    ->lockForUpdate()
+                                    ->max('no_jurnal_pembantu') ?? 0);
 
                                 $nomorJurnalBaru = $maxJurnal + 1;
 
@@ -552,48 +552,48 @@ class JurnalPembantuHeadersTable
                                             'no_jurnal_pembantu' => $noJPBaru++,
 
                                             'tgl_transaksi' =>
-                                                now()->format('Y-m-d'),
+                                            now()->format('Y-m-d'),
 
                                             'jenis_transaksi' =>
-                                                'balik',
+                                            'balik',
 
                                             'modul_asal' =>
-                                                $header->modul_asal,
+                                            $header->modul_asal,
 
                                             'jurnal' =>
-                                                $nomorJurnalBaru,
+                                            $nomorJurnalBaru,
 
                                             'no_akun' =>
-                                                $header->no_akun,
+                                            $header->no_akun,
 
                                             'nama_akun' =>
-                                                $header->nama_akun,
+                                            $header->nama_akun,
 
                                             'map' =>
-                                                strtolower($header->map) === 'd'
+                                            strtolower($header->map) === 'd'
                                                 ? 'k'
                                                 : 'd',
 
                                             'keterangan' =>
-                                                'BALIK: ' . $header->keterangan,
+                                            'BALIK: ' . $header->keterangan,
 
                                             'no_dokumen' =>
-                                                $header->no_dokumen,
+                                            $header->no_dokumen,
 
                                             'total_nilai' =>
-                                                $header->total_nilai,
+                                            $header->total_nilai,
 
                                             'status' =>
-                                                JurnalPembantuHeader::STATUS_DRAFT,
+                                            JurnalPembantuHeader::STATUS_DRAFT,
 
                                             'adalah_jurnal_balik' =>
-                                                true,
+                                            true,
 
                                             'membalik_id' =>
-                                                $header->id,
+                                            $header->id,
 
                                             'dibuat_oleh' =>
-                                                Auth::id() ?? 1,
+                                            Auth::id() ?? 1,
 
                                         ]);
 
@@ -608,40 +608,40 @@ class JurnalPembantuHeadersTable
                                         $headerBaru->items()->create([
 
                                             'urut' =>
-                                                $item->urut,
+                                            $item->urut,
 
                                             'jenis_pihak' =>
-                                                $item->jenis_pihak,
+                                            $item->jenis_pihak,
 
                                             'nama_pihak' =>
-                                                $item->nama_pihak,
+                                            $item->nama_pihak,
 
                                             'nama_barang' =>
-                                                $item->nama_barang,
+                                            $item->nama_barang,
 
                                             'no_dokumen' =>
-                                                $item->no_dokumen,
+                                            $item->no_dokumen,
 
                                             'no_referensi' =>
-                                                $item->no_referensi,
+                                            $item->no_referensi,
 
                                             'keterangan' =>
-                                                $item->keterangan,
+                                            $item->keterangan,
 
                                             'banyak' =>
-                                                $item->banyak,
+                                            $item->banyak,
 
                                             'harga' =>
-                                                $item->harga,
+                                            $item->harga,
 
                                             'jumlah' =>
-                                                $item->jumlah,
+                                            $item->jumlah,
 
                                             'status' =>
-                                                true,
+                                            true,
 
                                             'created_by' =>
-                                                Auth::id() ?? 1,
+                                            Auth::id() ?? 1,
 
                                         ]);
                                     }
@@ -655,7 +655,7 @@ class JurnalPembantuHeadersTable
                                     $header->update([
 
                                         'status' =>
-                                            JurnalPembantuHeader::STATUS_DIBALIK,
+                                        JurnalPembantuHeader::STATUS_DIBALIK,
 
                                     ]);
                                 }

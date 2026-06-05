@@ -1725,7 +1725,7 @@
                         </div>
                         @endif
                     </div>
-                    <div class="overflow-x-auto border-t-2 border-gray-200 dark:border-gray-700">
+                    {{-- <div class="overflow-x-auto border-t-2 border-gray-200 dark:border-gray-700">
                         <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1600px]">
                             <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                                 <tr>
@@ -1768,7 +1768,7 @@
                                 </tr>
                             </tfoot>
                         </table>
-                    </div>
+                    </div> --}}
                 </div>
             </div>
         </div>
