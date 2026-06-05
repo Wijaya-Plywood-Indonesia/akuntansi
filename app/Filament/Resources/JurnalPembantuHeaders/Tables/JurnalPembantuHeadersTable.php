@@ -353,7 +353,20 @@ class JurnalPembantuHeadersTable
                                     $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
 
                                     if (!$isCashOrPayment) {
-                                        $hitKbk = 'b';
+                                        $hitKbk = 'b'; // default fallback
+
+                                        if ($firstItem) {
+                                            $b = (float) $firstItem->banyak;
+                                            $m = (float) $firstItem->m3;
+                                            $h = (float) $firstItem->harga;
+                                            $j = (float) $firstItem->jumlah;
+
+                                            if ($m > 0 && abs($j - ($m * $h)) < 0.01) {
+                                                $hitKbk = 'm';
+                                            } elseif ($b > 0 && abs($j - ($b * $h)) < 0.01) {
+                                                $hitKbk = 'b';
+                                            }
+                                        }
                                     }
 
                                     if ($itemHitKbk === 'k') {
