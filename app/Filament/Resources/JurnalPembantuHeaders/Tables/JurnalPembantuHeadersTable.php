@@ -340,21 +340,42 @@ class JurnalPembantuHeadersTable
 
                                     $items = $header->items;
 
-                                    $totalBanyak = (float) 
-                                        $items->sum('banyak');
+                                    $totalBanyak = (float) $items->sum('banyak');
+                                    $totalM3 = (float) $items->sum('m3');
+                                    $totalJumlah = (float) $items->sum('jumlah');
 
-                                    $totalJumlah = (float) 
-                                        $items->sum('jumlah');
+                                    // Ambil hit_kbk dari item pertama yang aktif
+                                    $firstItem = $items->first();
+                                    $itemHitKbk = $firstItem?->hit_kbk;
 
-                                    $banyak =
-                                        $totalBanyak > 0
-                                        ? $totalBanyak
-                                        : 1;
+                                    $hitKbk = '';
+                                    $prefix = substr($header->no_akun, 0, 3);
+                                    $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
 
-                                    $harga =
-                                        $totalBanyak > 0
-                                        ? ($totalJumlah / $totalBanyak)
-                                        : (float) $header->total_nilai;
+                                    if (!$isCashOrPayment) {
+                                        $hitKbk = 'b';
+                                    }
+
+                                    if ($itemHitKbk === 'k') {
+                                        $hitKbk = 'm';
+                                    } elseif ($itemHitKbk === 'b') {
+                                        $hitKbk = 'b';
+                                    }
+
+                                    // Hitung banyak, m3, dan harga untuk Jurnal Umum
+                                    if ($hitKbk === 'm') {
+                                        $m3 = $totalM3;
+                                        $banyak = $totalBanyak > 0 ? $totalBanyak : null;
+                                        $harga = $totalM3 > 0 ? ($totalJumlah / $totalM3) : (float) $header->total_nilai;
+                                    } elseif ($hitKbk === 'b') {
+                                        $m3 = $totalM3 > 0 ? $totalM3 : null;
+                                        $banyak = $totalBanyak > 0 ? $totalBanyak : 1;
+                                        $harga = $totalBanyak > 0 ? ($totalJumlah / $totalBanyak) : (float) $header->total_nilai;
+                                    } else {
+                                        $m3 = $totalM3 > 0 ? $totalM3 : null;
+                                        $banyak = $totalBanyak > 0 ? $totalBanyak : null;
+                                        $harga = (float) $header->total_nilai;
+                                    }
 
                                     // Ekstrak nama pihak dari keterangan (format: "Keterangan | No.Nota: XXX | Nama Pihak")
                                     $parts = explode('|', $header->keterangan);
@@ -379,9 +400,13 @@ class JurnalPembantuHeadersTable
 
                                         'keterangan' => $header->keterangan,
 
-                                        'banyak' => round($banyak, 2),
+                                        'banyak' => $banyak !== null ? round($banyak, 4) : null,
+
+                                        'm3' => $m3 !== null ? round($m3, 4) : null,
 
                                         'harga' => round($harga, 2),
+
+                                        'hit_kbk' => $hitKbk,
 
                                         'map' => strtolower($header->map),
 

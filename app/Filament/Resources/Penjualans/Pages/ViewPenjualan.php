@@ -162,10 +162,39 @@ class ViewPenjualan extends ViewRecord
                                 foreach ($headersAsli as $header) {
                                     $itemsAktif = $header->items()->where('status', true)->get();
                                     $totalBanyak = $itemsAktif->sum('banyak');
+                                    $totalM3 = $itemsAktif->sum('m3');
                                     $totalJumlah = $itemsAktif->sum('jumlah');
 
-                                    $banyak = $totalBanyak > 0 ? $totalBanyak : 1;
-                                    $hargaRata = $totalBanyak > 0 ? $totalJumlah / $totalBanyak : $header->total_nilai;
+                                    $firstItem = $itemsAktif->first();
+                                    $itemHitKbk = $firstItem?->hit_kbk;
+
+                                    $hitKbk = '';
+                                    $prefix = substr($header->no_akun, 0, 3);
+                                    $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
+
+                                    if (!$isCashOrPayment) {
+                                        $hitKbk = 'b';
+                                    }
+
+                                    if ($itemHitKbk === 'k') {
+                                        $hitKbk = 'm';
+                                    } elseif ($itemHitKbk === 'b') {
+                                        $hitKbk = 'b';
+                                    }
+
+                                    if ($hitKbk === 'm') {
+                                        $m3 = $totalM3;
+                                        $banyak = $totalBanyak > 0 ? $totalBanyak : null;
+                                        $harga = $totalM3 > 0 ? ($totalJumlah / $totalM3) : (float) $header->total_nilai;
+                                    } elseif ($hitKbk === 'b') {
+                                        $m3 = $totalM3 > 0 ? $totalM3 : null;
+                                        $banyak = $totalBanyak > 0 ? $totalBanyak : 1;
+                                        $harga = $totalBanyak > 0 ? ($totalJumlah / $totalBanyak) : (float) $header->total_nilai;
+                                    } else {
+                                        $m3 = $totalM3 > 0 ? $totalM3 : null;
+                                        $banyak = $totalBanyak > 0 ? $totalBanyak : null;
+                                        $harga = (float) $header->total_nilai;
+                                    }
 
                                     \App\Models\JurnalUmum::create([
                                         'tgl'        => now()->format('Y-m-d'),
@@ -174,8 +203,10 @@ class ViewPenjualan extends ViewRecord
                                         'nama_akun'  => $header->nama_akun,
                                         'nama'       => $record->nama_customer ?? 'Pelanggan',
                                         'keterangan' => $header->keterangan . ' (Otomatis Terposting karena Pembatalan)',
-                                        'banyak'     => $banyak,
-                                        'harga'      => round($hargaRata, 2),
+                                        'banyak'     => $banyak !== null ? round($banyak, 4) : null,
+                                        'm3'         => $m3 !== null ? round($m3, 4) : null,
+                                        'harga'      => round($harga, 2),
+                                        'hit_kbk'    => $hitKbk,
                                         'map'        => strtolower($header->map),
                                     ]);
                                 }
