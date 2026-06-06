@@ -319,8 +319,11 @@ class ViewPenjualan extends ViewRecord
                 ->action(function (array $data, $record) {
                     try {
                         $data['total'] = $data['total_saat_ini'];
-                        $data['bayar'] = (float) ($data['bayar'] ?? 0) > 0 ? $data['bayar'] + $record->bayar : $record->bayar;
-                        $data['kembalian'] = (float) ($data['kembalian'] ?? 0) > 0 ? $data['kembalian'] + $record->kembalian : $record->kembalian;
+                        
+                        // FIX: Langsung timpa dengan nilai final dari inputan form
+                        // Jangan ditambah (+) dengan $record lama agar tidak dobel
+                        $data['bayar'] = (float) ($data['bayar'] ?? 0);
+                        $data['kembalian'] = (float) ($data['kembalian'] ?? 0);
 
                         SyncPenjualanService::syncPenjualan($record->id, $data);
 
