@@ -10,11 +10,13 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::table('pembelis', function (Blueprint $table) {
-            $table->string('nik', 15)
-                ->nullable()
-                ->after('nama');
-        });
+        if (!Schema::hasColumn('pembelis', 'nik')) {
+            Schema::table('pembelis', function (Blueprint $table) {
+                $table->string('nik', 15)
+                    ->nullable()
+                    ->after('nama');
+            });
+        }
     }
 
     /**
@@ -22,11 +24,12 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::table('pembelis', function (Blueprint $table) {
-            //
-            $table->dropColumn([
-                'nik',
-            ]);
-        });
+        if (Schema::hasColumn('pembelis', 'nik')) {
+            Schema::table('pembelis', function (Blueprint $table) {
+                $table->dropColumn([
+                    'nik',
+                ]);
+            });
+        }
     }
 };
