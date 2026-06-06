@@ -13,12 +13,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Service Jurnal Pembantu — Penjualan (v7)
- * Fix: HPP tidak dobel, Petian terhitung, dan Jurnal Peti (Peti Kosong vs Peti Isi) dinamis dari DB
+ * Service Jurnal Pembantu — Penjualan
  */
 class JurnalPenjualanTelurService
 {
-    const KODE_KAS           = '1121-00';
+    const KODE_KAS           = '110-01';
     const KG_PER_PETI        = 10;
     const HARGA_PETI_DEFAULT = 6000;
 
@@ -106,7 +105,7 @@ class JurnalPenjualanTelurService
                     $urut           = 1;
                     $list           = $itemTelur->values();
                     $lastIndex      = $list->count() - 1;
-                    $sudahTersimpan = 0.0; // akumulasi jumlah (banyak × harga) yang sudah disimpan
+                    $sudahTersimpan = 0.0;
 
                     foreach ($list as $i => $d) {
                         if ($i === $lastIndex) {
@@ -114,8 +113,10 @@ class JurnalPenjualanTelurService
                                 ? round(($kas['nominal'] - $sudahTersimpan) / (float) $d->qty, 4)
                                 : 0;
                         } else {
-                            $harga           = round((float) $d->harga_jual * $kas['proporsi'], 4);
-                            $sudahTersimpan += round((float) $d->qty * $harga, 4);
+                            // Hitung harga bersih dengan proporsi potongan diskon
+                            $hargaBersihDetail = $d->qty > 0 ? (float)$d->subtotal / (float)$d->qty : 0;
+                            $harga             = round($hargaBersihDetail * $kas['proporsi'], 4);
+                            $sudahTersimpan   += round((float) $d->qty * $harga, 4);
                         }
 
                         $this->buatItem($hKas->id, [
@@ -127,7 +128,7 @@ class JurnalPenjualanTelurService
                             'no_referensi' => (string) $d->id,
                             'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                             'banyak'       => $d->qty,
-                            'harga'        => $harga, // ← harga yang sudah dikoreksi
+                            'harga'        => $harga, 
                             'created_by'   => $userId,
                             'updated_by'   => $userId,
                         ]);
@@ -156,6 +157,9 @@ class JurnalPenjualanTelurService
                     ]);
                     $urut = 1;
                     foreach ($details as $d) {
+                        // FIX: Hitung nilai real/bersih setelah potongan
+                        $hargaBersih = $d->qty > 0 ? round((float)$d->subtotal / (float)$d->qty, 4) : 0;
+
                         $this->buatItem($hPend->id, [
                             'urut'         => $urut++,
                             'jenis_pihak'  => 'pelanggan',
@@ -165,18 +169,16 @@ class JurnalPenjualanTelurService
                             'no_referensi' => (string) $d->id,
                             'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                             'banyak'       => $d->qty,
-                            'harga'        => $d->harga_jual,
+                            'harga'        => $hargaBersih, // Tidak pakai $d->harga_jual mentah
                             'created_by'   => $userId,
                             'updated_by'   => $userId,
                         ]);
                     }
                 }
 
-                // ── D: HPP (group per kode_hpp) & K: Persediaan (group per kode_pers) ──
+                // ── D: HPP & K: Persediaan ──
                 if ($totalHpp > 0) {
                     $ketHpp = $this->ket('HPP Penjualan', $nota);
-
-                    // [FIX] Group HPP hanya berdasar kode_hpp → tidak dobel
                     $perHpp = $itemTelur->groupBy(
                         fn($d) => $this->kodePerJenis($d->barang)[1]
                     );
@@ -187,7 +189,6 @@ class JurnalPenjualanTelurService
                         );
                         if ($adaHpp->isEmpty()) continue;
 
-                        // 1 header HPP per kode akun HPP
                         $akunHpp = $this->resolveAkun($kodeHpp);
                         $hHpp    = $this->buatHeader([
                             'no_jurnal_pembantu' => $this->nextNomorPembantu(),
@@ -217,7 +218,6 @@ class JurnalPenjualanTelurService
                             ]);
                         }
 
-                        // K: Persediaan → group per kode_persediaan di dalam loop HPP
                         $perPers = $adaHpp->groupBy(
                             fn($d) => $this->kodePerJenis($d->barang)[2]
                         );
@@ -255,22 +255,20 @@ class JurnalPenjualanTelurService
                     }
                 }
 
-                // ── Peti otomatis (Peti Isi Telur KREDIT, Peti Kosong DEBIT) ─────────
+                // ── Peti otomatis ─────────
                 if ($jumlahPeti > 0) {
                     $ketPeti = $this->ket('Konversi Peti Telur', $nota, $customer);
 
-                    // Ambil barang dari DB beserta relasi akun persediaannya
                     $brgPetiKosong = Barang::with('subAnakAkun')->where('nama_barang', 'like', '%peti%kosong%')->first();
                     $brgPetiIsi    = Barang::with('subAnakAkun')->where('nama_barang', 'like', '%peti%isi%telur%')->first();
 
-                    // Resolve Kode Akun & HPP dinamis, fallback jika gagal query
                     $kodePetiKosong  = $brgPetiKosong?->subAnakAkun?->kode_sub_anak_akun ?? '1600-01';
                     $hargaPetiKosong = (float) ($brgPetiKosong?->harga_beli ?? self::HARGA_PETI_DEFAULT);
 
                     $kodePetiIsi  = $brgPetiIsi?->subAnakAkun?->kode_sub_anak_akun ?? '1600-02';
                     $hargaPetiIsi = (float) ($brgPetiIsi?->harga_beli ?? self::HARGA_PETI_DEFAULT);
 
-                    // D: Peti Kosong Bertambah
+                    // D: Peti Kosong
                     $akunPetiKosong = $this->resolveAkun($kodePetiKosong);
                     $hPetiKosong = $this->buatHeader([
                         'no_jurnal_pembantu' => $this->nextNomorPembantu(),
@@ -289,14 +287,14 @@ class JurnalPenjualanTelurService
                         'urut'        => 1,
                         'nama_barang' => $brgPetiKosong?->nama_barang ?? 'Peti Kosong',
                         'no_dokumen'  => $nota,
-                        'keterangan'  => 'Masuk stok peti kosong ' . $jumlahPeti . ' pcs (Kiloan: ' . $petiDariKiloan . ', Petian: ' . $petiDariPetian . ')',
+                        'keterangan'  => 'Masuk stok peti kosong ' . $jumlahPeti . ' pcs',
                         'banyak'      => $jumlahPeti,
                         'harga'       => $hargaPetiKosong,
                         'created_by'  => $userId,
                         'updated_by'  => $userId,
                     ]);
 
-                    // K: Peti Isi Telur Berkurang
+                    // K: Peti Isi
                     $akunPetiIsi = $this->resolveAkun($kodePetiIsi);
                     $hPetiIsi = $this->buatHeader([
                         'no_jurnal_pembantu' => $this->nextNomorPembantu(),
@@ -315,7 +313,7 @@ class JurnalPenjualanTelurService
                         'urut'        => 1,
                         'nama_barang' => $brgPetiIsi?->nama_barang ?? 'Peti Isi Telur',
                         'no_dokumen'  => $nota,
-                        'keterangan'  => 'Keluar stok peti isi telur ' . $jumlahPeti . ' pcs (Kiloan: ' . $petiDariKiloan . ', Petian: ' . $petiDariPetian . ')',
+                        'keterangan'  => 'Keluar stok peti isi telur ' . $jumlahPeti . ' pcs',
                         'banyak'      => $jumlahPeti,
                         'harga'       => $hargaPetiIsi,
                         'created_by'  => $userId,
@@ -332,7 +330,6 @@ class JurnalPenjualanTelurService
                 $totalLain = $itemLain->sum('subtotal');
                 $barisKas  = $this->resolveBarisKas($penjualan, $totalLain);
 
-                // Group per akun pendapatan
                 $perJenisLain = $itemLain->groupBy(
                     fn($d) => $this->kodePerJenis($d->barang)[0]
                 );
@@ -368,8 +365,9 @@ class JurnalPenjualanTelurService
                                     ? round(($kas['nominal'] - $sudahTersimpan) / (float) $d->qty, 4)
                                     : 0;
                             } else {
-                                $harga           = round((float) $d->harga_jual * $kas['proporsi'], 4);
-                                $sudahTersimpan += round((float) $d->qty * $harga, 4);
+                                $hargaBersihDetail = $d->qty > 0 ? (float)$d->subtotal / (float)$d->qty : 0;
+                                $harga             = round($hargaBersihDetail * $kas['proporsi'], 4);
+                                $sudahTersimpan   += round((float) $d->qty * $harga, 4);
                             }
 
                             $this->buatItem($hKas->id, [
@@ -404,6 +402,9 @@ class JurnalPenjualanTelurService
                     ]);
                     $urut = 1;
                     foreach ($details as $d) {
+                        // FIX: Menangani Potongan/Diskon
+                        $hargaBersih = $d->qty > 0 ? round((float)$d->subtotal / (float)$d->qty, 4) : 0;
+
                         $this->buatItem($hPend->id, [
                             'urut'         => $urut++,
                             'jenis_pihak'  => 'pelanggan',
@@ -413,13 +414,13 @@ class JurnalPenjualanTelurService
                             'no_referensi' => (string) $d->id,
                             'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                             'banyak'       => $d->qty,
-                            'harga'        => $d->harga_jual,
+                            'harga'        => $hargaBersih, 
                             'created_by'   => $userId,
                             'updated_by'   => $userId,
                         ]);
                     }
 
-                    // D: HPP & K: Persediaan (jika ada harga_beli)
+                    // D: HPP & K: Persediaan 
                     $adaHpp = $details->filter(
                         fn($d) => (float) ($d->barang->harga_beli ?? 0) > 0
                     );
@@ -427,7 +428,6 @@ class JurnalPenjualanTelurService
                     if ($adaHpp->isNotEmpty()) {
                         $ketHpp = $this->ket('HPP ' . $namaBarangPertama, $nota);
 
-                        // [FIX] Group HPP per kode_hpp → tidak dobel
                         $perHppLain = $adaHpp->groupBy(
                             fn($d) => $this->kodePerJenis($d->barang)[1]
                         );
@@ -462,7 +462,6 @@ class JurnalPenjualanTelurService
                                 ]);
                             }
 
-                            // K: Persediaan → group per kode_persediaan
                             $perPersLain = $detailsHpp->groupBy(
                                 fn($d) => $this->kodePerJenis($d->barang)[2]
                             );
@@ -524,29 +523,32 @@ class JurnalPenjualanTelurService
         $baris = [];
 
         if ($bayarTunai > 0) {
-            $akun    = $this->resolveAkun(self::KODE_KAS);
+            $akun     = $this->resolveAkun(self::KODE_KAS);
+            $proporsi = $bayarTunai / $total;
             $baris[] = [
                 'kode'     => $akun['kode'],
                 'nama'     => $akun['nama'],
-                'proporsi' => $bayarTunai / $total,
-                'nominal'  => $bayarTunai,
+                'proporsi' => $proporsi,
+                // FIX: Gunakan proporsi dikali Grand Total Net, 
+                // mencegah nominal kas bengkak ketika uang fisik melebihi tagihan (ada kembalian)
+                'nominal'  => $proporsi * $totalNilai, 
             ];
         }
 
         if ($bayarTransfer > 0) {
             $kodeBank = $penjualan->rekeningPerusahaan?->subAnakAkun?->kode_sub_anak_akun;
-
             if (!$kodeBank) {
-                Log::warning("[JurnalPenjualan] Rekening transfer {$penjualan->no_rekening} belum di-mapping. Fallback ke kas tunai. Nota: {$penjualan->no_nota}.");
+                Log::warning("[JurnalPenjualan] Rekening transfer {$penjualan->no_rekening} belum di-mapping.");
                 $kodeBank = self::KODE_KAS;
             }
 
-            $akun    = $this->resolveAkun($kodeBank);
+            $akun     = $this->resolveAkun($kodeBank);
+            $proporsi = $bayarTransfer / $total;
             $baris[] = [
                 'kode'     => $akun['kode'],
                 'nama'     => $akun['nama'],
-                'proporsi' => $bayarTransfer / $total,
-                'nominal'  => $bayarTransfer,
+                'proporsi' => $proporsi,
+                'nominal'  => $proporsi * $totalNilai,
             ];
         }
 
@@ -565,29 +567,18 @@ class JurnalPenjualanTelurService
 
         $sub = SubAnakAkun::where('kode_sub_anak_akun', $kode)->where('status', 'aktif')->first();
         if ($sub) {
-            return $this->akunCache[$kode] = [
-                'kode' => $sub->kode_sub_anak_akun,
-                'nama' => $sub->nama_sub_anak_akun,
-            ];
+            return $this->akunCache[$kode] = ['kode' => $sub->kode_sub_anak_akun, 'nama' => $sub->nama_sub_anak_akun];
         }
 
         $anak = AnakAkun::where('kode_anak_akun', $kode)->where('status', 'aktif')->first();
         if ($anak) {
-            return $this->akunCache[$kode] = [
-                'kode' => $anak->kode_anak_akun,
-                'nama' => $anak->nama_anak_akun,
-            ];
+            return $this->akunCache[$kode] = ['kode' => $anak->kode_anak_akun, 'nama' => $anak->nama_anak_akun];
         }
 
         $induk = IndukAkun::where('kode_induk_akun', $kode)->where('status', 'aktif')->first();
         if ($induk) {
-            return $this->akunCache[$kode] = [
-                'kode' => $induk->kode_induk_akun,
-                'nama' => $induk->nama_induk_akun,
-            ];
+            return $this->akunCache[$kode] = ['kode' => $induk->kode_induk_akun, 'nama' => $induk->nama_induk_akun];
         }
-
-        Log::warning("[JurnalPenjualan] Kode akun '{$kode}' tidak ditemukan di master akun.");
 
         return $this->akunCache[$kode] = [
             'kode' => $kode,
@@ -601,35 +592,25 @@ class JurnalPenjualanTelurService
 
     private function isTelur(string $namaLower): bool
     {
-        return str_contains($namaLower, 'telur')
-            || str_contains($namaLower, '_butir')
-            || str_contains($namaLower, '_kilo')
-            || str_contains($namaLower, '_kg')
-            || str_contains($namaLower, 'petian')
-            || str_contains($namaLower, 'bentes');
+        return str_contains($namaLower, 'telur') || str_contains($namaLower, '_butir')
+            || str_contains($namaLower, '_kilo') || str_contains($namaLower, '_kg')
+            || str_contains($namaLower, 'petian') || str_contains($namaLower, 'bentes');
     }
 
     private function isKiloan(string $namaLower): bool
     {
-        if (str_contains($namaLower, 'bentes')) return false;
-        if (str_contains($namaLower, 'petian') || str_contains($namaLower, '_butir')) return false;
-
-        return str_contains($namaLower, 'kilo')
-            || str_contains($namaLower, '_kg')
-            || str_contains($namaLower, 'telur ruko')
-            || str_contains($namaLower, 'telur_ruko');
+        if (str_contains($namaLower, 'bentes') || str_contains($namaLower, 'petian') || str_contains($namaLower, '_butir')) {
+            return false;
+        }
+        return str_contains($namaLower, 'kilo') || str_contains($namaLower, '_kg')
+            || str_contains($namaLower, 'telur ruko') || str_contains($namaLower, 'telur_ruko');
     }
 
     private function kodePerJenis(?Barang $barang = null): array
     {
-        $kodePend = $barang?->akunPendapatan?->kode_sub_anak_akun;
-        $kodeHpp  = $barang?->akunHpp?->kode_sub_anak_akun;
-        $kodePers = $barang?->subAnakAkun?->kode_sub_anak_akun;
-
-        if (!$kodePend) $kodePend = '4100-01';
-        if (!$kodeHpp)  $kodeHpp  = '6000-01';
-        if (!$kodePers) $kodePers = '1411-00';
-
+        $kodePend = $barang?->akunPendapatan?->kode_sub_anak_akun ?: '4100-01';
+        $kodeHpp  = $barang?->akunHpp?->kode_sub_anak_akun ?: '6000-01';
+        $kodePers = $barang?->subAnakAkun?->kode_sub_anak_akun ?: '1411-00';
         return [$kodePend, $kodeHpp, $kodePers];
     }
 
@@ -645,28 +626,33 @@ class JurnalPenjualanTelurService
         return JurnalPembantuHeader::create(array_merge([
             'status'              => JurnalPembantuHeader::STATUS_DRAFT,
             'adalah_jurnal_balik' => false,
-            'total_nilai'         => 0,
+            'total_nilai'         => 0, // Dikosongkan agar DB Observer/Trigger yang mengisinya
         ], $data));
     }
 
     private function buatItem(int $headerId, array $data): JurnalPembantuItem
     {
+        // FIX: Menyiapkan field jumlah sebelum disimpan agar nilai jurnal tidak nol
+        // dan menghindari increment ganda (karena sistem memiliki Observer sendiri).
+        if (!isset($data['jumlah'])) {
+            $banyak = (float) ($data['banyak'] ?? 0);
+            $harga  = (float) ($data['harga'] ?? 0);
+            $data['jumlah'] = round($banyak * $harga, 4);
+        }
+
         return JurnalPembantuItem::create(array_merge([
             'jurnal_pembantu_header_id' => $headerId,
             'status'                    => true,
-            'jumlah'                    => 0,
         ], $data));
     }
 
     private function nextNomorJurnal(): int
     {
-        $max = JurnalPembantuHeader::lockForUpdate()->max('jurnal');
-        return ($max ?? 0) + 1;
+        return (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
     }
 
     private function nextNomorPembantu(): int
     {
-        $max = JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu');
-        return ($max ?? 0) + 1;
+        return (JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') ?? 0) + 1;
     }
 }
