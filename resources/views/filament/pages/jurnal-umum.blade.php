@@ -1571,7 +1571,7 @@
     <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400 break-words whitespace-normal max-w-[300px]">{{ $hj->keterangan }}</td>
 
     {{-- Hit KBK --}}
-    <td class="px-4 py-4 text-center text-gray-400 font-bold uppercase tracking-wider">
+    <td class="px-4 py-4 text-center text-gray-400 font-bold lowercase tracking-wider">
         {{ $hj->hit_kbk ?? '-' }}
     </td>
 
