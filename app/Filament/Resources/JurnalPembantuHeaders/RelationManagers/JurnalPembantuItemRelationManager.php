@@ -130,8 +130,8 @@ class JurnalPembantuItemRelationManager extends RelationManager
                     ->limit(30),
 
                 TextColumn::make('banyak')
-                    ->numeric(6)
-                    ->alignRight(),
+    ->formatStateUsing(fn ($state) => (float) $state)
+    ->alignRight(),
 
                 TextColumn::make('m3')
                     ->numeric(6)

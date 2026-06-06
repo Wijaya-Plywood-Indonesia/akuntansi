@@ -32,7 +32,12 @@ class StokMatrix extends Page
             return $barang->subAnakAkun?->kode_sub_anak_akun;
         })->filter()->unique()->toArray();
 
-        $transaksisGrouped = JurnalUmum::select('no_akun', 'map', DB::raw('SUM(COALESCE(banyak, 0)) as total_qty'))
+        $transaksisGrouped = JurnalUmum::select(
+                'no_akun',
+                'map',
+                DB::raw('SUM(COALESCE(banyak, 0)) as total_qty'),
+                DB::raw('SUM(COALESCE(m3, 0)) as total_m3')
+            )
             ->whereIn('no_akun', $kodeAkuns)
             ->groupBy('no_akun', 'map')
             ->get()
@@ -45,21 +50,26 @@ class StokMatrix extends Page
             $kodeAkun = $subAkun?->kode_sub_anak_akun;
 
             $totalQty = 0.0;
+            $totalM3 = 0.0;
             if ($kodeAkun && isset($transaksisGrouped[$kodeAkun])) {
                 foreach ($transaksisGrouped[$kodeAkun] as $trx) {
                     $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
                     $qty = (float) $trx->total_qty;
+                    $m3 = (float) $trx->total_m3;
 
                     if ($isDebit) {
                         $totalQty += $qty;
+                        $totalM3 += $m3;
                     } else {
                         $totalQty -= $qty;
+                        $totalM3 -= $m3;
                     }
                 }
             }
 
             $matrixTemporaryStok[$barang->id] = (object) [
-                'stok' => $totalQty
+                'stok' => $totalQty,
+                'm3'   => $totalM3,
             ];
         }
 
@@ -72,12 +82,15 @@ class StokMatrix extends Page
         $totalStokAktifCount = 0;
         $totalStokKosongCount = 0;
         $totalAkumulasiStok = 0.0;
+        $totalAkumulasiM3 = 0.0;
 
         foreach ($this->barangs as $barang) {
             $qty = $this->stok[$barang->id]->stok ?? 0.0;
-            if ($qty > 0) {
+            $m3 = $this->stok[$barang->id]->m3 ?? 0.0;
+            if ($qty > 0 || $m3 > 0) {
                 $totalStokAktifCount++;
                 $totalAkumulasiStok += $qty;
+                $totalAkumulasiM3 += $m3;
             } else {
                 $totalStokKosongCount++;
             }
@@ -94,6 +107,7 @@ class StokMatrix extends Page
             'totalStokAktifCount'  => $totalStokAktifCount,
             'totalStokKosongCount' => $totalStokKosongCount,
             'totalAkumulasiStok'   => $totalAkumulasiStok,
+            'totalAkumulasiM3'     => $totalAkumulasiM3,
         ];
     }
 }

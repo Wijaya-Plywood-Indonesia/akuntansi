@@ -944,9 +944,10 @@
         {{-- TABLE DRAFT                                                      --}}
         {{-- ══════════════════════════════════════════════════════════════ --}}
         <div x-show="items.length > 0" x-cloak class="space-y-4 mb-10">
-
+         
             {{-- Header & Summary Total Draft (Dipindah ke atas) --}}
             <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[4px] p-3 lg:p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+                
 
                 {{-- KIRI: Info Item --}}
                 <div class="flex items-center gap-3">
@@ -1121,8 +1122,6 @@
                         </template>
                     </template>
                 </div>
-
-
 
                 {{-- Tombol Posting --}}
                 <div class="p-4 bg-gray-50/50 dark:bg-gray-800/40 border-t border-gray-200 dark:border-gray-800 flex justify-end">
@@ -1439,30 +1438,28 @@
                         <table class="w-full text-left text-sm border-collapse" style="table-layout: auto; min-width: max-content;">
                             <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
                                 <tr class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest whitespace-nowrap">
-                                    <th class="px-4 py-4">
-                                        <input type="checkbox" class="row-checkbox"
-                                            :checked="selectAll"
-                                            @change="toggleSelectAll()"
-                                            title="Pilih semua">
-                                    </th>
-                                    <th class="px-4 py-4">Tanggal</th>
-                                    <th class="px-4 py-4">No Akun</th>
-                                    <th class="px-4 py-4">Nama Akun</th>
-                                    <th class="px-4 py-4 text-center">Nomor Jurnal</th>
-                                    <th class="px-4 py-4">No. Dokumen</th>
-                                    <th class="px-4 py-4 min-w-[240px]">Keterangan</th>
-
-                                    {{-- 🔥 MM dan Hit KBK tidak akan bertumpuk lagi --}}
-                                    <th class="px-4 py-4 text-center">MM</th>
-                                    <th class="px-4 py-4 text-center">Hit KBK</th>
-
-                                    <th class="px-4 py-4 text-right">Kuantitas</th>
-                                    <th class="px-4 py-4 text-right">M3</th>
-                                    <th class="px-4 py-4 text-right">Harga</th>
-                                    <th class="px-4 py-4 text-right text-green-400 bg-green-50/10 font-black">Debit (Rp)</th>
-                                    <th class="px-4 py-4 text-right text-red-400 bg-red-50/10 font-black">Kredit (Rp)</th>
-                                    <th class="px-4 py-4 text-center">Aksi</th>
-                                </tr>
+    <th class="px-4 py-4">
+        <input type="checkbox" class="row-checkbox"
+            :checked="selectAll"
+            @change="toggleSelectAll()"
+            title="Pilih semua">
+    </th>
+    <th class="px-4 py-4">Nama Akun</th>
+    <th class="px-4 py-4">Tanggal</th>
+    <th class="px-4 py-4 text-center">No. Jurnal</th>
+    <th class="px-4 py-4">No Akun</th>
+    <th class="px-4 py-4">No. Dokumen</th>
+    <th class="px-4 py-4 text-center">MM</th>
+    <th class="px-4 py-4">Nama</th>
+    <th class="px-4 py-4 min-w-[240px]">Keterangan</th>
+    <th class="px-4 py-4 text-center">Hit KBK</th>
+    <th class="px-4 py-4 text-right">Kuantitas</th>
+    <th class="px-4 py-4 text-right">M3</th>
+    <th class="px-4 py-4 text-right">Harga</th>
+    <th class="px-4 py-4 text-right text-green-400 bg-green-50/10 font-black">Debit (Rp)</th>
+    <th class="px-4 py-4 text-right text-red-400 bg-red-50/10 font-black">Kredit (Rp)</th>
+    <th class="px-4 py-4 text-center">Aksi</th>
+</tr>
                             </thead>
 
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1493,6 +1490,9 @@
                                             <td class="px-4 py-5">
                                                 <div class="h-3 rounded w-6 mx-auto bg-gray-200 dark:bg-gray-700"></div>
                                             </td>
+                                            <td class="px-4 py-5">
+    <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
+</td>
                                             <td class="px-4 py-5">
                                                 <div class="h-3 rounded w-10 mx-auto bg-gray-200 dark:bg-gray-700"></div>
                                             </td>
@@ -1530,89 +1530,115 @@
                                 @endphp
 
                                 <tr data-row-id="{{ $hj->id }}"
-                                    :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                    class="hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top transition-none row-fadein"
-                                    style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
+    :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
+    class="hover:bg-gray-50 dark:hover:bg-gray-800/50 align-top transition-none row-fadein"
+    style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
-                                    <td class="px-4 py-4 text-center">
-                                        <input type="checkbox" class="row-checkbox"
-                                            :checked="isSelected({{ $hj->id }})"
-                                            @change="toggleRow({{ $hj->id }})">
-                                    </td>
+    <td class="px-4 py-4 text-center">
+        <input type="checkbox" class="row-checkbox"
+            :checked="isSelected({{ $hj->id }})"
+            @change="toggleRow({{ $hj->id }})">
+    </td>
 
-                                    <td class="px-4 py-4 text-gray-500 font-medium whitespace-nowrap">{{ $hj->tgl->format('d-m-Y') }}</td>
-                                    <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{{ $hj->no_akun }}</td>
-                                    <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 whitespace-nowrap">{{ $hj->nama_akun }}</td>
-                                    <td class="px-4 py-4 text-center text-gray-400 font-medium">{{ $hj->jurnal }}</td>
-                                    <td class="px-4 py-4 text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
-                                        {{ $hj->no_dokumen ?? '-' }}
-                                    </td>
-                                    {{-- Keterangan dibatasi maksimal lebarnya agar tidak memanjang terus jika teksnya banyak --}}
-                                    <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400 break-words whitespace-normal max-w-[300px]">{{ $hj->keterangan }}</td>
+    {{-- Nama Akun --}}
+    <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 whitespace-nowrap">{{ $hj->nama_akun }}</td>
 
-                                    <td class="px-4 py-4 text-center font-bold text-gray-500">
-                                        {{ $hj->mm ?? '-' }}
-                                    </td>
-                                    <td class="px-4 py-4 text-center text-gray-400 font-bold uppercase tracking-wider">
-                                        {{ $hj->hit_kbk ?? '-' }}
-                                    </td>
+    {{-- Tanggal --}}
+    <td class="px-4 py-4 text-gray-500 font-medium whitespace-nowrap">{{ $hj->tgl->format('d-m-Y') }}</td>
 
-                                    <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                        {{ ($hj->banyak !== null && $hj->banyak !== '')
-                                    ? ($hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.'))
-                                    : '-' }}
-                                    </td>
+    {{-- No Jurnal --}}
+    <td class="px-4 py-4 text-center text-gray-400 font-medium">{{ $hj->jurnal }}</td>
 
-                                    <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                        {{ (float)$hj->m3 > 0 ? rtrim(rtrim(number_format((float)$hj->m3, 6, ',', '.'), '0'), ',') : '-' }}
-                                    </td>
+    {{-- No Akun --}}
+    <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{{ $hj->no_akun }}</td>
 
-                                    <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">{{ $hj->harga == intval($hj->harga)
-                                ? number_format($hj->harga, 0, ',', '.')
-                                : number_format($hj->harga, 2, ',', '.') }}</td>
+    {{-- No Dokumen --}}
+    <td class="px-4 py-4 text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
+        {{ $hj->no_dokumen ?? '-' }}
+    </td>
 
-                                    <td class="px-4 py-4 text-right font-bold text-green-400 bg-green-50/5 whitespace-nowrap">
-                                        @if(in_array(strtolower($hj->map), ['d', 'debit']))
-                                        {{ $totalRow == intval($totalRow)
-                                    ? number_format($totalRow, 0, ',', '.')
-                                    : number_format($totalRow, 2, ',', '.') }}
-                                        @else
-                                        0
-                                        @endif
-                                    </td>
-                                    <td class="px-4 py-4 text-right font-bold text-red-400 bg-red-50/5 whitespace-nowrap">
-                                        @if(in_array(strtolower($hj->map), ['k', 'kredit']))
-                                        {{ $totalRow == intval($totalRow)
-                                    ? number_format($totalRow, 0, ',', '.')
-                                    : number_format($totalRow, 2, ',', '.') }}
-                                        @else
-                                        0
-                                        @endif
-                                    </td>
-                                    <td class="px-4 py-4 text-center">
-                                        @if(auth()->user()?->hasRole('super_admin'))
-                                        <div class="flex items-center justify-center gap-1">
-                                            <button type="button" wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
-                                                class="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded transition-colors" title="Edit">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                </svg>
-                                            </button>
-                                            <button type="button" wire:click="mountAction('deleteHistory', { id: {{ $hj->id }} })"
-                                                class="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded transition-colors" title="Hapus">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                        @else
-                                        -
-                                        @endif
-                                    </td>
-                                </tr>
+    {{-- MM --}}
+    <td class="px-4 py-4 text-center font-bold text-gray-500">
+        {{ $hj->mm ?? '-' }}
+    </td>
+
+    {{-- Nama --}}
+    <td class="px-4 py-4 text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
+        {{ $hj->nama ?? '-' }}
+    </td>
+
+    {{-- Keterangan --}}
+    <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400 break-words whitespace-normal max-w-[300px]">{{ $hj->keterangan }}</td>
+
+    {{-- Hit KBK --}}
+    <td class="px-4 py-4 text-center text-gray-400 font-bold uppercase tracking-wider">
+        {{ $hj->hit_kbk ?? '-' }}
+    </td>
+
+    {{-- Kuantitas --}}
+    <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
+        {{ ($hj->banyak !== null && $hj->banyak !== '')
+            ? ($hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.'))
+            : '-' }}
+    </td>
+
+    {{-- M3 --}}
+    <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
+        {{ (float)$hj->m3 > 0 ? rtrim(rtrim(number_format((float)$hj->m3, 6, ',', '.'), '0'), ',') : '-' }}
+    </td>
+
+    {{-- Harga --}}
+    <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">{{ $hj->harga == intval($hj->harga)
+        ? number_format($hj->harga, 0, ',', '.')
+        : number_format($hj->harga, 2, ',', '.') }}</td>
+
+    {{-- Debit --}}
+    <td class="px-4 py-4 text-right font-bold text-green-400 bg-green-50/5 whitespace-nowrap">
+        @if(in_array(strtolower($hj->map), ['d', 'debit']))
+            {{ $totalRow == intval($totalRow)
+                ? number_format($totalRow, 0, ',', '.')
+                : number_format($totalRow, 2, ',', '.') }}
+        @else
+            0
+        @endif
+    </td>
+
+    {{-- Kredit --}}
+    <td class="px-4 py-4 text-right font-bold text-red-400 bg-red-50/5 whitespace-nowrap">
+        @if(in_array(strtolower($hj->map), ['k', 'kredit']))
+            {{ $totalRow == intval($totalRow)
+                ? number_format($totalRow, 0, ',', '.')
+                : number_format($totalRow, 2, ',', '.') }}
+        @else
+            0
+        @endif
+    </td>
+
+    {{-- Aksi --}}
+    <td class="px-4 py-4 text-center">
+        @if(auth()->user()?->hasRole('super_admin'))
+        <div class="flex items-center justify-center gap-1">
+            <button type="button" wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
+                class="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded transition-colors" title="Edit">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+            </button>
+            <button type="button" wire:click="mountAction('deleteHistory', { id: {{ $hj->id }} })"
+                class="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded transition-colors" title="Hapus">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
+        </div>
+        @else
+        -
+        @endif
+    </td>
+</tr>
                                 @empty
                                 <tr>
-                                    <td colspan="15" class="px-6 py-16 text-center">
+                                    <td colspan="16" class="px-6 py-16 text-center">
                                         <div class="flex flex-col items-center gap-3 text-gray-400">
                                             <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1628,7 +1654,7 @@
 
                             <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                                 <tr>
-                                    <td colspan="12" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
+                                    <td colspan="13" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
                                     <td class="px-4 py-5 text-right text-green-400 bg-green-50/10 text-base font-black whitespace-nowrap">
                                         {{ number_format($totalDebitDB, 0, ',', '.') }}
                                     </td>
@@ -1699,11 +1725,11 @@
                         </div>
                         @endif
                     </div>
-                    <div class="overflow-x-auto border-t-2 border-gray-200 dark:border-gray-700">
+                    {{-- <div class="overflow-x-auto border-t-2 border-gray-200 dark:border-gray-700">
                         <table class="w-full text-left text-sm border-collapse table-fixed min-w-[1600px]">
                             <tfoot class="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                                 <tr>
-                                    <td colspan="9" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
+                                    <td colspan="10" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
                                     <td class="px-4 py-5 text-right text-green-400 bg-green-50/10 text-base font-black">
                                         {{ number_format($totalDebitDB, 0, ',', '.') }}
                                     </td>
@@ -1713,7 +1739,7 @@
                                     <td></td>
                                 </tr>
                                 <tr class="border-t border-gray-200 dark:border-gray-700">
-                                    <td colspan="12" class="px-4 py-3">
+                                    <td colspan="13" class="px-4 py-3">
                                         @if($isHistoryBalanced)
                                         <div class="flex items-center justify-end gap-2">
                                             <div class="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-[4px]">
@@ -1742,7 +1768,7 @@
                                 </tr>
                             </tfoot>
                         </table>
-                    </div>
+                    </div> --}}
                 </div>
             </div>
         </div>

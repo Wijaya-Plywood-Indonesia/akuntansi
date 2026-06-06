@@ -8,7 +8,6 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -30,15 +29,11 @@ class DetailPembeliansRelationManager extends RelationManager
         return false;
     }
 
-    // =========================================================
-    // FORM — dipakai untuk modal Create & Edit
-    // =========================================================
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components([
 
-                // ── Pilih Barang ──────────────────────────────────────────
                 Select::make('barang_id')
                     ->label('Barang')
                     ->options(
@@ -59,7 +54,6 @@ class DetailPembeliansRelationManager extends RelationManager
                         $barang = Barang::with('satuan')->find($state);
                         if (!$barang) return;
 
-                        // Isi otomatis dari data barang, user tetap bisa edit
                         $set('kode_barang', $barang->kode_barang);
                         $set('nama_barang', $barang->nama_barang);
                         $set('harga_beli',  $barang->harga_beli ?? 0);
@@ -70,16 +64,14 @@ class DetailPembeliansRelationManager extends RelationManager
                                 : ($barang->satuan ?? 'Unit')
                         );
 
-                        // Hitung subtotal awal (qty default 1)
                         $set('subtotal', $barang->harga_beli ?? 0);
                     })
                     ->columnSpanFull(),
 
-                // ── Kode & Nama Barang (readonly, terisi otomatis) ────────
                 TextInput::make('kode_barang')
                     ->label('Kode Barang')
                     ->disabled()
-                    ->dehydrated()   // tetap ikut tersimpan meski disabled
+                    ->dehydrated()
                     ->placeholder('Otomatis terisi...'),
 
                 TextInput::make('nama_barang')
@@ -88,7 +80,6 @@ class DetailPembeliansRelationManager extends RelationManager
                     ->dehydrated()
                     ->placeholder('Otomatis terisi...'),
 
-                // ── Qty & Satuan ──────────────────────────────────────────
                 TextInput::make('qty')
                     ->label('Jumlah (Qty)')
                     ->numeric()
@@ -97,7 +88,30 @@ class DetailPembeliansRelationManager extends RelationManager
                     ->required()
                     ->live(debounce: 500)
                     ->afterStateUpdated(function ($state, Get $get, Set $set) {
-                        self::hitungSubtotal($state, $get, $set);
+                        self::hitungSubtotal($get, $set);
+                    }),
+                    
+                TextInput::make('kubikasi')
+                    ->label('Kubikasi (M³)')
+                    ->numeric()
+                    ->default(0)
+                    ->step(0.0001)
+                    ->live(debounce: 500)
+                    ->afterStateUpdated(function ($state, Get $get, Set $set) {
+                        self::hitungSubtotal($get, $set);
+                    }),
+                    
+                Select::make('hitung_dari')
+                    ->label('Dasar Harga')
+                    ->options([
+                        'qty' => 'Quantity (Lembar/Pcs)',
+                        'm3'  => 'Kubikasi (M³)'
+                    ])
+                    ->default('qty')
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(function ($state, Get $get, Set $set) {
+                        self::hitungSubtotal($get, $set);
                     }),
 
                 TextInput::make('satuan')
@@ -105,7 +119,6 @@ class DetailPembeliansRelationManager extends RelationManager
                     ->placeholder('Pcs / Kg...')
                     ->maxLength(50),
 
-                // ── Harga Beli (otomatis tapi bisa diedit) ───────────────
                 TextInput::make('harga_beli')
                     ->label('Harga Beli (Rp)')
                     ->numeric()
@@ -114,10 +127,9 @@ class DetailPembeliansRelationManager extends RelationManager
                     ->prefix('Rp')
                     ->live(debounce: 500)
                     ->afterStateUpdated(function ($state, Get $get, Set $set) {
-                        self::hitungSubtotal($get('qty'), $get, $set);
+                        self::hitungSubtotal($get, $set);
                     }),
 
-                // ── Diskon Item ───────────────────────────────────────────
                 TextInput::make('diskon')
                     ->label('Diskon Item (Rp)')
                     ->numeric()
@@ -126,10 +138,9 @@ class DetailPembeliansRelationManager extends RelationManager
                     ->prefix('Rp')
                     ->live(debounce: 500)
                     ->afterStateUpdated(function ($state, Get $get, Set $set) {
-                        self::hitungSubtotal($get('qty'), $get, $set);
+                        self::hitungSubtotal($get, $set);
                     }),
 
-                // ── Subtotal (readonly, dihitung otomatis) ────────────────
                 TextInput::make('subtotal')
                     ->label('Subtotal (Rp)')
                     ->numeric()
@@ -138,7 +149,6 @@ class DetailPembeliansRelationManager extends RelationManager
                     ->prefix('Rp')
                     ->default(0),
 
-                // ── Catatan ───────────────────────────────────────────────
                 Textarea::make('catatan')
                     ->label('Catatan')
                     ->placeholder('Catatan opsional untuk barang ini...')
@@ -149,9 +159,6 @@ class DetailPembeliansRelationManager extends RelationManager
             ->columns(2);
     }
 
-    // =========================================================
-    // TABLE — tampilan daftar detail barang
-    // =========================================================
     public function table(Table $table): Table
     {
         return $table
@@ -174,6 +181,20 @@ class DetailPembeliansRelationManager extends RelationManager
                 TextColumn::make('qty')
                     ->label('Qty')
                     ->sortable()
+                    ->alignCenter(),
+                    
+                TextColumn::make('kubikasi')
+                    ->label('M³')
+                    ->sortable()
+                    ->alignCenter(),
+                    
+                TextColumn::make('hitung_dari')
+                    ->label('Dasar Harga')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'qty' => 'info',
+                        'm3' => 'warning',
+                    })
                     ->alignCenter(),
 
                 TextColumn::make('satuan')
@@ -216,12 +237,14 @@ class DetailPembeliansRelationManager extends RelationManager
                     ->label('Tambah Barang')
                     ->modalHeading('Tambah Detail Barang')
                     ->mutateFormDataUsing(function (array $data): array {
-                        // Pastikan subtotal selalu dihitung ulang saat simpan
-                        $qty    = (float) ($data['qty']        ?? 0);
-                        $harga  = (float) ($data['harga_beli'] ?? 0);
-                        $diskon = (float) ($data['diskon']     ?? 0);
+                        $qty         = (float) ($data['qty']        ?? 0);
+                        $kubikasi    = (float) ($data['kubikasi']   ?? 0);
+                        $harga       = (float) ($data['harga_beli'] ?? 0);
+                        $diskon      = (float) ($data['diskon']     ?? 0);
+                        $hitung_dari = $data['hitung_dari'] ?? 'qty';
 
-                        $data['subtotal'] = max(0, ($qty * $harga) - $diskon);
+                        $pengali = ($hitung_dari === 'm3') ? $kubikasi : $qty;
+                        $data['subtotal'] = max(0, ($pengali * $harga) - $diskon);
 
                         return $data;
                     }),
@@ -239,15 +262,16 @@ class DetailPembeliansRelationManager extends RelationManager
             ->paginated([10, 25, 50]);
     }
 
-    // =========================================================
-    // HELPER — hitung subtotal secara reaktif di dalam form
-    // =========================================================
-    protected static function hitungSubtotal(mixed $qty, Get $get, Set $set): void
+    protected static function hitungSubtotal(Get $get, Set $set): void
     {
-        $qty    = (float) ($qty                ?? 0);
-        $harga  = (float) ($get('harga_beli')  ?? 0);
-        $diskon = (float) ($get('diskon')       ?? 0);
-
-        $set('subtotal', max(0, ($qty * $harga) - $diskon));
+        $qty         = (float) ($get('qty') ?? 0);
+        $kubikasi    = (float) ($get('kubikasi') ?? 0);
+        $harga       = (float) ($get('harga_beli')  ?? 0);
+        $diskon      = (float) ($get('diskon')       ?? 0);
+        $hitung_dari = $get('hitung_dari') ?? 'qty';
+        
+        $pengali = ($hitung_dari === 'm3') ? $kubikasi : $qty;
+        
+        $set('subtotal', max(0, ($pengali * $harga) - $diskon));
     }
 }
