@@ -30,8 +30,8 @@ class NeracaService
 
             $result[$key] = array_merge(
                 [
-                    'label' => $periode['label'], 
-                    'tahun' => $periode['tahun'], 
+                    'label' => $periode['label'],
+                    'tahun' => $periode['tahun'],
                     'bulan' => $periode['bulan']
                 ],
                 $this->buildNeraca($groups, $saldo, $qty, $labaRugiBerjalan)
@@ -76,8 +76,8 @@ class NeracaService
 
             foreach ($mutasiLalu as $kode => $m) {
                 $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
-                $saldoAwal[$kode] = $isKredit 
-                    ? ($m->total_kredit - $m->total_debit) 
+                $saldoAwal[$kode] = $isKredit
+                    ? ($m->total_kredit - $m->total_debit)
                     : ($m->total_debit - $m->total_kredit);
             }
         } else {
@@ -151,8 +151,8 @@ class NeracaService
 
             foreach ($mutasiQtyLalu as $kode => $m) {
                 $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
-                $qtyAwal[$kode] = $isKredit 
-                    ? ($m->qty_kredit - $m->qty_debit) 
+                $qtyAwal[$kode] = $isKredit
+                    ? ($m->qty_kredit - $m->qty_debit)
                     : ($m->qty_debit - $m->qty_kredit);
             }
         } else {
@@ -163,7 +163,9 @@ class NeracaService
                     ->where('bulan', $prevDate->month)
                     ->whereNotNull('qty')->where('qty', '>', 0)
                     ->pluck('qty', 'no_akun')->toArray();
-            } catch (\Exception $e) { $qtyAwal = []; }
+            } catch (\Exception $e) {
+                $qtyAwal = [];
+            }
         }
 
         $mutasiQty = JurnalUmum::whereBetween('tgl', [$start->format('Y-m-d'), $end->format('Y-m-d')])
@@ -178,7 +180,7 @@ class NeracaService
             ->keyBy('no_akun');
 
         $semuaKode = collect(array_keys($qtyAwal))->merge($mutasiQty->keys())->unique();
-        
+
         $result = [];
         foreach ($semuaKode as $kode) {
             $awal = (float) ($qtyAwal[$kode] ?? 0);
@@ -244,7 +246,7 @@ class NeracaService
             $debit  = (float) ($mutasi[$kode]->total_debit  ?? 0);
             $kredit = (float) ($mutasi[$kode]->total_kredit ?? 0);
             $isKredit = in_array(strtolower($akun->saldo_normal ?? 'debit'), ['kredit', 'credit', 'k']);
-            
+
             if ($isKredit) {
                 $laba += $kredit - $debit;
             } else {
@@ -274,17 +276,17 @@ class NeracaService
     {
         return AkunGroup::with([
             'subAnakAkuns' => fn($q) => $q->orderBy('kode_sub_anak_akun')
-                ->select(['sub_anak_akuns.id','id_anak_akun','kode_sub_anak_akun','nama_sub_anak_akun','saldo_normal']),
+                ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
             'childrenRecursive.subAnakAkuns' => fn($q) => $q->orderBy('kode_sub_anak_akun')
-                ->select(['sub_anak_akuns.id','id_anak_akun','kode_sub_anak_akun','nama_sub_anak_akun','saldo_normal']),
+                ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
             'childrenRecursive.anakAkuns' => fn($q) => $q->orderBy('kode_anak_akun')
                 ->with([
                     'subAnakAkuns' => fn($q2) => $q2->orderBy('kode_sub_anak_akun')
-                        ->select(['sub_anak_akuns.id','id_anak_akun','kode_sub_anak_akun','nama_sub_anak_akun','saldo_normal']),
+                        ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
                     'children' => fn($q3) => $q3->orderBy('kode_anak_akun')
                         ->with([
                             'subAnakAkuns' => fn($q4) => $q4->orderBy('kode_sub_anak_akun')
-                                ->select(['sub_anak_akuns.id','id_anak_akun','kode_sub_anak_akun','nama_sub_anak_akun','saldo_normal']),
+                                ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
                         ]),
                 ]),
         ])->whereNull('parent_id')->visible()->ordered()->get();
@@ -354,6 +356,7 @@ class NeracaService
                 'nama'  => $sub->nama_sub_anak_akun,
                 'nilai' => $nilai,
                 'qty'   => $q,
+                'm3'    => $barang->m3,
             ];
             $total += $nilai;
         }
@@ -411,7 +414,6 @@ class NeracaService
                     'sub_sections' => [],
                 ];
                 $totalAll += $totalSection;
-
             } else {
                 [$subSections, $totalBranch] = $this->buildSections($group->children, $saldo, $qty);
                 $sections[] = [

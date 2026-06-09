@@ -16,18 +16,6 @@ class ListPembelians extends ListRecords
         return [
             CreateAction::make()
                 ->label('Tambah Pembelian')
-                ->visible(function () {
-                    $user = filament()->auth()->user();
-
-                    if ($user->hasRole('super_admin')) {
-                        return true;
-                    }
-
-                    $adaNotaBelumValidasi = Pembelian::whereNull('validated_by')
-                        ->where('status', '!=', Pembelian::STATUS_BATAL)
-                        ->exists();
-                    return !$adaNotaBelumValidasi;
-                }),
         ];
     }
 }

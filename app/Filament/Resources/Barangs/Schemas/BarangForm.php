@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Barangs\Schemas;
 
+use App\Models\Kategori;
 use App\Models\SubAnakAkun;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -32,7 +33,32 @@ class BarangForm
                     ->relationship('kategori', 'nama_kategori')
                     ->preload()
                     ->searchable()
-                    ->required(),
+                    ->required()
+
+                    // ── 1. FORM DI DALAM MODAL POP-UP ────────────────────────────────────────
+                    ->createOptionForm([
+                        TextInput::make('nama_kategori')
+                            ->label('Nama Kategori')
+                            ->required()
+                            ->maxLength(255),
+
+                        Select::make('parent_id')
+                            ->label('Parent Kategori')
+                            // Mengambil relasi parent dari model Kategori Anda
+                            ->relationship('parent', 'nama_kategori')
+                            ->searchable()
+                            ->preload() // Memuat data agar langsung muncul saat diklik
+                            ->placeholder('Kategori Utama (Kosongkan jika tidak ada)')
+                            ->nullable(),
+                    ])
+                    ->createOptionUsing(function (array $data) {
+                        $kategori = Kategori::create([
+                            'nama_kategori' => $data['nama_kategori'],
+                            'parent_id'     => $data['parent_id'] ?? null,
+                        ]);
+
+                        return $kategori->id;
+                    }),
 
                 Select::make('id_satuan')
                     ->label('Satuan')
@@ -44,13 +70,11 @@ class BarangForm
                 TextInput::make('harga_beli')
                     ->label('HPP')
                     ->numeric()
-                    ->prefix('Rp')
-                    ->required(),
+                    ->prefix('Rp'),
 
                 TextInput::make('harga_jual')
                     ->numeric()
-                    ->prefix('Rp')
-                    ->required(),
+                    ->prefix('Rp'),
 
                 TextInput::make('stok_minimum')
                     ->required()

@@ -1,5 +1,6 @@
 <x-filament::page>
-    {{-- Main Container with Alpine.js --}}
+
+    {{-- Main Container dengan Alpine.js --}}
     <div x-data="{
         search: '',
         filterStatus: 'all',
@@ -32,55 +33,50 @@
     }" class="space-y-4">
 
         {{-- Minimal Search & Filter Bar --}}
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-3 shadow-sm">
-            
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 shadow-sm transition-colors duration-200">
+
             {{-- Live Search Input --}}
-            <div class="relative flex-grow max-w-md">
+            <div class="relative flex-grow max-w-md w-full">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </div>
-                <input 
-                    type="text" 
-                    x-model="search" 
-                    placeholder="Cari nama barang atau no akun..." 
-                    class="w-full pl-9 pr-8 py-2 bg-gray-50/60 focus:bg-white dark:bg-gray-950/40 dark:focus:bg-gray-950 border border-gray-200 dark:border-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl text-xs transition-all outline-none text-gray-700 dark:text-gray-300"
-                />
-                <button 
-                    x-show="search.length > 0" 
-                    @click="search = ''" 
-                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
+                <input
+                    type="text"
+                    x-model="search"
+                    placeholder="Cari nama barang atau no akun..."
+                    class="w-full pl-9 pr-8 py-2 bg-gray-50/60 dark:bg-gray-950/40 focus:bg-white dark:focus:bg-gray-950 border border-gray-200 dark:border-gray-800 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10 dark:focus:ring-indigo-400/10 rounded-xl text-xs transition-all outline-none text-gray-700 dark:text-gray-300" />
+                <button
+                    x-show="search.length > 0"
+                    @click="search = ''"
+                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
 
-            {{-- Dynamic Tabs for Status Filtering --}}
-            <div class="flex bg-gray-100/80 dark:bg-gray-950/60 p-1 rounded-xl border border-gray-200/50 dark:border-gray-800/80 self-start sm:self-auto">
-                <button 
+            {{-- Dynamic Tabs untuk Status Filtering --}}
+            <div class="flex bg-gray-100/80 dark:bg-gray-950/60 p-1 rounded-xl border border-gray-200/50 dark:border-gray-800/80 self-start sm:self-auto transition-colors duration-200">
+                <button
                     @click="filterStatus = 'all'"
-                    :class="filterStatus === 'all' ? 'bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'"
-                    class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5"
-                >
+                    :class="filterStatus === 'all' ? 'bg-white dark:bg-gray-800 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'"
+                    class="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5">
                     Semua
-                    <span class="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[9px] font-mono text-gray-600 dark:text-gray-300" x-text="items.length"></span>
+                    <span class="bg-gray-250 dark:bg-gray-700 px-1.5 py-0.5 rounded text-[9px] font-mono text-gray-600 dark:text-gray-300" x-text="items.length"></span>
                 </button>
-                <button 
+                <button
                     @click="filterStatus = 'available'"
-                    :class="filterStatus === 'available' ? 'bg-white dark:bg-gray-900 shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'"
-                    class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5"
-                >
+                    :class="filterStatus === 'available' ? 'bg-white dark:bg-gray-800 shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'"
+                    class="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5">
                     Tersedia
                     <span class="bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 rounded text-[9px] font-mono text-emerald-600 dark:text-emerald-400" x-text="items.filter(i => i.qty > 0 || i.m3 > 0).length"></span>
                 </button>
-                <button 
+                <button
                     @click="filterStatus = 'empty'"
-                    :class="filterStatus === 'empty' ? 'bg-white dark:bg-gray-900 shadow-sm text-rose-600 dark:text-rose-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'"
-                    class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5"
-                >
+                    :class="filterStatus === 'empty' ? 'bg-white dark:bg-gray-800 shadow-sm text-rose-600 dark:text-rose-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'"
+                    class="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5">
                     Habis
                     <span class="bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded text-[9px] font-mono text-rose-600 dark:text-rose-400" x-text="items.filter(i => i.qty <= 0 && i.m3 <= 0).length"></span>
                 </button>
@@ -88,38 +84,53 @@
 
         </div>
 
-        {{-- High Density Responsive Grid Table with Borders (Desktop: 5, Tablet: 4, Handphone: 3) --}}
-        <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-0 border-t border-l border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden shadow-sm">
-            <template x-for="item in filteredItems" :key="item.id">
-                <div class="bg-white dark:bg-gray-900 border-r border-b border-gray-200 dark:border-gray-800 p-2.5 flex items-center justify-between gap-3 text-xs hover:bg-gray-50/50 dark:hover:bg-gray-950/30 transition-colors duration-150">
-                    
-                    {{-- Product Name and Account Code --}}
-                    <div class="min-w-0 pr-2">
-                        <span class="font-bold text-gray-800 dark:text-gray-200 block truncate text-xs" x-text="item.nama" :title="item.nama"></span>
-                        <span class="text-[10px] text-gray-400 dark:text-gray-500 font-mono" x-text="item.akun"></span>
-                    </div>
-                    
-                    {{-- Quantities and Units --}}
-                    <div class="text-right flex-shrink-0 flex flex-col justify-center space-y-1">
-                        <div class="leading-none">
-                            <span class="font-mono font-bold text-xs" :class="item.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'" x-text="formatQty(item.qty)"></span>
-                            <span class="text-[9px] font-bold text-gray-400 dark:text-gray-500 block uppercase tracking-wider" x-text="item.satuan"></span>
-                        </div>
-                        <div class="leading-none pt-1 border-t border-gray-100 dark:border-gray-800/80">
-                            <span class="font-mono font-bold text-[11px]" :class="item.m3 > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600/80 dark:text-rose-400/80'" x-text="formatM3(item.m3)"></span>
-                            <span class="text-[8px] font-bold text-gray-400 dark:text-gray-500 block uppercase tracking-wider">m³</span>
-                        </div>
-                    </div>
+        {{-- Tabel Utama (Fokus pada Nama Barang, Stok, dan Kubikasi) --}}
+        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm transition-colors duration-200">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider transition-colors duration-200">
+                            <th class="p-4 sm:p-5">Nama Barang</th>
+                            <th class="p-4 sm:p-5 text-right w-[180px] sm:w-[220px]">Stok Barang</th>
+                            <th class="p-4 sm:p-5 text-right w-[180px] sm:w-[220px]">Total Kubikasi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                        <template x-for="item in filteredItems" :key="item.id">
+                            <tr
+                                class="hover:bg-gray-50/50 dark:hover:bg-gray-950/30 transition-colors duration-150"
+                                :class="item.qty <= 0 ? 'bg-rose-50/10 dark:bg-rose-950/5' : ''">
+                                {{-- Nama Barang & Kode Akun --}}
+                                <td class="p-4 sm:p-5">
+                                    <div class="font-semibold text-gray-950 dark:text-white text-sm sm:text-base transition-colors duration-200" x-text="item.nama"></div>
+                                    <div class="text-[10px] text-gray-400 dark:text-gray-500 font-mono tracking-wide mt-0.5 block" x-text="item.akun"></div>
+                                </td>
 
-                </div>
-            </template>
-            
-            {{-- Empty Results State --}}
-            <div x-show="filteredItems.length === 0" class="col-span-full py-8 text-center bg-white dark:bg-gray-900 border-r border-b border-gray-200 dark:border-gray-800">
-                <svg class="w-8 h-8 mx-auto mb-2 text-gray-300 dark:text-gray-700" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 012.008 1.24l.885 1.77a2.25 2.25 0 002.007 1.24h1.98a2.25 2.25 0 002.007-1.24l.885-1.77a2.25 2.25 0 012.007-1.24h3.86m-18 0h18" />
-                </svg>
-                <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">Tidak ada barang yang cocok dengan kriteria pencarian.</p>
+                                {{-- Stok Barang (Read-Only) --}}
+                                <td class="p-4 sm:p-5 text-right font-mono font-bold text-sm sm:text-base whitespace-nowrap transition-colors duration-200">
+                                    <span :class="item.qty <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-white'" x-text="formatQty(item.qty)"></span>
+                                    <span class="text-xs text-gray-400 dark:text-gray-500 font-semibold ml-1.5 uppercase" x-text="item.satuan"></span>
+                                </td>
+
+                                {{-- Total Kubikasi --}}
+                                <td class="p-4 sm:p-5 text-right font-mono font-bold text-sm sm:text-base whitespace-nowrap text-gray-900 dark:text-white transition-colors duration-200">
+                                    <span :class="item.m3 <= 0 ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'" x-text="formatM3(item.m3)"></span>
+                                    <span class="text-xs text-gray-400 dark:text-gray-500 font-semibold ml-1">m³</span>
+                                </td>
+                            </tr>
+                        </template>
+
+                        {{-- State Kosong / Pencarian Tidak Ditemukan --}}
+                        <tr x-show="filteredItems.length === 0" class="transition-colors duration-200">
+                            <td colspan="3" class="p-12 text-center bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 transition-colors duration-200">
+                                <svg class="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-700" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 012.008 1.24l.885 1.77a2.25 2.25 0 002.007 1.24h1.98a2.25 2.25 0 002.007-1.24l.885-1.77a2.25 2.25 0 012.007-1.24h3.86m-18 0h18" />
+                                </svg>
+                                <p class="text-xs font-semibold">Tidak ada barang yang cocok dengan kriteria pencarian.</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 

@@ -167,6 +167,9 @@
             // Format QTY diubah agar lebih robust menolak null/string kosong
             $fmtQty = fn($v) => (is_numeric($v) && $v != 0) ? number_format((float)$v, 0, ',', '.') : null;
 
+            // Helper Baru untuk memformat angka desimal m3 (Maksimal 2 angka di belakang koma)
+            $fmtM3 = fn($v) => (is_numeric($v) && $v != 0) ? number_format((float)$v, 2, ',', '.') . ' m³' : null;
+
             $flattenSections = null;
             $flattenSections = function(array $sections, int $depth = 0) use (&$flattenSections): array {
             $rows = [];
@@ -200,6 +203,7 @@
             'label' => $item['nama'],
             'kode' => $item['kode'],
             'nilai' => $item['nilai'],
+            'm3' => $item['m3'] ?? null,
             'qty' => $item['qty'] ?? null,
             'depth' => $depth,
             ];
@@ -301,13 +305,13 @@
                     <table class="w-full text-sm border-collapse" style="min-width:700px">
                         <thead>
                             <tr>
-                                <th colspan="3"
+                                <th colspan="4"
                                     class="border border-gray-200 dark:border-gray-700
                                        bg-blue-50 dark:bg-blue-900/20 py-3 px-5
                                        text-center text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
                                     AKTIVA
                                 </th>
-                                <th colspan="3"
+                                <th colspan="4"
                                     class="border border-gray-200 dark:border-gray-700
                                        bg-green-50 dark:bg-green-900/20 py-3 px-5
                                        text-center text-sm font-bold text-green-700 dark:text-green-300 uppercase tracking-wide">
@@ -317,9 +321,11 @@
                             <tr class="bg-gray-50 dark:bg-gray-700/40 text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">
                                 <th class="border border-gray-100 dark:border-gray-700 py-1.5 px-4 text-left font-semibold w-[32%]">Akun</th>
                                 <th class="border border-gray-100 dark:border-gray-700 py-1.5 px-3 text-right font-semibold w-[7%]">Qty</th>
+                                <th class="border border-gray-100 dark:border-gray-700 py-1.5 px-3 text-right font-semibold w-[6%]">m³</th>
                                 <th class="border border-gray-100 dark:border-gray-700 py-1.5 px-4 text-right font-semibold w-[11%]">Nilai (Rp)</th>
                                 <th class="border border-gray-100 dark:border-gray-700 py-1.5 px-4 text-left font-semibold w-[32%]">Akun</th>
                                 <th class="border border-gray-100 dark:border-gray-700 py-1.5 px-3 text-right font-semibold w-[7%]">Qty</th>
+                                <th class="border border-gray-100 dark:border-gray-700 py-1.5 px-3 text-right font-semibold w-[6%]">m³</th>
                                 <th class="border border-gray-100 dark:border-gray-700 py-1.5 px-4 text-right font-semibold w-[11%]">Nilai (Rp)</th>
                             </tr>
                         </thead>
@@ -384,6 +390,14 @@
                                         @endif
                                     </td>
 
+                                    <td class="border border-gray-100 dark:border-gray-700 py-2 px-3 text-right tabular-nums whitespace-nowrap text-teal-600 dark:text-teal-400">
+                                        @if($aRow && $isItem && !empty($aRow['m3']))
+                                        <span class="text-xs font-semibold">
+                                            {{ $fmtM3($aRow['m3']) }}
+                                        </span>
+                                        @endif
+                                    </td>
+
                                     <td class="border border-gray-100 dark:border-gray-700 py-2 px-4 text-right tabular-nums whitespace-nowrap
                                 {{ $isTot ? 'font-semibold text-gray-800 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300' }}">
                                         @if($aRow && isset($aRow['nilai']) && !$isHdr && !$isSub)
@@ -428,6 +442,14 @@
                                         @endif
                                     </td>
 
+                                    <td class="border border-gray-100 dark:border-gray-700 py-2 px-3 text-right tabular-nums whitespace-nowrap text-teal-600 dark:text-teal-400">
+                                        @if($aRow && $isItem && !empty($aRow['m3']))
+                                        <span class="text-xs font-semibold">
+                                            {{ $fmtM3($aRow['m3']) }}
+                                        </span>
+                                        @endif
+                                    </td>
+
                                     <td class="border border-gray-100 dark:border-gray-700 py-2 px-4 text-right tabular-nums whitespace-nowrap
                                 {{ $isTot ? 'font-semibold text-gray-800 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300' }}">
                                         @if($pRow && isset($pRow['nilai']) && !$isHdr && !$isSub)
@@ -441,7 +463,8 @@
 
                                 {{-- Grand Total --}}
                                 <tr class="bg-gray-800 dark:bg-gray-900 text-white">
-                                    <td colspan="2" class="border border-gray-700 px-5 py-3">
+                                    <!-- Colspan diubah dari 2 menjadi 3 -->
+                                    <td colspan="3" class="border border-gray-700 px-5 py-3">
                                         <span class="font-bold text-sm uppercase tracking-wide">Total Aktiva</span>
                                     </td>
                                     <td class="border border-gray-700 px-4 py-3 text-right tabular-nums">
@@ -449,7 +472,9 @@
                                             {{ $fmt($neraca['totalAktiva']) }}
                                         </span>
                                     </td>
-                                    <td colspan="2" class="border border-gray-700 px-5 py-3">
+
+                                    <!-- Colspan diubah dari 2 menjadi 3 -->
+                                    <td colspan="3" class="border border-gray-700 px-5 py-3">
                                         <span class="font-bold text-sm uppercase tracking-wide">Total Pasiva</span>
                                     </td>
                                     <td class="border border-gray-700 px-4 py-3 text-right tabular-nums">
