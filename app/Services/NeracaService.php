@@ -26,6 +26,11 @@ class NeracaService
 
             $saldo            = $this->getSaldoDinamis($start, $end, $jenisFilter);
             $qty              = $this->getSaldoQtyDinamis($start, $end, $jenisFilter);
+
+            // ── PERUBAHAN 1: AMBIL SALDO M3 DINAMIS DARI DATABASE ──────────────────
+            // Baris ini ditambahkan untuk memanggil method penarik saldo m3 dinamis
+            $m3               = $this->getSaldoM3Dinamis($start, $end, $jenisFilter);
+
             $labaRugiBerjalan = $this->hitungLabaRugiBerjalanDinamis($start, $end);
 
             $result[$key] = array_merge(
@@ -34,7 +39,9 @@ class NeracaService
                     'tahun' => $periode['tahun'],
                     'bulan' => $periode['bulan']
                 ],
-                $this->buildNeraca($groups, $saldo, $qty, $labaRugiBerjalan)
+                // ── PERUBAHAN 2: SERTAKAN VARIABEL $m3 KE DALAM BUILDER NERACA ───────
+                // Parameter $m3 disisipkan di antara $qty dan $labaRugiBerjalan
+                $this->buildNeraca($groups, $saldo, $qty, $m3, $labaRugiBerjalan)
             );
         }
 
@@ -198,6 +205,74 @@ class NeracaService
         return $result;
     }
 
+    // ── PERUBAHAN 3: MENAMBAHKAN METHOD BARU UNTUK SALDO M3 DINAMIS ────────────────────
+    // Metode ini sepenuhnya baru untuk mengakumulasi nilai volume m3 dari Jurnal Umum / Buku Besar
+    private function getSaldoM3Dinamis(Carbon $start, Carbon $end, string $jenisFilter): array
+    {
+        $m3Awal = [];
+        $saldoNormalMap = DB::table('sub_anak_akuns')->pluck('saldo_normal', 'kode_sub_anak_akun')->toArray();
+
+        if ($jenisFilter === 'hari') {
+            $mutasiM3Lalu = JurnalUmum::where('tgl', '<', $start->format('Y-m-d'))
+                ->whereNotNull('m3')->where('m3', '>', 0)
+                ->selectRaw("
+                    no_akun,
+                    SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(m3, 0) ELSE 0 END) as m3_debit,
+                    SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(m3, 0) ELSE 0 END) as m3_kredit
+                ")
+                ->groupBy('no_akun')
+                ->get()
+                ->keyBy('no_akun');
+
+            foreach ($mutasiM3Lalu as $kode => $m) {
+                $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
+                $m3Awal[$kode] = $isKredit
+                    ? ($m->m3_kredit - $m->m3_debit)
+                    : ($m->m3_debit - $m->m3_kredit);
+            }
+        } else {
+            $prevDate = $start->copy()->subMonth();
+            try {
+                $m3Awal = DB::table('buku_besar')
+                    ->where('tahun', $prevDate->year)
+                    ->where('bulan', $prevDate->month)
+                    ->whereNotNull('m3')->where('m3', '>', 0)
+                    ->pluck('m3', 'no_akun')->toArray();
+            } catch (\Exception $e) {
+                $m3Awal = [];
+            }
+        }
+
+        $mutasiM3 = JurnalUmum::whereBetween('tgl', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+            ->whereNotNull('m3')->where('m3', '>', 0)
+            ->selectRaw("
+                no_akun,
+                SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(m3, 0) ELSE 0 END) as m3_debit,
+                SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(m3, 0) ELSE 0 END) as m3_kredit
+            ")
+            ->groupBy('no_akun')
+            ->get()
+            ->keyBy('no_akun');
+
+        $semuaKode = collect(array_keys($m3Awal))->merge($mutasiM3->keys())->unique();
+
+        $result = [];
+        foreach ($semuaKode as $kode) {
+            $awal = (float) ($m3Awal[$kode] ?? 0);
+            $m3D  = (float) ($mutasiM3[$kode]->m3_debit  ?? 0);
+            $m3K  = (float) ($mutasiM3[$kode]->m3_kredit ?? 0);
+
+            if ($m3D == 0 && $m3K == 0 && $awal == 0) continue;
+
+            $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
+            $net = $isKredit ? $awal + $m3K - $m3D : $awal + $m3D - $m3K;
+
+            if ($net != 0) $result[$kode] = $net;
+        }
+
+        return $result;
+    }
+
     private function hitungLabaRugiBerjalanDinamis(Carbon $start, Carbon $end): float
     {
         $rootLabaRugi = DB::table('akun_groups')->whereNull('parent_id')
@@ -292,7 +367,9 @@ class NeracaService
         ])->whereNull('parent_id')->visible()->ordered()->get();
     }
 
-    private function buildNeraca(Collection $groups, array $saldo, array $qty = [], float $labaRugiBerjalan = 0.0): array
+    // ── PERUBAHAN 4: ATUR PARAMETER FUNGSI buildNeraca ───────────────────────
+    // Menambahkan parameter 'array $m3 = []' di antara $qty dan $labaRugiBerjalan
+    private function buildNeraca(Collection $groups, array $saldo, array $qty = [], array $m3 = [], float $labaRugiBerjalan = 0.0): array
     {
         $aktiva = ['sections' => [], 'total' => 0.0];
         $pasiva = ['sections' => [], 'total' => 0.0];
@@ -301,9 +378,11 @@ class NeracaService
             $namaUpper = strtoupper(trim($rootGroup->nama));
 
             if ($rootGroup->childrenRecursive->isEmpty()) {
-                [$sections, $totalRoot] = $this->buildSectionsFromRoot($rootGroup, $saldo, $qty);
+                // ── PERUBAHAN 5: TERUSKAN VARIABEL $m3 KE FUNCTION ANAK ─────────────────
+                [$sections, $totalRoot] = $this->buildSectionsFromRoot($rootGroup, $saldo, $qty, $m3);
             } else {
-                [$sections, $totalRoot] = $this->buildSections($rootGroup->childrenRecursive, $saldo, $qty);
+                // ── PERUBAHAN 6: TERUSKAN VARIABEL $m3 KE FUNCTION REKURSIF ─────────────
+                [$sections, $totalRoot] = $this->buildSections($rootGroup->childrenRecursive, $saldo, $qty, $m3);
             }
 
             $data = ['sections' => $sections, 'total' => $totalRoot];
@@ -323,6 +402,8 @@ class NeracaService
                     'nama'  => 'Laba (Rugi) Periode Berjalan',
                     'nilai' => $labaRugiBerjalan,
                     'qty'   => null,
+                    // ── PERUBAHAN 7: TAMBAHKAN KEY 'm3' UNTUK KONSISTENSI ARRAY ──────────
+                    'm3'    => null,
                 ]],
                 'total'        => $labaRugiBerjalan,
                 'sub_sections' => [],
@@ -338,7 +419,9 @@ class NeracaService
         ];
     }
 
-    private function buildSectionsFromRoot(AkunGroup $rootGroup, array $saldo, array $qty = []): array
+    // ── PERUBAHAN 8: SESUAIKAN SIGNATURE FUNGSI buildSectionsFromRoot ────────
+    // Menambahkan parameter 'array $m3 = []' di bagian akhir
+    private function buildSectionsFromRoot(AkunGroup $rootGroup, array $saldo, array $qty = [], array $m3 = []): array
     {
         $items = [];
         $total = 0.0;
@@ -351,12 +434,16 @@ class NeracaService
             $nilai = $saldo[$sub->kode_sub_anak_akun] ?? 0.0;
             $q     = isset($qty[$sub->kode_sub_anak_akun]) ? (float) $qty[$sub->kode_sub_anak_akun] : null;
 
+            // ── PERUBAHAN 9: HAPUS VARIABEL ERROR $barang->m3 DAN AMBIL SALDO M3 ──
+            // Mengambil volume m3 dari array $m3 yang ditarik dari database secara dinamis
+            $vol   = isset($m3[$sub->kode_sub_anak_akun]) ? (float) $m3[$sub->kode_sub_anak_akun] : null;
+
             $items[] = [
                 'kode'  => $sub->kode_sub_anak_akun,
                 'nama'  => $sub->nama_sub_anak_akun,
                 'nilai' => $nilai,
                 'qty'   => $q,
-                'm3'    => $barang->m3,
+                'm3'    => $vol, // Menggunakan variabel lokal $vol baru (bebas error)
             ];
             $total += $nilai;
         }
@@ -369,7 +456,9 @@ class NeracaService
         ]], $total];
     }
 
-    private function buildSections(Collection $groups, array $saldo, array $qty = []): array
+    // ── PERUBAHAN 10: SESUAIKAN SIGNATURE FUNGSI buildSections ───────────────
+    // Menambahkan parameter 'array $m3 = []' di bagian akhir
+    private function buildSections(Collection $groups, array $saldo, array $qty = [], array $m3 = []): array
     {
         $sections = [];
         $totalAll = 0.0;
@@ -386,11 +475,15 @@ class NeracaService
                         $nilai = $saldo[$sub->kode_sub_anak_akun] ?? 0.0;
                         $q     = isset($qty[$sub->kode_sub_anak_akun]) ? (float) $qty[$sub->kode_sub_anak_akun] : null;
 
+                        // ── PERUBAHAN 11: AMBIL DATA M3 DINAMIS PADA GRUP DAUN (LEAF) ──
+                        $vol   = isset($m3[$sub->kode_sub_anak_akun]) ? (float) $m3[$sub->kode_sub_anak_akun] : null;
+
                         $items[] = [
                             'kode'  => $sub->kode_sub_anak_akun,
                             'nama'  => $sub->nama_sub_anak_akun,
                             'nilai' => $nilai,
                             'qty'   => $q,
+                            'm3'    => $vol, // Petakan $vol ke index m3
                         ];
                         $totalSection += $nilai;
                     }
@@ -403,6 +496,7 @@ class NeracaService
                         'nama'  => $anakAkun->nama_anak_akun,
                         'nilai' => $nilaiAkun,
                         'qty'   => null,
+                        'm3'    => null, // Konsistensi array
                     ];
                     $totalSection += $nilaiAkun;
                 }
@@ -415,7 +509,8 @@ class NeracaService
                 ];
                 $totalAll += $totalSection;
             } else {
-                [$subSections, $totalBranch] = $this->buildSections($group->children, $saldo, $qty);
+                // ── PERUBAHAN 12: TERUSKAN ARRAY $m3 KE METODE REKURSIF ANAK ──────────
+                [$subSections, $totalBranch] = $this->buildSections($group->children, $saldo, $qty, $m3);
                 $sections[] = [
                     'group'        => $group->nama,
                     'items'        => [],
