@@ -65,7 +65,7 @@ class JurnalPembelianService
                     'map'                => 'd',
                     'keterangan'         => "{$detail->nama_barang} | Nota: {$nota}",
                     'no_dokumen'         => $nota,
-                    'total_nilai'        => $detail->subtotal, // INI BENAR (JIKA BERUBAH JADI HARGA, CEK OBSERVER)
+                    'total_nilai'        => $detail->subtotal,
                     'status'             => JurnalPembantuHeader::STATUS_DRAFT,
                     'dibuat_oleh'        => $userId,
                 ]);
@@ -79,7 +79,7 @@ class JurnalPembelianService
                     'no_dokumen'   => $nota,
                     'keterangan'   => "Masuk Gudang " . (float)$detail->qty . " {$detail->satuan}",
                     'banyak'       => $detail->qty,
-                    'm3'           => $detail->kubikasi ?? 0, // <--- TAMBAHAN M3
+                    'm3'           => $detail->kubikasi ?? 0,
                     'harga'        => $detail->harga_beli,
                     'jumlah'       => $detail->subtotal,
                     'status'       => true,
@@ -137,26 +137,30 @@ class JurnalPembelianService
             }
 
             // ──────────────────────────────────────────────────────────────
-            // SISI KREDIT (K) : KUNCI EVALUASI BERDASARKAN MODE PEMBAYARAN DI DB
+            // SISI KREDIT (K) : EVALUASI PEMBAGIAN KAS VS HUTANG DAGANG
             // ──────────────────────────────────────────────────────────────
             $totalUangMuka = 0;
             $sisaHutang    = 0;
 
-            // Ambil data pembayaran pertama dari DB
-            $pembayaranDetail = $pembelian->metodePembayarans->first();
-            $methodString = $pembayaranDetail?->payment_method ?? PembelianMetodePembayaran::METODE_TUNAI;
+            // Urutkan riwayat pembayaran berdasarkan ID untuk mendapatkan pembayaran pertama (DP) secara akurat
+            $pembayaranPertama = $pembelian->metodePembayarans->sortBy('id')->first();
+            $methodString = $pembayaranPertama?->payment_method ?? PembelianMetodePembayaran::METODE_TUNAI;
 
-            // ─── LOGIKA UTAMA: EVALUASI BERDASARKAN METODE ───
+            // ─── LOGIKA UTAMA: AKUNTANSI PEMBAYARAN BERTAHAP ───
             if ($methodString === PembelianMetodePembayaran::METODE_TUNAI) {
+                // Tunai Murni langsung lunas tanpa DP / Hutang
                 $totalUangMuka = $grandTotal;
                 $sisaHutang    = 0;
             } else {
-                $nominalTerbayar = (float) $pembelian->metodePembayarans->sum('amount');
-                $totalUangMuka = $nominalTerbayar;
-                $sisaHutang    = max(0, $grandTotal - $nominalTerbayar);
+                // KUNCI EVALUASI: Untuk DP & Cicilan, Kas/Bank hanya mencatat nominal pembayaran pertama (DP/Uang Muka)
+                // Sisa pembayaran (Grand Total - DP) akan otomatis diakui sebagai Jurnal Hutang Dagang
+                $nominalUangMuka = $pembayaranPertama ? (float) $pembayaranPertama->amount : 0.0;
+
+                $totalUangMuka = $nominalUangMuka;
+                $sisaHutang    = max(0, $grandTotal - $nominalUangMuka);
             }
 
-            // ─── KREDIT 1: KAS / BANK MENCATAT PENGELUARAN ───
+            // ─── KREDIT 1: KAS / BANK MENCATAT PENGELUARAN DP ───
             if ($totalUangMuka > 0) {
                 $metodeUtama = ($methodString === PembelianMetodePembayaran::METODE_TRANSFER)
                     ? self::KODE_BANK_INTAN
@@ -167,12 +171,12 @@ class JurnalPembelianService
                     $namaKas = ($metodeUtama === self::KODE_BANK_INTAN) ? 'bank PT INTAN' : 'kas Tunai Mut';
                 }
 
-                $keteranganHeaderKas = "Pembayaran via " . strtoupper($namaKas) . " | Nota: {$nota} | {$supplier}";
-                if (!empty($pembayaranDetail?->reference_number)) {
-                    $keteranganHeaderKas .= " [Ref: #{$pembayaranDetail->reference_number}]";
+                $keteranganHeaderKas =  strtoupper($namaKas) . " | Nota: {$nota} | {$supplier}";
+                if (!empty($pembayaranPertama?->reference_number)) {
+                    $keteranganHeaderKas .= " [Ref: #{$pembayaranPertama->reference_number}]";
                 }
-                if (!empty($pembayaranDetail?->catatan)) {
-                    $keteranganHeaderKas .= " ({$pembayaranDetail->catatan})";
+                if (!empty($pembayaranPertama?->catatan)) {
+                    $keteranganHeaderKas .= " ({$pembayaranPertama->catatan})";
                 }
 
                 $headerKas = JurnalPembantuHeader::create([
@@ -191,11 +195,6 @@ class JurnalPembelianService
                     'dibuat_oleh'        => $userId,
                 ]);
 
-                $labelKeteranganItem = "Pelunasan Transaksi secara " . strtoupper($methodString);
-                if ($methodString === PembelianMetodePembayaran::METODE_LAINNYA) {
-                    $labelKeteranganItem = "Pembayaran Uang Muka (Down Payment)";
-                }
-
                 JurnalPembantuItem::create([
                     'jurnal_pembantu_header_id' => $headerKas->id,
                     'urut'         => 1,
@@ -203,9 +202,9 @@ class JurnalPembelianService
                     'nama_pihak'   => $supplier,
                     'no_dokumen'   => $nota,
                     'nama_barang'  => null,
-                    'keterangan'   => $labelKeteranganItem,
+                    'keterangan'   => "Pembayaran Awal",
                     'banyak'       => 1,
-                    'm3'           => 0, // <--- TAMBAHAN M3
+                    'm3'           => 0,
                     'harga'        => $totalUangMuka,
                     'jumlah'       => $totalUangMuka,
                     'status'       => true,
@@ -213,7 +212,7 @@ class JurnalPembelianService
                 ]);
             }
 
-            // ─── KREDIT 2: TIMBULNYA SISA HUTANG ───
+            // ─── KREDIT 2: TIMBULNYA SISA HUTANG DAGANG (SISA TAGIHAN) ───
             if ($sisaHutang > 0) {
                 $namaHutang = $this->getNamaAkun(self::KODE_HUTANG_DAGANG);
                 if (empty($namaHutang)) {
@@ -229,7 +228,7 @@ class JurnalPembelianService
                     'no_akun'            => self::KODE_HUTANG_DAGANG,
                     'nama_akun'          => $namaHutang,
                     'map'                => 'k',
-                    'keterangan'         => "Timbul Sisa Hutang Nota: {$nota} | {$supplier}",
+                    'keterangan'         => "Hutang Pembayaran Nota: {$nota} | {$supplier}",
                     'no_dokumen'         => $nota,
                     'total_nilai'        => $sisaHutang,
                     'status'             => JurnalPembantuHeader::STATUS_DRAFT,
@@ -241,7 +240,7 @@ class JurnalPembelianService
                 $sisaBarangHutang = max(0, $totalSub - $totalUangMuka);
 
                 if ($sisaBarangHutang > 0) {
-                    $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Alokasi Sisa Nilai Pokok Barang", $sisaBarangHutang, $userId);
+                    $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Sisa Nilai Pokok Barang", $sisaBarangHutang, $userId);
                 }
                 if ($ongkir > 0) {
                     $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Alokasi Komponen Biaya Ongkos Kirim", $ongkir, $userId);
@@ -263,8 +262,9 @@ class JurnalPembelianService
             'no_dokumen'   => $nota,
             'keterangan'   => $ket,
             'banyak'       => 1,
-            'm3'           => 0, // <--- TAMBAHAN M3
+            'm3'           => 0,
             'harga'        => $nominal,
+            'shadow_harga' => $nominal,
             'jumlah'       => $nominal,
             'status'       => true,
             'created_by'   => $userId,

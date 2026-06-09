@@ -390,9 +390,9 @@
                                         @endif
                                     </td>
 
-                                    <td class="border border-gray-100 dark:border-gray-700 py-2 px-3 text-right tabular-nums whitespace-nowrap text-teal-600 dark:text-teal-400">
+                                    <td class="border border-gray-100 dark:border-gray-700 py-2 px-3 text-right tabular-nums whitespace-nowrap">
                                         @if($aRow && $isItem && !empty($aRow['m3']))
-                                        <span class="text-xs font-semibold">
+                                        <span class="text-xs text-gray-400 dark:text-gray-500 font-normal">
                                             {{ $fmtM3($aRow['m3']) }}
                                         </span>
                                         @endif
@@ -442,9 +442,9 @@
                                         @endif
                                     </td>
 
-                                    <td class="border border-gray-100 dark:border-gray-700 py-2 px-3 text-right tabular-nums whitespace-nowrap text-teal-600 dark:text-teal-400">
+                                    <td class="border border-gray-100 dark:border-gray-700 py-2 px-3 text-right tabular-nums whitespace-nowrap">
                                         @if($aRow && $isItem && !empty($aRow['m3']))
-                                        <span class="text-xs font-semibold">
+                                        <span class="text-xs text-gray-400 dark:text-gray-500 font-normal">
                                             {{ $fmtM3($aRow['m3']) }}
                                         </span>
                                         @endif
