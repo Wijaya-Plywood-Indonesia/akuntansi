@@ -12,20 +12,28 @@ use Illuminate\Support\Facades\Log;
 
 class JurnalPembelianService
 {
-    /** Pemetaan Kode Akun Sesuai Standar Akuntansi Perusahaan */
-    const KODE_HUTANG_DAGANG     = '2100-00';
-    const KODE_KAS_DEFAULT       = '1121-00';
-    const KODE_BANK_INTAN        = '1212-00';
+    // ──────────────────────────────────────────────────────────────
+    // KODE AKUN PATEN (HARDCODE/FIXED) UNTUK KEPERLUAN SAAT INI
+    // ──────────────────────────────────────────────────────────────
+    const KODE_KAS_TUNAI        = '110-01'; // Paten Kas Tunai
+    const KODE_BANK_TRANSFER    = '110-02'; // Paten Bank/Transfer
+    const KODE_PPN_MASUKAN      = '116-01'; // Paten PPN Masukan
+    const KODE_HUTANG_DAGANG    = '211-01'; // Paten Hutang Dagang
+    const KODE_BEBAN_ONGKIR     = '512-07'; // Paten Beban Ongkir
+    const KODE_BEBAN_LAIN_LAIN  = '610-99'; // Paten Beban Lain-Lain
 
-    /** KUNCI PERBAIKAN: Kode akun beban penyeimbang Debit (D) */
-    const KODE_BEY_ONGKIR_DEBET  = '5200-07'; // Biaya Angkut Pembelian
-    const KODE_BEY_LAIN_DEBET    = '5900-00'; // Beban Lain-lain
-
+    /**
+     * Membuat Jurnal Pembantu secara Fleksibel dan Dinamis
+     */
     public function buatJurnalDariPembelian(Pembelian $pembelian, int $userId): void
     {
+        // Load relasi barang (termasuk persediaan, hpp, dan pendapatan)
         $pembelian->loadMissing([
             'detailPembelians.barang.subAnakAkun',
-            'metodePembayarans'
+            'detailPembelians.barang.akunHpp',
+            'detailPembelians.barang.akunPendapatan',
+            'metodePembayarans',
+            'supplier'
         ]);
 
         if ($pembelian->detailPembelians->isEmpty()) {
@@ -38,18 +46,25 @@ class JurnalPembelianService
             $supplier = $pembelian->supplier_name ?: 'Supplier';
             $grandTotal = (float) $pembelian->grand_total;
 
+            // Generate nomor urut jurnal pembantu baru
             $noJurnal = JurnalPembantuHeader::lockForUpdate()->max('jurnal') + 1;
 
             // ──────────────────────────────────────────────────────────────
-            // SISI DEBIT (D) 1: Nilai Pokok Barang (Persediaan Gudang)
+            // SISI DEBIT (D) 1: Nilai Pokok Barang (Persediaan Gudang dari Tabel Barang)
             // ──────────────────────────────────────────────────────────────
-            foreach ($pembelian->detailPembelians as $index => $detail) {
+            foreach ($pembelian->detailPembelians as $detail) {
                 $barang = $detail->barang;
+
+                // Ambil DINAMIS dari tabel barang (id_sub_anak_akun)
                 $kodeAkunDebet = $barang?->subAnakAkun?->kode_sub_anak_akun;
 
+                // Jika ingin mengambil akun HPP atau Pendapatan milik barang di masa mendatang:
+                // $kodeAkunHpp = $barang?->akunHpp?->kode_sub_anak_akun;
+                // $kodeAkunPendapatan = $barang?->akunPendapatan?->kode_sub_anak_akun;
+
                 if (!$kodeAkunDebet) {
-                    Log::warning("[JurnalPembelian] Barang '{$detail->nama_barang}' belum di-set akun jurnalnya. Kebal ke akun default.");
-                    $kodeAkunDebet = '1411-00';
+                    Log::warning("[JurnalPembelian] Barang '{$detail->nama_barang}' belum di-set akun persediaannya. Menggunakan fallback persediaan default '115-01'.");
+                    $kodeAkunDebet = '115-01';
                 }
 
                 $namaAkunDebet = $this->getNamaAkun($kodeAkunDebet);
@@ -81,6 +96,8 @@ class JurnalPembelianService
                     'banyak'       => $detail->qty,
                     'm3'           => $detail->kubikasi ?? 0,
                     'harga'        => $detail->harga_beli,
+                    'shadow_harga' => $detail->harga_beli,
+                    'shadow_jumlah' => $detail->subtotal,
                     'jumlah'       => $detail->subtotal,
                     'status'       => true,
                     'created_by'   => $userId,
@@ -88,11 +105,39 @@ class JurnalPembelianService
             }
 
             // ──────────────────────────────────────────────────────────────
-            // SISI DEBIT (D) 2: BEBAN ONGKIR & BIAYA LAIN (PENYEIMBANG)
+            // SISI DEBIT (D) 2: PAJAK PPN MASUKAN (PATEN/HARDCODE)
+            // ──────────────────────────────────────────────────────────────
+            $ppnNominal = (float) ($pembelian->total_ppn ?? 0);
+            if ($ppnNominal > 0) {
+                $kodeAkunPpn = self::KODE_PPN_MASUKAN;
+                $namaAkunPpn = $this->getNamaAkun($kodeAkunPpn) ?: 'PPN Masukan';
+
+                $headerPpnD = JurnalPembantuHeader::create([
+                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                    'tgl_transaksi'      => $tgl,
+                    'jenis_transaksi'    => 'bm',
+                    'modul_asal'         => 'pembelian_barang',
+                    'jurnal'             => $noJurnal,
+                    'no_akun'            => $kodeAkunPpn,
+                    'nama_akun'          => $namaAkunPpn,
+                    'map'                => 'd',
+                    'keterangan'         => "Pajak Pertambahan Nilai (PPN) | Nota: {$nota}",
+                    'no_dokumen'         => $nota,
+                    'total_nilai'        => $ppnNominal,
+                    'status'             => JurnalPembantuHeader::STATUS_DRAFT,
+                    'dibuat_oleh'        => $userId,
+                ]);
+
+                $this->buatItemDetail($headerPpnD->id, 1, $supplier, $nota, "Alokasi Pajak {$nota}", $ppnNominal, $userId);
+            }
+
+            // ──────────────────────────────────────────────────────────────
+            // SISI DEBIT (D) 3: BEBAN ONGKIR (PATEN/HARDCODE)
             // ──────────────────────────────────────────────────────────────
             $ongkir = (float) ($pembelian->ongkir ?? 0);
             if ($ongkir > 0) {
-                $namaAkunOngkir = $this->getNamaAkun(self::KODE_BEY_ONGKIR_DEBET) ?: 'Biaya Angkut Pembelian';
+                $kodeAkunOngkir = self::KODE_BEBAN_ONGKIR;
+                $namaAkunOngkir = $this->getNamaAkun($kodeAkunOngkir) ?: 'Biaya Angkut Pembelian';
 
                 $headerOngkirD = JurnalPembantuHeader::create([
                     'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
@@ -100,7 +145,7 @@ class JurnalPembelianService
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
                     'jurnal'             => $noJurnal,
-                    'no_akun'            => self::KODE_BEY_ONGKIR_DEBET,
+                    'no_akun'            => $kodeAkunOngkir,
                     'nama_akun'          => $namaAkunOngkir,
                     'map'                => 'd',
                     'keterangan'         => "Beban Ongkos Kirim Pembelian | Nota: {$nota}",
@@ -113,9 +158,13 @@ class JurnalPembelianService
                 $this->buatItemDetail($headerOngkirD->id, 1, $supplier, $nota, "Alokasi Beban Ongkir Nota {$nota}", $ongkir, $userId);
             }
 
+            // ──────────────────────────────────────────────────────────────
+            // SISI DEBIT (D) 4: BIAYA LAIN-LAIN (PATEN/HARDCODE)
+            // ──────────────────────────────────────────────────────────────
             $biayaLain = (float) ($pembelian->biaya_lain ?? 0);
             if ($biayaLain > 0) {
-                $namaAkunLain = $this->getNamaAkun(self::KODE_BEY_LAIN_DEBET) ?: 'Beban Lain-Lain';
+                $kodeAkunLain = self::KODE_BEBAN_LAIN_LAIN;
+                $namaAkunLain = $this->getNamaAkun($kodeAkunLain) ?: 'Beban Lain-Lain';
 
                 $headerLainD = JurnalPembantuHeader::create([
                     'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
@@ -123,7 +172,7 @@ class JurnalPembelianService
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
                     'jurnal'             => $noJurnal,
-                    'no_akun'            => self::KODE_BEY_LAIN_DEBET,
+                    'no_akun'            => $kodeAkunLain,
                     'nama_akun'          => $namaAkunLain,
                     'map'                => 'd',
                     'keterangan'         => "Beban Biaya Lain-Lain Pembelian | Nota: {$nota}",
@@ -142,36 +191,31 @@ class JurnalPembelianService
             $totalUangMuka = 0;
             $sisaHutang    = 0;
 
-            // Urutkan riwayat pembayaran berdasarkan ID untuk mendapatkan pembayaran pertama (DP) secara akurat
             $pembayaranPertama = $pembelian->metodePembayarans->sortBy('id')->first();
             $methodString = $pembayaranPertama?->payment_method ?? PembelianMetodePembayaran::METODE_TUNAI;
 
-            // ─── LOGIKA UTAMA: AKUNTANSI PEMBAYARAN BERTAHAP ───
             if ($methodString === PembelianMetodePembayaran::METODE_TUNAI) {
-                // Tunai Murni langsung lunas tanpa DP / Hutang
                 $totalUangMuka = $grandTotal;
                 $sisaHutang    = 0;
             } else {
-                // KUNCI EVALUASI: Untuk DP & Cicilan, Kas/Bank hanya mencatat nominal pembayaran pertama (DP/Uang Muka)
-                // Sisa pembayaran (Grand Total - DP) akan otomatis diakui sebagai Jurnal Hutang Dagang
                 $nominalUangMuka = $pembayaranPertama ? (float) $pembayaranPertama->amount : 0.0;
-
                 $totalUangMuka = $nominalUangMuka;
                 $sisaHutang    = max(0, $grandTotal - $nominalUangMuka);
             }
 
-            // ─── KREDIT 1: KAS / BANK MENCATAT PENGELUARAN DP ───
+            // ─── KREDIT 1: KAS / BANK MENCATAT PENGELUARAN DP (PATEN/HARDCODE) ───
             if ($totalUangMuka > 0) {
+                // Diambil dari konstanta paten kas / bank transfer
                 $metodeUtama = ($methodString === PembelianMetodePembayaran::METODE_TRANSFER)
-                    ? self::KODE_BANK_INTAN
-                    : self::KODE_KAS_DEFAULT;
+                    ? self::KODE_BANK_TRANSFER
+                    : self::KODE_KAS_TUNAI;
 
                 $namaKas = $this->getNamaAkun($metodeUtama);
                 if (empty($namaKas)) {
-                    $namaKas = ($metodeUtama === self::KODE_BANK_INTAN) ? 'bank PT INTAN' : 'kas Tunai Mut';
+                    $namaKas = ($methodString === PembelianMetodePembayaran::METODE_TRANSFER) ? 'Bank Transfer' : 'Kas Tunai';
                 }
 
-                $keteranganHeaderKas =  strtoupper($namaKas) . " | Nota: {$nota} | {$supplier}";
+                $keteranganHeaderKas = strtoupper($namaKas) . " | Nota: {$nota} | {$supplier}";
                 if (!empty($pembayaranPertama?->reference_number)) {
                     $keteranganHeaderKas .= " [Ref: #{$pembayaranPertama->reference_number}]";
                 }
@@ -202,22 +246,23 @@ class JurnalPembelianService
                     'nama_pihak'   => $supplier,
                     'no_dokumen'   => $nota,
                     'nama_barang'  => null,
-                    'keterangan'   => "Pembayaran Awal",
+                    'keterangan'   => "Pembayaran Tunai/Uang Muka",
                     'banyak'       => 1,
                     'm3'           => 0,
                     'harga'        => $totalUangMuka,
+                    'shadow_harga' => $totalUangMuka,
+                    'shadow_jumlah' => $totalUangMuka,
                     'jumlah'       => $totalUangMuka,
                     'status'       => true,
                     'created_by'   => $userId,
                 ]);
             }
 
-            // ─── KREDIT 2: TIMBULNYA SISA HUTANG DAGANG (SISA TAGIHAN) ───
+            // ─── KREDIT 2: HUTANG DAGANG (PATEN/HARDCODE) ───
             if ($sisaHutang > 0) {
-                $namaHutang = $this->getNamaAkun(self::KODE_HUTANG_DAGANG);
-                if (empty($namaHutang)) {
-                    $namaHutang = 'Hutang Dagang';
-                }
+                // Diambil dari konstanta paten hutang dagang
+                $akunHutangDinamis = self::KODE_HUTANG_DAGANG;
+                $namaHutang = $this->getNamaAkun($akunHutangDinamis) ?: 'Hutang Dagang';
 
                 $headerHutang = JurnalPembantuHeader::create([
                     'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
@@ -225,7 +270,7 @@ class JurnalPembelianService
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
                     'jurnal'             => $noJurnal,
-                    'no_akun'            => self::KODE_HUTANG_DAGANG,
+                    'no_akun'            => $akunHutangDinamis,
                     'nama_akun'          => $namaHutang,
                     'map'                => 'k',
                     'keterangan'         => "Hutang Pembayaran Nota: {$nota} | {$supplier}",
@@ -241,6 +286,9 @@ class JurnalPembelianService
 
                 if ($sisaBarangHutang > 0) {
                     $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Sisa Nilai Pokok Barang", $sisaBarangHutang, $userId);
+                }
+                if ($ppnNominal > 0) {
+                    $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Alokasi Pajak Pertambahan Nilai (PPN)", $ppnNominal, $userId);
                 }
                 if ($ongkir > 0) {
                     $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Alokasi Komponen Biaya Ongkos Kirim", $ongkir, $userId);
@@ -265,6 +313,7 @@ class JurnalPembelianService
             'm3'           => 0,
             'harga'        => $nominal,
             'shadow_harga' => $nominal,
+            'shadow_jumlah' => $nominal,
             'jumlah'       => $nominal,
             'status'       => true,
             'created_by'   => $userId,

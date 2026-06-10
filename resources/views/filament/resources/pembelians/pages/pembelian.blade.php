@@ -4,6 +4,7 @@
                 items: @entangle('items'),
                 ongkir: @entangle('ongkir'),
                 biayaLain: @entangle('biaya_lain'),
+                ppnPersen: @entangle('ppn_persen'),
                 bayar: @entangle('payment_amount'),
                 nomorNota: @entangle('nomor_nota'),
                 tanggal: @entangle('tanggal'),
@@ -25,9 +26,14 @@
                     }, 0);
                 },
 
+                get ppnNominal() {
+                    return Math.round((this.subTotal * (parseFloat(this.ppnPersen) || 0)) / 100);
+                },
+
                 get grandTotal() {
                     return Math.max(0,
                         Math.round(this.subTotal)
+                        + Math.round(this.ppnNominal)
                         + Math.round(parseFloat(this.ongkir) || 0)
                         + Math.round(parseFloat(this.biayaLain) || 0)
                     );
@@ -72,6 +78,8 @@
                         is_new_supplier: this.isNewSupplier,
                         catatan: this.catatan,
                         sub_total: this.subTotal,
+                        ppn_persen: this.ppnPersen,
+                        total_ppn: this.ppnNominal,
                         ongkir: this.ongkir,
                         biaya_lain: this.biayaLain,
                         payment_method: this.paymentMethod,
@@ -392,7 +400,7 @@
                                                             m3 = clean ? parseFloat(clean) : 0;
                                                             $el.value = clean;
                                                         "
-                                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md py-1 px-1 text-xs font-bold text-center focus:ring-2 focus:ring-primary-500/10 dark:text-white outline-none" 
+                                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md py-1 px-1 text-xs font-bold text-center focus:ring-2 focus:ring-primary-500/10 dark:text-white outline-none"
                                                         placeholder="0.0000" />
                                                 </td>
 
@@ -436,7 +444,7 @@
                                             <tr>
                                                 <td colspan="8" class="py-12">
                                                     <div class="flex flex-col items-center justify-center w-full">
-                                                        <x-heroicon-o-shopping-bag class="w-10 h-10 text-gray-200 dark:text-gray-750 mb-1" />
+                                                        <x-heroicon-o-shopping-bag class="w-10 h-10 text-gray-250 dark:text-gray-750 mb-1" />
                                                         <span class="text-[10px] font-black uppercase text-gray-400 dark:text-gray-600 tracking-[0.2em]">Belum ada barang</span>
                                                     </div>
                                                 </td>
@@ -488,7 +496,7 @@
                                             </div>
                                             <button wire:click="removeItem({{ $index }})" type="button" class="text-gray-300 hover:text-red-500 p-1"><x-heroicon-o-trash class="w-4 h-4" /></button>
                                         </div>
-                                        
+
                                         <div class="grid grid-cols-2 gap-3">
                                             <div class="space-y-1">
                                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Qty</label>
@@ -529,17 +537,20 @@
                                             </div>
                                             <div class="space-y-1">
                                                 <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Harga Beli</label>
-                                                <input type="text"
-                                                    :value="formatHarga(harga)"
-                                                    @input="
-                                                         let raw = $event.target.value.replace(/\D/g, '');
-                                                         harga = raw ? parseInt(raw) : 0;
-                                                         $el.value = formatHarga(harga);
-                                                     "
-                                                    class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl py-2 px-3 text-sm font-black text-right focus:ring-2 focus:ring-primary-500/10 dark:text-white transition-all outline-none" />
+                                                <div class="relative flex items-center">
+                                                    <span class="absolute left-3 text-[9px] font-black text-gray-450">Rp</span>
+                                                    <input type="text"
+                                                        :value="formatHarga(harga)"
+                                                        @input="
+                                                             let raw = $event.target.value.replace(/\D/g, '');
+                                                             harga = raw ? parseInt(raw) : 0;
+                                                             $el.value = formatHarga(harga);
+                                                         "
+                                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl py-2 px-3 text-sm font-black text-right focus:ring-2 focus:ring-primary-500/10 dark:text-white transition-all outline-none" />
+                                                </div>
                                             </div>
                                         </div>
-                                        
+
                                         <div class="space-y-1 text-right bg-gray-50 dark:bg-gray-800/30 p-2.5 rounded-xl">
                                             <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</label>
                                             <div class="text-sm font-black text-primary-600 dark:text-primary-400" x-text="'Rp ' + fmt(subtotal)"></div>
@@ -615,6 +626,25 @@
                                     <div class="flex justify-between items-center">
                                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Subtotal Barang</span>
                                         <span class="font-black text-sm text-gray-955 dark:text-white" x-text="'Rp ' + fmt(subTotal)"></span>
+                                    </div>
+
+                                    {{-- Pajak PPN Breakdown (Rupiah) --}}
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide" x-text="'PPN (' + ppnPersen + '%)'"></span>
+                                        <span class="font-black text-sm text-gray-955 dark:text-white" x-text="'Rp ' + fmt(ppnNominal)"></span>
+                                    </div>
+
+                                    {{-- Input PPN Pajak (Dengan Suffix % di Sebelah Kanan) --}}
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Pajak PPN (+)</span>
+                                        <div class="relative flex items-center">
+                                            <input type="text"
+                                                inputmode="numeric"
+                                                x-model="ppnPersen"
+                                                @input="ppnPersen = $event.target.value.replace(/\D/g, '')"
+                                                class="w-36 pl-2.5 pr-7 py-1 text-right font-black text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none" />
+                                            <span class="absolute right-2.5 text-[10px] font-bold text-gray-400 pointer-events-none">%</span>
+                                        </div>
                                     </div>
 
                                     {{-- Ongkir --}}
@@ -800,6 +830,7 @@
                             catatan: component.$wire.catatan,
                             sub_total: component.$wire.sub_total,
                             total_diskon: component.$wire.total_diskon,
+                            ppn_persen: component.$wire.ppn_persen,
                             total_ppn: component.$wire.total_ppn,
                             ongkir: component.$wire.ongkir,
                             biaya_lain: component.$wire.biaya_lain,
