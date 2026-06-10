@@ -140,19 +140,20 @@ class JurnalPembantuHeader extends Model
     // ── Hitung ulang total_nilai dari items ───────────────────────────
 
     public function recalculateTotalNilai(string $kolomStatus = 'aktif'): void
-    {
-        $items = $this->items()->where('status', true)->get();
+{
+    $items = $this->items()->where('status', true)->get();
 
-        $total = $items->sum(function ($item) {
-            return match ($item->hit_kbk) {
-                'k' => $item->harga * ($item->m3 ?? 0) * 1000,
-                'b' => $item->harga * ($item->banyak ?? 0),
-                default => $item->jumlah, // <--- UBAH DI SINI, AMBIL DARI KOLOM JUMLAH
-            };
-        });
-        
-        $this->update(['total_nilai' => $total]);
-    }
+    $total = $items->sum(function ($item) {
+        return match ($item->hit_kbk) {
+            'k' => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
+            'b' => (float)$item->harga * (float)($item->banyak ?? 0),
+            // FIX: hitung dari banyak × harga, bukan ambil kolom jumlah
+            default => (float)$item->harga * (float)($item->banyak ?? 0),
+        };
+    });
+    
+    $this->update(['total_nilai' => $total]);
+}
 
     // ── Auto-set total_nilai dari items saat items berubah ────────────
     // Panggil method ini dari observer JurnalPembantuItem atau service.
