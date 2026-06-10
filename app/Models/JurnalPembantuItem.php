@@ -75,31 +75,22 @@ class JurnalPembantuItem extends Model
     // ── Hitung jumlah otomatis sebelum simpan ─────────────────────────
 
     protected static function booted(): void
-    {
-        static::created(function ($item) {
-            // Hanya recalculate jika BUKAN dari sync kayu masuk
-            if ($item->header?->modul_asal !== 'kayu_masuk') {
-                $item->header->recalculateTotalNilai();
-            }
-        });
+{
+    // Hapus created dan updated yang redundant
+    // saved sudah mencakup keduanya (created + updated)
+    
+    static::saved(function (self $item) {
+        if ($item->header?->modul_asal !== 'kayu_masuk') {
+            $item->header->recalculateTotalNilai();
+        }
+    });
 
-
-        static::updated(function ($item) {
-            if ($item->header?->modul_asal !== 'kayu_masuk') {
-                $item->header->recalculateTotalNilai();
-            }
-        });
-
-        // Setelah item disimpan/dihapus, update total_nilai di header
-        static::saved(function (self $item) {
-            $item->header->recalculateTotalNilai('status'); // ← ganti, bukan tambah
-        });
-
-        static::deleted(function (self $item) {
-            $item->header->recalculateTotalNilai('status'); // ← ganti, bukan tambah
-
-        });
-    }
+    static::deleted(function (self $item) {
+        if ($item->header?->modul_asal !== 'kayu_masuk') {
+            $item->header->recalculateTotalNilai();
+        }
+    });
+}
 
     public function hitungJumlah(): float
     {
