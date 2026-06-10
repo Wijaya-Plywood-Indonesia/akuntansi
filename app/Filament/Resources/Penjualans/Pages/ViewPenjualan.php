@@ -30,12 +30,12 @@ class ViewPenjualan extends ViewRecord
                 ->requiresConfirmation()
                 ->visible(
                     fn($record) => empty($record->validated_by)
-                    && !in_array($record->status_transaksi, ['LUNAS', 'COD', 'DIBATALKAN'])
+                        && !in_array($record->status_transaksi, ['LUNAS', 'COD', 'DIBATALKAN'])
                 )
                 ->disabled(
                     fn($record) =>
                     $record->user_id === filament()->auth()->id()
-                    && !filament()->auth()->user()->hasRole('super_admin')
+                        && !filament()->auth()->user()->hasRole('super_admin')
                 )
                 ->modalHeading('Validasi Transaksi')
                 ->modalSubmitActionLabel('Simpan Validasi')
@@ -111,7 +111,7 @@ class ViewPenjualan extends ViewRecord
                 ->visible(
                     fn($record) =>
                     !empty($record->validated_by)
-                    && filament()->auth()->user()->hasRole('super_admin')
+                        && filament()->auth()->user()->hasRole('super_admin')
                 )
                 ->action(function ($record) {
                     if (empty($record->validated_by)) {
@@ -160,10 +160,10 @@ class ViewPenjualan extends ViewRecord
 
                                 // Posting ke Jurnal Umum
                                 foreach ($headersAsli as $header) {
-                                    $itemsAktif = $header->items()->where('status', true)->get();
-                                    $totalBanyak = $itemsAktif->sum('banyak');
-                                    $totalM3 = $itemsAktif->sum('m3');
-                                    $totalJumlah = $itemsAktif->sum('jumlah');
+                                    $itemsAktif       = $header->items()->where('status', true)->get();
+                                    $totalBanyak      = (float) $itemsAktif->sum('banyak');
+                                    $totalM3          = (float) $itemsAktif->sum('m3');
+                                    $totalNilaiHeader = (float) $header->total_nilai;
 
                                     $firstItem = $itemsAktif->first();
                                     $itemHitKbk = $firstItem?->hit_kbk;
@@ -198,15 +198,15 @@ class ViewPenjualan extends ViewRecord
                                     if ($hitKbk === 'm') {
                                         $m3 = $totalM3;
                                         $banyak = $totalBanyak > 0 ? $totalBanyak : null;
-                                        $harga = $totalM3 > 0 ? ($totalJumlah / $totalM3) : (float) $header->total_nilai;
+                                        $harga = $totalM3 > 0 ? ($totalNilaiHeader / $totalM3) : $totalNilaiHeader;
                                     } elseif ($hitKbk === 'b') {
                                         $m3 = $totalM3 > 0 ? $totalM3 : null;
                                         $banyak = $totalBanyak > 0 ? $totalBanyak : 1;
-                                        $harga = $totalBanyak > 0 ? ($totalJumlah / $totalBanyak) : (float) $header->total_nilai;
+                                        $harga = $totalBanyak > 0 ? ($totalNilaiHeader / $totalBanyak) : $totalNilaiHeader;
                                     } else {
                                         $m3 = $totalM3 > 0 ? $totalM3 : null;
                                         $banyak = $totalBanyak > 0 ? $totalBanyak : null;
-                                        $harga = (float) $header->total_nilai;
+                                        $harga = $totalNilaiHeader;
                                     }
 
                                     \App\Models\JurnalUmum::create([
@@ -233,7 +233,7 @@ class ViewPenjualan extends ViewRecord
                             // 3. Buat jurnal balik otomatis
                             app(JurnalBalikService::class)
                                 ->buatJurnalBalikDariNota($record->no_nota, $userId);
-                            
+
                             $pesanNotif .= 'Jurnal Balik Baru berhasil diterbitkan di Jurnal Pembantu.';
                         }
 
@@ -319,7 +319,7 @@ class ViewPenjualan extends ViewRecord
                 ->action(function (array $data, $record) {
                     try {
                         $data['total'] = $data['total_saat_ini'];
-                        
+
                         // FIX: Langsung timpa dengan nilai final dari inputan form
                         // Jangan ditambah (+) dengan $record lama agar tidak dobel
                         $data['bayar'] = (float) ($data['bayar'] ?? 0);
@@ -331,7 +331,7 @@ class ViewPenjualan extends ViewRecord
                             ->title('Data Berhasil Disinkronkan')
                             ->success()
                             ->send();
-                        
+
                         return redirect(request()->header('Referer'));
                     } catch (\Exception $e) {
                         Notification::make()
