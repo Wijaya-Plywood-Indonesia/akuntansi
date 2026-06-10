@@ -1,59 +1,238 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 📒 Akuntansi — PT. Wijaya Plywood Indonesia
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+> Sistem Akuntansi berbasis web untuk pengelolaan keuangan internal PT. Wijaya Plywood Indonesia, dapat diakses di **[akuntansi.wijayaplywoods.com](https://akuntansi.wijayaplywoods.com)**.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 📋 Deskripsi
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+**Akuntansi** adalah aplikasi web internal berbasis Laravel yang dibangun untuk mengelola proses akuntansi perusahaan secara terintegrasi. Aplikasi ini menggunakan panel admin berbasis **FilamentPHP 5** dengan desain responsif dan antarmuka yang modern.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## ✨ Fitur Utama
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+| Modul | Deskripsi |
+|-------|-----------|
+| **Jurnal Umum** | Pencatatan transaksi keuangan harian |
+| **Jurnal Pembantu** | Jurnal pembantu dengan header dan item detail |
+| **Buku Besar** | Rekapitulasi per akun dari jurnal umum |
+| **Neraca** | Laporan posisi keuangan perusahaan |
+| **Chart of Account (COA)** | Struktur akun bertingkat: Induk Akun → Anak Akun → Sub Anak Akun |
+| **Master Data** | Pengelolaan data master (vendor, customer, dll.) |
+| **Penjualan** | Pencatatan dan pengelolaan transaksi penjualan |
+| **Pembelian** | Pencatatan dan pengelolaan transaksi pembelian |
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## 🛠️ Tech Stack
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+| Komponen | Teknologi |
+|----------|-----------|
+| Backend Framework | Laravel 12 |
+| PHP Version | PHP ^8.2 |
+| Admin Panel | FilamentPHP 5.0 |
+| Role & Permission | Filament Shield 4.1 |
+| Tree/Nested Data | kalnoy/nestedset 6.0 |
+| Autentikasi API | Laravel Sanctum 4.0 |
+| Realtime (opsional) | Pusher PHP Server 7.2 |
+| Frontend Build | Vite + Tailwind CSS |
+| Database Default | SQLite (dapat dikonfigurasi ke MySQL) |
 
-### Premium Partners
+---
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## ⚙️ Requirements
 
-## Contributing
+Sebelum instalasi, pastikan environment memenuhi persyaratan berikut:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- PHP >= 8.2
+- Composer
+- Node.js & npm
+- SQLite / MySQL / MariaDB
+- Extension PHP: `pdo`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype`, `json`
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## 🚀 Instalasi
 
-## Security Vulnerabilities
+### 1. Clone Repositori
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+git clone https://github.com/Wijaya-Plywood-Indonesia/akuntansi.git
+cd akuntansi
+```
 
-## License
+### 2. Setup Otomatis (Rekomendasi)
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+composer run setup
+```
+
+Perintah ini akan secara otomatis menjalankan:
+- `composer install`
+- Menyalin `.env.example` → `.env`
+- Generate application key
+- Menjalankan migrasi database
+- `npm install` & `npm run build`
+
+### 3. Setup Manual (Langkah demi Langkah)
+
+```bash
+# Install dependensi PHP
+composer install
+
+# Salin file konfigurasi environment
+cp .env.example .env
+
+# Generate application key
+php artisan key:generate
+
+# Jalankan migrasi database
+php artisan migrate
+
+# Install dependensi JavaScript
+npm install
+
+# Build asset frontend
+npm run build
+```
+
+---
+
+## 🔧 Konfigurasi Environment
+
+Buka file `.env` dan sesuaikan konfigurasi berikut:
+
+```env
+APP_NAME="Akuntansi Wijaya"
+APP_URL=http://localhost
+
+# Konfigurasi Database (default: SQLite)
+DB_CONNECTION=sqlite
+
+# Untuk MySQL, uncomment dan isi berikut:
+# DB_CONNECTION=mysql
+# DB_HOST=127.0.0.1
+# DB_PORT=3306
+# DB_DATABASE=akuntansi
+# DB_USERNAME=root
+# DB_PASSWORD=
+
+# Konfigurasi Pusher (opsional, untuk fitur realtime)
+# PUSHER_APP_ID=
+# PUSHER_APP_KEY=
+# PUSHER_APP_SECRET=
+# PUSHER_HOST=
+# PUSHER_PORT=443
+# PUSHER_SCHEME=https
+# PUSHER_APP_CLUSTER=mt1
+```
+
+---
+
+## ▶️ Menjalankan Aplikasi
+
+### Mode Development
+
+```bash
+composer run dev
+```
+
+Perintah ini akan menjalankan secara bersamaan:
+- PHP development server (`php artisan serve`)
+- Queue listener
+- Log watcher (Pail)
+- Vite dev server
+
+Aplikasi akan tersedia di: **http://localhost:8000**
+
+### Mode Production
+
+```bash
+npm run build
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan serve
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+composer run test
+```
+
+---
+
+## 📁 Struktur Direktori
+
+```
+akuntansi/
+├── app/
+│   ├── Filament/           # Resource, Pages, dan Widgets panel admin
+│   ├── Models/             # Eloquent Models (dengan NestedSet untuk COA)
+│   ├── Services/           # Business logic / Service layer
+│   └── ...
+├── config/                 # File konfigurasi Laravel
+├── database/
+│   ├── migrations/         # Migrasi database
+│   ├── seeders/            # Data awal / seeder
+│   └── factories/          # Factory untuk testing
+├── public/                 # Asset publik & entry point web
+├── resources/
+│   ├── views/              # Blade templates (custom Filament pages)
+│   └── css/ & js/          # Asset frontend
+├── routes/                 # Definisi routing aplikasi
+├── storage/                # Log, cache, file upload
+├── tests/                  # Unit & Feature tests
+├── .env.example            # Template konfigurasi environment
+├── composer.json           # Dependensi PHP
+└── package.json            # Dependensi JavaScript
+```
+
+---
+
+## 🔐 Akses Panel Admin
+
+Panel admin dibangun dengan **FilamentPHP** dan dapat diakses di:
+
+```
+http://localhost:8000/admin
+```
+
+Manajemen role dan permission menggunakan **Filament Shield**. Setelah instalasi, jalankan:
+
+```bash
+php artisan shield:generate --all
+php artisan shield:super-admin --user=1
+```
+
+---
+
+## 📦 Changelog / Releases
+
+| Versi | Tanggal | Perubahan |
+|-------|---------|-----------|
+| **V.1.2.0** | 2 Jun 2026 | Master data + Modul Penjualan & Pembelian; update Migrations, Model, Blade, Filament Resource & Page, Service |
+| **V.1.1.0** | 13 Mar 2026 | Penambahan Jurnal Pembantu (header & items) |
+| **v1.0.0** | 3 Mar 2026 | Rilis perdana: Jurnal Umum, Buku Besar, Neraca, COA (Induk/Anak/Sub Anak Akun), desain responsif custom Filament |
+
+Lihat semua rilis di: [GitHub Releases](https://github.com/Wijaya-Plywood-Indonesia/akuntansi/releases)
+
+---
+
+## 👥 Tim Pengembang
+
+Dikembangkan oleh tim IT **PT. Wijaya Plywood Indonesia**.
+
+---
+
+## 📄 Lisensi
+
+Proyek ini bersifat **privat** dan hanya digunakan untuk keperluan internal PT. Wijaya Plywood Indonesia.
+
+---
+
+*Dokumentasi ini akan terus diperbarui seiring perkembangan aplikasi.*
