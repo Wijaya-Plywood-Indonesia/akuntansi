@@ -33,11 +33,12 @@ class Pembelian extends Page
     public $supplier_name;
     public $supplier_phone;
     public $supplier_address;
-    public $is_new_supplier  = false;
+    public $is_new_supplier   = false;
 
     public $catatan;
     public $foto_nota = [];
     public $items = [];
+    public $status; // Menambahkan deklarasi properti untuk menghindari ralat undefined property
 
     public string $search        = '';
     public array  $searchResults = [];
@@ -45,7 +46,11 @@ class Pembelian extends Page
 
     public $sub_total    = 0;
     public $total_diskon = null;
-    public $total_ppn    = null;
+
+    // Pajak PPN
+    public $ppn_persen   = 11; // Menyimpan persentase PPN default 11%
+    public $total_ppn    = null; // Menyimpan nominal pajak dalam rupiah
+
     public $ongkir       = null;
     public $biaya_lain   = null;
 
@@ -141,8 +146,7 @@ class Pembelian extends Page
                 $hitungDari = $this->items[$index]['hitung_dari'] ?? 'qty';
 
                 $subtotalLama = floatval($this->items[$index]['subtotal'] ?? 0);
-                
-                // Menentukan pengali (Qty atau M3)
+
                 $pengali = ($hitungDari === 'm3') ? $kubikasi : $qty;
                 $subtotalBaru = max(0.0, ($pengali * $hargaItem) - $diskon);
 
@@ -165,7 +169,7 @@ class Pembelian extends Page
             'satuan'      => $satuan,
             'qty'         => 1,
             'kubikasi'    => 0,
-            'hitung_dari' => 'qty', // Default hitung berdasar Qty
+            'hitung_dari' => 'qty',
             'harga_beli'  => $harga,
             'diskon'      => 0,
             'subtotal'    => $subtotal,
@@ -247,6 +251,11 @@ class Pembelian extends Page
         $this->recalculateSubTotal();
     }
 
+    public function updatedPpnPersen(): void
+    {
+        $this->recalculateSubTotal();
+    }
+
     public function recalculateSubTotal(): void
     {
         $total = 0.0;
@@ -258,7 +267,6 @@ class Pembelian extends Page
             $diskon      = $this->parseNumber($item['diskon'] ?? 0);
             $hitung_dari = $item['hitung_dari'] ?? 'qty';
 
-            // Menentukan pengali (Qty atau M3)
             $pengali = ($hitung_dari === 'm3') ? $kubikasi : $qty;
             $subtotal = max(0.0, ($pengali * $harga) - $diskon);
 
@@ -267,6 +275,9 @@ class Pembelian extends Page
         }
 
         $this->sub_total = $total;
+
+        // Kalkulasi nominal rupiah PPN secara real-time berdasarkan subtotal di backend
+        $this->total_ppn = round(($this->sub_total * ($this->parseNumber($this->ppn_persen))) / 100);
     }
 
     #[Computed]
@@ -339,8 +350,8 @@ class Pembelian extends Page
                 'items'                => 'required|array|min:1',
                 'items.*.barang_id'    => 'required',
                 'items.*.qty'          => 'required|numeric|min:0.01',
-                'items.*.kubikasi'     => 'nullable|numeric|min:0', // Validasi kubikasi
-                'items.*.hitung_dari'  => 'required|in:qty,m3',     // Validasi pilihan dropdown
+                'items.*.kubikasi'     => 'nullable|numeric|min:0',
+                'items.*.hitung_dari'  => 'required|in:qty,m3',
                 'items.*.harga_beli'   => 'required|numeric|min:0',
             ], [
                 'nomor_nota.required'         => 'Nomor nota/invoice wajib diisi.',
@@ -398,7 +409,7 @@ class Pembelian extends Page
             $this->status = match (true) {
                 $grand > 0 && $dibayar >= $grand  => ModelsPembelian::STATUS_LUNAS,
                 $dibayar > 0 && $dibayar < $grand => ModelsPembelian::STATUS_CICILAN,
-                default                            => ModelsPembelian::STATUS_HUTANG,
+                default                           => ModelsPembelian::STATUS_HUTANG,
             };
 
             $pembelian = ModelsPembelian::create([
@@ -414,7 +425,7 @@ class Pembelian extends Page
                 'foto'             => !empty($paths) ? $paths : null,
                 'sub_total'        => $this->sub_total,
                 'total_diskon'     => $this->parseNumber($this->total_diskon),
-                'total_ppn'        => $this->parseNumber($this->total_ppn),
+                'total_ppn'        => $this->parseNumber($this->total_ppn), // Tersimpan otomatis sebagai nominal rupiah hasil kalkulasi PPN persen
                 'ongkir'           => $this->parseNumber($this->ongkir),
                 'biaya_lain'       => $this->parseNumber($this->biaya_lain),
                 'grand_total'      => $grand,
@@ -423,7 +434,7 @@ class Pembelian extends Page
             $detailData = [];
             foreach ($this->items as $item) {
                 if (empty($item['barang_id'])) continue;
-                
+
                 $detailData[] = [
                     'pembelian_id' => $pembelian->id,
                     'barang_id'    => $item['barang_id'],
@@ -431,8 +442,8 @@ class Pembelian extends Page
                     'nama_barang'  => $item['nama_barang'],
                     'satuan'       => $item['satuan'],
                     'qty'          => $this->parseNumber($item['qty']),
-                    'kubikasi'     => $this->parseNumber($item['kubikasi']), // Insert kubikasi
-                    'hitung_dari'  => $item['hitung_dari'] ?? 'qty',         // Insert dasar perhitungan
+                    'kubikasi'     => $this->parseNumber($item['kubikasi']),
+                    'hitung_dari'  => $item['hitung_dari'] ?? 'qty',
                     'harga_beli'   => $this->parseNumber($item['harga_beli']),
                     'diskon'       => $this->parseNumber($item['diskon']),
                     'subtotal'     => $this->parseNumber($item['subtotal']),
@@ -493,7 +504,11 @@ class Pembelian extends Page
         $this->catatan           = $state['catatan'] ?? null;
         $this->sub_total         = $state['sub_total'] ?? 0;
         $this->total_diskon      = $state['total_diskon'] ?? null;
+
+        // Membaca keadaan simpanan PPN
+        $this->ppn_persen        = $state['ppn_persen'] ?? 11;
         $this->total_ppn         = $state['total_ppn'] ?? null;
+
         $this->ongkir            = $state['ongkir'] ?? null;
         $this->biaya_lain        = $state['biaya_lain'] ?? null;
         $this->payment_method    = $state['payment_method'] ?? PembelianMetodePembayaran::METODE_TUNAI;
