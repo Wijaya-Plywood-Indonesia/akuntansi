@@ -425,6 +425,16 @@ class PosPenjualan extends Page
             ->send();
         return;
     }
+
+    if (Penjualan::where('no_nota', $this->no_nota)->exists()) {
+        Notification::make()
+            ->title('No Nota Sudah Digunakan')
+            ->body("Nomor nota '{$this->no_nota}' sudah terdaftar di sistem. Silakan gunakan nomor nota yang lain.")
+            ->danger()
+            ->send();
+        return;
+    }
+
         if (empty($this->cart)) {
             Notification::make()->title('Keranjang Kosong')->danger()->send();
             return;
