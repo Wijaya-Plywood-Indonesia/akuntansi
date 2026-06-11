@@ -29,8 +29,7 @@ class ViewPenjualan extends ViewRecord
                 ->color('success')
                 ->requiresConfirmation()
                 ->visible(
-                    fn($record) => empty($record->validated_by)
-                        && !in_array($record->status_transaksi, ['LUNAS', 'COD', 'DIBATALKAN'])
+                    fn($record) => $record->status_transaksi !== 'LUNAS'
                 )
                 ->disabled(
                     fn($record) =>
@@ -68,9 +67,9 @@ class ViewPenjualan extends ViewRecord
                         return;
                     }
 
-                    if (!empty($record->validated_by)) {
+                    if ($record->status_transaksi === 'LUNAS') {
                         Notification::make()
-                            ->title('Transaksi sudah divalidasi')
+                            ->title('Transaksi sudah lunas dan final')
                             ->warning()
                             ->send();
                         return;
@@ -112,6 +111,7 @@ class ViewPenjualan extends ViewRecord
                     fn($record) =>
                     !empty($record->validated_by)
                         && filament()->auth()->user()->hasRole('super_admin')
+                        && $record->status_transaksi === 'LUNAS'
                 )
                 ->action(function ($record) {
                     if (empty($record->validated_by)) {
