@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\JurnalProduksiController;
 use App\Http\Controllers\PenjualanExportController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\NotaThermalController;
@@ -40,3 +41,5 @@ Route::get('/', function () {
 Route::get('/force-download-excel', [PenjualanExportController::class, 'download'])
     ->name('force.download');
 // ->middleware('auth:filament.admin');
+
+Route::post('/jurnal-produksi/import', [JurnalProduksiController::class, 'importExcel'])->name('jurnal-produksi.import');
