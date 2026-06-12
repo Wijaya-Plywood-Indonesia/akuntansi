@@ -314,7 +314,8 @@ class ImportJurnalProduksiService
         return match ($item['hit_kbk']) {
             'm' => (float) $item['harga'] * (float) ($item['m3']     ?? 0),
             'b' => (float) $item['harga'] * (float) ($item['banyak'] ?? 0),
-            default => (float) ($item['total'] ?? 0),
+            // hit_kbk kosong/null -> "Langsung": nilai jumlah = Harga itu sendiri
+            default => (float) ($item['harga'] ?? 0),
         };
     }
 
@@ -450,4 +451,4 @@ class ImportJurnalProduksiService
     {
         return (JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') ?? 0) + 1;
     }
-} 
+}
