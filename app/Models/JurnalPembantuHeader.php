@@ -145,13 +145,14 @@ class JurnalPembantuHeader extends Model
 
     $total = $items->sum(function ($item) {
         return match ($item->hit_kbk) {
-            'k' => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
-            'b' => (float)$item->harga * (float)($item->banyak ?? 0),
-            // FIX: hitung dari banyak × harga, bukan ambil kolom jumlah
+            'k'     => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
+            'm'     => (float)$item->harga * (float)($item->m3 ?? 0),
+            'b'     => (float)$item->harga * (float)($item->banyak ?? 0),
+            null, '' => (float)$item->harga,   // ← langsung, tidak dikali apapun
             default => (float)$item->harga * (float)($item->banyak ?? 0),
         };
     });
-    
+
     $this->update(['total_nilai' => $total]);
 }
 
