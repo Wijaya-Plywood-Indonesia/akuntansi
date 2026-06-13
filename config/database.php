@@ -58,14 +58,11 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => [
-                // Mematikan verifikasi SSL agar bisa tembus di jaringan lokal kantor
-                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) => null,
-                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT : \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT) => false,
-
-                // Menjaga agar koneksi tetap persisten (opsional, bagus untuk performa)
-                PDO::ATTR_PERSISTENT => true,
-            ],
+            'options' => array_filter([
+                (defined('PDO::MYSQL_ATTR_SSL_CA') ? (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) : null) => null,
+                (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT') ? (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT : \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT) : null) => false,
+                (defined('PDO::ATTR_PERSISTENT') ? \PDO::ATTR_PERSISTENT : null) => true,
+            ]),
         ],
 
         'mysql_local' => [
