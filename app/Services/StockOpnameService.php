@@ -61,45 +61,45 @@ class StockOpnameService
             throw new Exception('Hanya opname berstatus menunggu yang bisa disetujui.');
         }
 
-        DB::transaction(function () use ($opname, $approverId, $catatanApproval) {
+        // DB::transaction(function () use ($opname, $approverId, $catatanApproval) {
 
-            foreach ($opname->details as $detail) {
+        //     foreach ($opname->details as $detail) {
 
-                // Lewati barang yang tidak ada selisih — tidak perlu adjust
-                if ((float) $detail->selisih == 0) {
-                    continue;
-                }
+        //         // Lewati barang yang tidak ada selisih — tidak perlu adjust
+        //         if ((float) $detail->selisih == 0) {
+        //             continue;
+        //         }
 
-                $stok = StokBarangToko::lockForUpdate()
-                    ->where('barang_id', $detail->barang_id)
-                    ->where('toko_id', $opname->toko_id)
-                    ->first();
+        //         $stok = StokBarangToko::lockForUpdate()
+        //             ->where('barang_id', $detail->barang_id)
+        //             ->where('toko_id', $opname->toko_id)
+        //             ->first();
 
-                if (!$stok) {
-                    $stok = StokBarangToko::create([
-                        'barang_id' => $detail->barang_id,
-                        'toko_id' => $opname->toko_id,
-                        'stok' => 0,
-                    ]);
-                }
+        //         if (!$stok) {
+        //             $stok = StokBarangToko::create([
+        //                 'barang_id' => $detail->barang_id,
+        //                 'toko_id' => $opname->toko_id,
+        //                 'stok' => 0,
+        //             ]);
+        //         }
 
-                $stokSebelum = (float) $stok->stok;
-                $stokSesudah = (float) $detail->stok_aktual;
+        //         $stokSebelum = (float) $stok->stok;
+        //         $stokSesudah = (float) $detail->stok_aktual;
 
-                $stok->update(['stok' => $stokSesudah]);
+        //         $stok->update(['stok' => $stokSesudah]);
 
-                StokLog::create([
-                    'barang_id' => $detail->barang_id,
-                    'toko_id' => $opname->toko_id,
-                    'tipe' => 'adjustment',
-                    'qty' => abs($detail->selisih),
-                    'stok_sebelum' => $stokSebelum,
-                    'stok_sesudah' => $stokSesudah,
-                    'referensi_type' => 'stock_opname',
-                    'referensi_id' => $opname->id,
-                    'created_by' => $approverId,
-                ]);
-            }
+        //         StokLog::create([
+        //             'barang_id' => $detail->barang_id,
+        //             'toko_id' => $opname->toko_id,
+        //             'tipe' => 'adjustment',
+        //             'qty' => abs($detail->selisih),
+        //             'stok_sebelum' => $stokSebelum,
+        //             'stok_sesudah' => $stokSesudah,
+        //             'referensi_type' => 'stock_opname',
+        //             'referensi_id' => $opname->id,
+        //             'created_by' => $approverId,
+        //         ]);
+        //     }
 
             $opname->update([
                 'status' => 'disetujui',
@@ -107,7 +107,6 @@ class StockOpnameService
                 'approved_at' => now(),
                 'catatan_approval' => $catatanApproval,
             ]);
-        });
     }
 
     /* =========================

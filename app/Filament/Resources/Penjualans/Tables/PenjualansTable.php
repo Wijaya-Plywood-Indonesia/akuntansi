@@ -88,11 +88,43 @@ class PenjualansTable
                     ->visible(
                         fn($record) =>
                         !empty($record->validated_by)
-                            && !in_array($record->status_transaksi, [
-                                'DIBATALKAN',
-                                'BELUM DIBAYAR',
+                            && in_array($record->status_transaksi, [
+                                'LUNAS',
+                                'COD',
                                 'PENDING',
-                            ])
+                            ]) // ✅ Syarat baru: muncul jika status ada di dalam daftar ini
+                    ),
+
+                Action::make('cetakThermal')
+                    ->label('Cetak Thermal')
+                    ->icon('heroicon-o-printer')
+                    ->color('primary')
+                    ->url(fn($record) => route('nota.cetakThermal', $record))
+                    ->openUrlInNewTab()
+                    ->visible(
+                        fn($record) =>
+                        !empty($record->validated_by)
+                            && in_array($record->status_transaksi, [
+                                'LUNAS',
+                                'COD',
+                                'PENDING',
+                            ]) 
+                    ),
+
+                Action::make('suratJalan')
+                    ->label('Cetak Surat Jalan')
+                    ->icon('heroicon-o-truck')
+                    ->color('warning')
+                    ->url(fn($record) => route('surat-jalan.cetak', $record))
+                    ->openUrlInNewTab()
+                    ->visible(
+                        fn($record) =>
+                        !empty($record->validated_by)
+                            && in_array($record->status_transaksi, [
+                                'LUNAS',
+                                'COD',
+                                'PENDING',
+                            ]) 
                     ),
 
                 Action::make('edit_keterangan')
