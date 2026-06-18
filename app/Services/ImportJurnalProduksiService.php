@@ -335,7 +335,7 @@ class ImportJurnalProduksiService
             return 'm';
         else if ($v === 'b')
             return 'b';
-        else if ($v === k)
+        else if ($v === 'k')
             return 'm';
         return null;
     }
