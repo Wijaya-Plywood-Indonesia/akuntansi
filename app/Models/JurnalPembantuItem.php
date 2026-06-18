@@ -114,5 +114,4 @@ class JurnalPembantuItem extends Model
     //     return $total;
     // }
 
-
 }
