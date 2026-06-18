@@ -600,6 +600,23 @@
 
     <script>
         document.addEventListener('livewire:initialized', () => {
+            // Check if page load is a reload/refresh
+            let isReload = false;
+            try {
+                const entries = performance.getEntriesByType('navigation');
+                if (entries.length > 0) {
+                    isReload = entries[0].type === 'reload';
+                } else {
+                    isReload = performance.navigation && performance.navigation.type === 1;
+                }
+            } catch (e) {
+                console.error('Error checking navigation type:', e);
+            }
+
+            if (!isReload) {
+                localStorage.removeItem('pos_state');
+            }
+
             // 1. Restore the full state from localStorage if it exists
             const savedState = localStorage.getItem('pos_state');
             if (savedState) {
@@ -645,6 +662,11 @@
                         localStorage.setItem('pos_state', JSON.stringify(state));
                     }
                 });
+            });
+
+            // Listen to Livewire SPA navigation event (navigating away)
+            document.addEventListener('livewire:navigating', () => {
+                localStorage.removeItem('pos_state');
             });
         });
     </script>
