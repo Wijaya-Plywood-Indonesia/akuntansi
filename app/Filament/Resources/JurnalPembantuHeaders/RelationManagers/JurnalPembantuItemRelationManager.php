@@ -42,7 +42,7 @@ class JurnalPembantuItemRelationManager extends RelationManager
 
                 Select::make('jenis_pihak')
                     ->options(JurnalPembantuItem::JENIS_PIHAK)
-                    ->required()
+                    ->nullable()
                     ->searchable(),
 
                 TextInput::make('nama_pihak')
@@ -92,6 +92,7 @@ class JurnalPembantuItemRelationManager extends RelationManager
                     ->live(),
 
                 TextInput::make('jumlah')
+
                     ->numeric()
                     ->step('0.0001')
                     ->disabled() // dihitung otomatis dari model
@@ -125,13 +126,15 @@ class JurnalPembantuItemRelationManager extends RelationManager
 
                 TextColumn::make('keterangan')
                     ->limit(100),
+                TextColumn::make('hit_kbk')
+                    ->limit(100),
 
                 TextColumn::make('ukuran')
                     ->limit(30),
 
                 TextColumn::make('banyak')
-    ->formatStateUsing(fn ($state) => (float) $state)
-    ->alignRight(),
+                    ->formatStateUsing(fn($state) => (float) $state)
+                    ->alignRight(),
 
                 TextColumn::make('m3')
                     ->numeric(6)
@@ -140,7 +143,7 @@ class JurnalPembantuItemRelationManager extends RelationManager
                 TextColumn::make('harga')
                     ->money('IDR')
                     ->alignRight(),
-
+                //  TextColumn::make(JurnalPembantuItem::hitungJumlah1('harga', 'hit_kbk', 'm3', 'banyak'))
                 TextColumn::make('jumlah')
                     ->money('IDR')
                     ->alignRight()
@@ -163,4 +166,5 @@ class JurnalPembantuItemRelationManager extends RelationManager
                 ]),
             ]);
     }
+
 }

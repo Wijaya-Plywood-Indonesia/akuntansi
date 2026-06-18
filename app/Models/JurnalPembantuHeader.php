@@ -140,21 +140,34 @@ class JurnalPembantuHeader extends Model
     // ── Hitung ulang total_nilai dari items ───────────────────────────
 
     public function recalculateTotalNilai(string $kolomStatus = 'aktif'): void
-{
-    $items = $this->items()->where('status', true)->get();
+    {
+        $items = $this->items()->where('status', true)->get();
 
-    $total = $items->sum(function ($item) {
-        return match ($item->hit_kbk) {
-            'k'     => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
-            'm'     => (float)$item->harga * (float)($item->m3 ?? 0),
-            'b'     => (float)$item->harga * (float)($item->banyak ?? 0),
-            null, '' => (float)$item->harga,   // ← langsung, tidak dikali apapun
-            default => (float)$item->harga * (float)($item->banyak ?? 0),
-        };
-    });
+        // JALUR 1: Khusus untuk Import Produksi (Ambil bulat-bulat dari kolom 'jumlah')
+        // Ini menghindari selisih desimal/floating-point antara Excel dan PHP
+        if (in_array($this->modul_asal, ['produksi', 'web_kayu'])) {
+            
+            $total = $items->sum('jumlah');
+            
+        } 
+        // JALUR 2: Untuk Modul Lain (Jurnal Umum, Penjualan, Pembelian, Manual, dsb)
+        // Tetap menggunakan rumus bawaan agar program Anda yang lain tidak rusak
+        else {
+            
+            $total = $items->sum(function ($item) {
+                return match ($item->hit_kbk) {
+                    'k'      => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
+                    'm'      => (float)$item->harga * (float)($item->m3 ?? 0),
+                    'b'      => (float)$item->harga * (float)($item->banyak ?? 0),
+                    null, '' => (float)$item->harga,   // langsung ambil harga jika kosong
+                    default  => (float)$item->harga * (float)($item->banyak ?? 0),
+                };
+            });
+            
+        }
 
-    $this->update(['total_nilai' => $total]);
-}
+        $this->update(['total_nilai' => $total]);
+    }
 
     // ── Auto-set total_nilai dari items saat items berubah ────────────
     // Panggil method ini dari observer JurnalPembantuItem atau service.
