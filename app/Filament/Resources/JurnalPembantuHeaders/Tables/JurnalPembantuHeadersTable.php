@@ -70,8 +70,8 @@ class JurnalPembantuHeadersTable
                     ->color(
                         fn($state) =>
                         strtolower($state) === 'd'
-                            ? 'info'
-                            : 'warning'
+                        ? 'info'
+                        : 'warning'
                     )
                     ->formatStateUsing(
                         fn($state) => strtoupper($state)
@@ -86,11 +86,11 @@ class JurnalPembantuHeadersTable
                     ->label('Status')
                     ->badge()
                     ->color(fn($state) => match ($state) {
-                        'draft'      => 'gray',
-                        'diposting'  => 'success',
-                        'dibalik'    => 'warning',
+                        'draft' => 'gray',
+                        'diposting' => 'success',
+                        'dibalik' => 'warning',
                         'dibatalkan' => 'danger',
-                        default      => 'gray',
+                        default => 'gray',
                     })
                     ->formatStateUsing(
                         fn($state) =>
@@ -247,7 +247,7 @@ class JurnalPembantuHeadersTable
                                     throw new \Exception('Sebagian jurnal sudah diposting.');
                                 }
 
-                                $totalDebit  = $headers->where('map', 'd')->sum('total_nilai');
+                                $totalDebit = $headers->where('map', 'd')->sum('total_nilai');
                                 $totalKredit = $headers->where('map', 'k')->sum('total_nilai');
 
                                 if (abs($totalDebit - $totalKredit) > 0.0001) {
@@ -274,16 +274,16 @@ class JurnalPembantuHeadersTable
 
                                 foreach ($headers as $header) {
 
-                                    $items            = $header->items;
-                                    $totalBanyak      = (float) $items->sum('banyak');
-                                    $totalM3          = (float) $items->sum('m3');
+                                    $items = $header->items;
+                                    $totalBanyak = (float) $items->sum('banyak');
+                                    $totalM3 = (float) $items->sum('m3');
                                     $totalNilaiHeader = (float) $header->total_nilai; // ← FIX: pakai total_nilai header
-
-                                    $firstItem  = $items->first();
+            
+                                    $firstItem = $items->first();
                                     $itemHitKbk = $firstItem?->hit_kbk;
 
-                                    $hitKbk          = '';
-                                    $prefix          = substr($header->no_akun, 0, 3);
+                                    $hitKbk = '';
+                                    $prefix = substr($header->no_akun, 0, 3);
                                     $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
 
                                     if (!$isCashOrPayment) {
@@ -311,49 +311,49 @@ class JurnalPembantuHeadersTable
 
                                     // ← FIX: gunakan total_nilai header sebagai sumber kebenaran
                                     if ($hitKbk === 'm') {
-                                        $m3     = $totalM3;
+                                        $m3 = $totalM3;
                                         $banyak = $totalBanyak > 0 ? $totalBanyak : null;
-                                        $harga  = $totalM3 > 0
+                                        $harga = $totalM3 > 0
                                             ? ($totalNilaiHeader / $totalM3)
                                             : $totalNilaiHeader;
 
                                     } elseif ($hitKbk === 'b') {
-                                        $m3     = $totalM3 > 0 ? $totalM3 : null;
+                                        $m3 = $totalM3 > 0 ? $totalM3 : null;
                                         $banyak = $totalBanyak > 0 ? $totalBanyak : 1;
-                                        $harga  = $totalBanyak > 0
+                                        $harga = $totalBanyak > 0
                                             ? ($totalNilaiHeader / $totalBanyak)
                                             : $totalNilaiHeader;
 
                                     } else {
-                                        $m3     = $totalM3 > 0 ? $totalM3 : null;
+                                        $m3 = $totalM3 > 0 ? $totalM3 : null;
                                         $banyak = $totalBanyak > 0 ? $totalBanyak : null;
-                                        $harga  = $totalNilaiHeader;
+                                        $harga = $totalNilaiHeader;
                                     }
 
-                                    $parts      = explode('|', $header->keterangan);
+                                    $parts = explode('|', $header->keterangan);
                                     $parsedNama = isset($parts[2]) ? trim($parts[2]) : null;
 
                                     JurnalUmum::create([
-                                        'tgl'        => $header->tgl_transaksi
+                                        'tgl' => $header->tgl_transaksi
                                             ? $header->tgl_transaksi->format('Y-m-d')
                                             : now()->format('Y-m-d'),
-                                        'jurnal'     => $nomorFinal,
-                                        'no_akun'    => $header->no_akun,
-                                        'nama_akun'  => $header->nama_akun,
-                                        'nama'       => $header->no_dokumen
+                                        'jurnal' => $nomorFinal,
+                                        'no_akun' => $header->no_akun,
+                                        'nama_akun' => $header->nama_akun,
+                                        'nama' => $header->no_dokumen
                                             ?? (JurnalPembantuHeader::JENIS[$header->jenis_transaksi] ?? null),
                                         'keterangan' => $header->keterangan,
-                                        'banyak'     => $banyak !== null ? round($banyak, 4) : null,
-                                        'm3'         => $m3 !== null ? round($m3, 4) : null,
-                                        'harga'      => round($harga, 2),
-                                        'hit_kbk'    => $hitKbk,
-                                        'map'        => strtolower($header->map),
+                                        'banyak' => $banyak !== null ? round($banyak, 4) : null,
+                                        'm3' => $m3 !== null ? round($m3, 4) : null,
+                                        'harga' => round($harga, 2),
+                                        'hit_kbk' => $hitKbk,
+                                        'map' => strtolower($header->map),
                                     ]);
 
                                     $header->update([
-                                        'status'         => JurnalPembantuHeader::STATUS_DIPOSTING,
+                                        'status' => JurnalPembantuHeader::STATUS_DIPOSTING,
                                         'diposting_oleh' => Auth::id() ?? 1,
-                                        'tgl_posting'    => now(),
+                                        'tgl_posting' => now(),
                                     ]);
                                 }
                             }, 5);
@@ -441,45 +441,45 @@ class JurnalPembantuHeadersTable
                                 }
 
                                 $maxJurnal = (int) (JurnalPembantuHeader::query()->lockForUpdate()->max('jurnal') ?? 0);
-                                $maxNoJP   = (int) (JurnalPembantuHeader::query()->lockForUpdate()->max('no_jurnal_pembantu') ?? 0);
+                                $maxNoJP = (int) (JurnalPembantuHeader::query()->lockForUpdate()->max('no_jurnal_pembantu') ?? 0);
 
                                 $nomorJurnalBaru = $maxJurnal + 1;
-                                $noJPBaru        = $maxNoJP + 1;
+                                $noJPBaru = $maxNoJP + 1;
 
                                 foreach ($headers as $header) {
 
                                     $headerBaru = JurnalPembantuHeader::create([
-                                        'no_jurnal_pembantu'  => $noJPBaru++,
-                                        'tgl_transaksi'       => now()->format('Y-m-d'),
-                                        'jenis_transaksi'     => 'balik',
-                                        'modul_asal'          => $header->modul_asal,
-                                        'jurnal'              => $nomorJurnalBaru,
-                                        'no_akun'             => $header->no_akun,
-                                        'nama_akun'           => $header->nama_akun,
-                                        'map'                 => strtolower($header->map) === 'd' ? 'k' : 'd',
-                                        'keterangan'          => 'BALIK: ' . $header->keterangan,
-                                        'no_dokumen'          => $header->no_dokumen,
-                                        'total_nilai'         => $header->total_nilai,
-                                        'status'              => JurnalPembantuHeader::STATUS_DRAFT,
+                                        'no_jurnal_pembantu' => $noJPBaru++,
+                                        'tgl_transaksi' => now()->format('Y-m-d'),
+                                        'jenis_transaksi' => 'balik',
+                                        'modul_asal' => $header->modul_asal,
+                                        'jurnal' => $nomorJurnalBaru,
+                                        'no_akun' => $header->no_akun,
+                                        'nama_akun' => $header->nama_akun,
+                                        'map' => strtolower($header->map) === 'd' ? 'k' : 'd',
+                                        'keterangan' => 'BALIK: ' . $header->keterangan,
+                                        'no_dokumen' => $header->no_dokumen,
+                                        'total_nilai' => $header->total_nilai,
+                                        'status' => JurnalPembantuHeader::STATUS_DRAFT,
                                         'adalah_jurnal_balik' => true,
-                                        'membalik_id'         => $header->id,
-                                        'dibuat_oleh'         => Auth::id() ?? 1,
+                                        'membalik_id' => $header->id,
+                                        'dibuat_oleh' => Auth::id() ?? 1,
                                     ]);
 
                                     foreach ($header->items as $item) {
                                         $headerBaru->items()->create([
-                                            'urut'         => $item->urut,
-                                            'jenis_pihak'  => $item->jenis_pihak,
-                                            'nama_pihak'   => $item->nama_pihak,
-                                            'nama_barang'  => $item->nama_barang,
-                                            'no_dokumen'   => $item->no_dokumen,
+                                            'urut' => $item->urut,
+                                            'jenis_pihak' => $item->jenis_pihak,
+                                            'nama_pihak' => $item->nama_pihak,
+                                            'nama_barang' => $item->nama_barang,
+                                            'no_dokumen' => $item->no_dokumen,
                                             'no_referensi' => $item->no_referensi,
-                                            'keterangan'   => $item->keterangan,
-                                            'banyak'       => $item->banyak,
-                                            'harga'        => $item->harga,
-                                            'jumlah'       => $item->jumlah,
-                                            'status'       => true,
-                                            'created_by'   => Auth::id() ?? 1,
+                                            'keterangan' => $item->keterangan,
+                                            'banyak' => $item->banyak,
+                                            'harga' => $item->harga,
+                                            'jumlah' => $item->jumlah,
+                                            'status' => true,
+                                            'created_by' => Auth::id() ?? 1,
                                         ]);
                                     }
 

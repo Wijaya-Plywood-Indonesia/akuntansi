@@ -50,7 +50,7 @@ class JurnalPembantuItem extends Model
     ];
 
     const HIT_KBK = [
-        'k' => '× M³',
+        'm' => '× M³',
         'b' => '× Banyak',
         null => 'Langsung',
     ];
@@ -75,29 +75,44 @@ class JurnalPembantuItem extends Model
     // ── Hitung jumlah otomatis sebelum simpan ─────────────────────────
 
     protected static function booted(): void
-{
-    // Hapus created dan updated yang redundant
-    // saved sudah mencakup keduanya (created + updated)
-    
-    static::saved(function (self $item) {
-        if ($item->header?->modul_asal !== 'kayu_masuk') {
-            $item->header->recalculateTotalNilai();
-        }
-    });
+    {
+        // Hapus created dan updated yang redundant
+        // saved sudah mencakup keduanya (created + updated)
 
-    static::deleted(function (self $item) {
-        if ($item->header?->modul_asal !== 'kayu_masuk') {
-            $item->header->recalculateTotalNilai();
-        }
-    });
-}
+        static::saved(function (self $item) {
+            if ($item->header?->modul_asal !== 'kayu_masuk') {
+                $item->header->recalculateTotalNilai();
+            }
+        });
+
+        static::deleted(function (self $item) {
+            if ($item->header?->modul_asal !== 'kayu_masuk') {
+                $item->header->recalculateTotalNilai();
+            }
+        });
+    }
 
     public function hitungJumlah(): float
     {
         return match ($this->hit_kbk) {
-            'k' => (float) $this->harga * (float) ($this->m3 ?? 0),
+            'm' => (float) $this->harga * (float) ($this->m3 ?? 0),
             'b' => (float) $this->harga * (float) ($this->banyak ?? 0),
             default => (float) $this->jumlah, // isi langsung, tidak dihitung ulang
         };
     }
+
+    // public function hitungJumlah1($harga, $hitkbk, $kubikasi, $jumlah): float
+    // {
+    //     $total = 0;
+    //     if ($hitkbk === 'm') {
+    //         $total = $harga * $kubikasi;
+    //     } else if ($hitkbk === 'b') {
+    //         $total = $harga * $jumlah;
+    //     } else {
+    //         $total = $harga;
+    //     }
+    //     return $total;
+    // }
+
+
 }

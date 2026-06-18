@@ -13,21 +13,21 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 class ImportJurnalProduksiService
 {
     private array $akunCache = [];
-    private array $errors    = [];
-    private array $results   = [];
+    private array $errors = [];
+    private array $results = [];
 
     public function import(string $filePath, ?int $userId): array
     {
-        $this->errors  = [];
+        $this->errors = [];
         $this->results = [];
-        $userId        = $userId ?? 1;
+        $userId = $userId ?? 1;
 
         try {
             $spreadsheet = IOFactory::load($filePath);
         } catch (\Exception $e) {
             return [
                 'success' => false,
-                'errors'  => ['Gagal membaca file: ' . $e->getMessage()],
+                'errors' => ['Gagal membaca file: ' . $e->getMessage()],
                 'results' => [],
             ];
         }
@@ -44,19 +44,19 @@ class ImportJurnalProduksiService
         if (!$sheet) {
             return [
                 'success' => false,
-                'errors'  => ['Sheet "jurnal produksi" tidak ditemukan di file Excel.'],
+                'errors' => ['Sheet "jurnal produksi" tidak ditemukan di file Excel.'],
                 'results' => [],
             ];
         }
 
         // formatData=false -> angka tetap int/float, tidak diformat jadi string
-        $rows    = $sheet->toArray(null, true, false, false);
+        $rows = $sheet->toArray(null, true, false, false);
         $jurnals = $this->parseJurnals($rows, $filePath);
 
         if (empty($jurnals)) {
             return [
                 'success' => false,
-                'errors'  => ['Tidak ada data jurnal valid yang ditemukan di sheet "jurnal produksi". Pastikan ada baris header kolom (Nama Akun, tgl, No Akun, map, dst).'],
+                'errors' => ['Tidak ada data jurnal valid yang ditemukan di sheet "jurnal produksi". Pastikan ada baris header kolom (Nama Akun, tgl, No Akun, map, dst).'],
                 'results' => [],
             ];
         }
@@ -69,7 +69,7 @@ class ImportJurnalProduksiService
 
         return [
             'success' => empty($this->errors) || !empty($this->results),
-            'errors'  => $this->errors,
+            'errors' => $this->errors,
             'results' => $this->results,
         ];
     }
@@ -88,9 +88,9 @@ class ImportJurnalProduksiService
 
     private function parseJurnals(array $rows, string $filePath): array
     {
-        $jurnals       = [];
+        $jurnals = [];
         $currentJurnal = null;
-        $isDataRow     = false;
+        $isDataRow = false;
 
         $defaultNoDokumen = 'PRODUKSI/' . strtoupper(pathinfo($filePath, PATHINFO_FILENAME));
 
@@ -101,9 +101,9 @@ class ImportJurnalProduksiService
                 if ($currentJurnal && !empty($currentJurnal['items'])) {
                     $jurnals[] = $currentJurnal;
                 }
-                $noDokumen     = trim(str_replace('No. Jurnal:', '', $col0));
+                $noDokumen = trim(str_replace('No. Jurnal:', '', $col0));
                 $currentJurnal = ['no_dokumen' => $noDokumen, 'items' => []];
-                $isDataRow     = false;
+                $isDataRow = false;
                 continue;
             }
 
@@ -130,25 +130,25 @@ class ImportJurnalProduksiService
             }
 
             $noAkun = $this->cleanAkunCode($row[3] ?? '');
-            $map    = strtolower(trim((string) ($row[8] ?? '')));
+            $map = strtolower(trim((string) ($row[8] ?? '')));
 
             if (empty($noAkun) || !in_array($map, ['d', 'k'])) {
                 continue;
             }
 
             $currentJurnal['items'][] = [
-                'nama_akun'  => trim((string) ($row[0] ?? '')),
-                'tgl'        => $this->parseDate($row[1] ?? null),
-                'no_akun'    => $noAkun,
-                'nama'       => trim((string) ($row[6] ?? '')),
+                'nama_akun' => trim((string) ($row[0] ?? '')),
+                'tgl' => $this->parseDate($row[1] ?? null),
+                'no_akun' => $noAkun,
+                'nama' => trim((string) ($row[6] ?? '')),
                 'keterangan' => trim((string) ($row[7] ?? '')),
-                'map'        => $map,
-                'hit_kbk'    => $this->parseHitKbk($row[9] ?? null),
-                'banyak'     => $this->parseNumber($row[10] ?? null),
-                'm3'         => $this->parseNumber($row[11] ?? null),
-                'harga'      => $this->parseNumber($row[12] ?? null) ?? 0,
+                'map' => $map,
+                'hit_kbk' => $this->parseHitKbk($row[9] ?? null),
+                'banyak' => $this->parseNumber($row[10] ?? null),
+                'm3' => $this->parseNumber($row[11] ?? null),
+                'harga' => $this->parseNumber($row[12] ?? null) ?? 0,
                 // Pastikan 'total' langsung ditarik dari index 13 excel
-                'total'      => $this->parseNumber($row[13] ?? null) ?? 0,
+                'total' => $this->parseNumber($row[13] ?? null) ?? 0,
             ];
         }
 
@@ -171,7 +171,8 @@ class ImportJurnalProduksiService
 
     private function cleanAkunCode(mixed $val): string
     {
-        if ($val === null || $val === '') return '';
+        if ($val === null || $val === '')
+            return '';
 
         if (is_float($val)) {
             $str = rtrim(rtrim(sprintf('%.4f', $val), '0'), '.');
@@ -199,7 +200,7 @@ class ImportJurnalProduksiService
         }
 
         $tglPertama = collect($jurnal['items'])->first()['tgl'] ?? now()->format('Y-m-d');
-        $noJurnal   = $this->nextNomorJurnal();
+        $noJurnal = $this->nextNomorJurnal();
 
         $grouped = collect($jurnal['items'])->groupBy(fn($i) => $i['no_akun'] . '|' . $i['map']);
 
@@ -207,10 +208,10 @@ class ImportJurnalProduksiService
         $akunTidakDitemukan = [];
 
         foreach ($grouped as $items) {
-            $firstItem  = $items->first();
-            $noAkun     = $firstItem['no_akun'];
-            $map        = $firstItem['map'];
-            $akun       = $this->resolveAkun($noAkun);
+            $firstItem = $items->first();
+            $noAkun = $firstItem['no_akun'];
+            $map = $firstItem['map'];
+            $akun = $this->resolveAkun($noAkun);
             $keterangan = $firstItem['nama'] ?: ($firstItem['keterangan'] ?: $noDokumen);
 
             if (str_starts_with($akun['nama'], '⚠')) {
@@ -218,20 +219,20 @@ class ImportJurnalProduksiService
             }
 
             $header = JurnalPembantuHeader::create([
-                'no_jurnal_pembantu'  => $this->nextNomorPembantu(),
-                'tgl_transaksi'       => $tglPertama,
-                'jenis_transaksi'     => 'produksi',
-                'modul_asal'          => 'produksi',
-                'jurnal'              => $noJurnal,
-                'no_akun'             => $akun['kode'],
-                'nama_akun'           => $akun['nama'] ?: $firstItem['nama_akun'],
-                'map'                 => $map,
-                'keterangan'          => $keterangan . ' | No.Jurnal: ' . $noDokumen,
-                'no_dokumen'          => $noDokumen,
-                'total_nilai'         => 0,
-                'status'              => JurnalPembantuHeader::STATUS_DRAFT,
+                'no_jurnal_pembantu' => $this->nextNomorPembantu(),
+                'tgl_transaksi' => $tglPertama,
+                'jenis_transaksi' => 'produksi',
+                'modul_asal' => 'produksi',
+                'jurnal' => $noJurnal,
+                'no_akun' => $akun['kode'],
+                'nama_akun' => $akun['nama'] ?: $firstItem['nama_akun'],
+                'map' => $map,
+                'keterangan' => $keterangan . ' | No.Jurnal: ' . $noDokumen,
+                'no_dokumen' => $noDokumen,
+                'total_nilai' => 0,
+                'status' => JurnalPembantuHeader::STATUS_DRAFT,
                 'adalah_jurnal_balik' => false,
-                'dibuat_oleh'         => $userId,
+                'dibuat_oleh' => $userId,
             ]);
 
             $urut = 1;
@@ -242,18 +243,18 @@ class ImportJurnalProduksiService
 
                 JurnalPembantuItem::create([
                     'jurnal_pembantu_header_id' => $header->id,
-                    'urut'                      => $urut++,
-                    'nama_barang'               => $item['keterangan'] ?: $item['nama_akun'],
-                    'no_dokumen'                => $noDokumen,
-                    'keterangan'                => $item['keterangan'] ?: $item['nama'],
-                    'banyak'                    => $item['banyak'],
-                    'm3'                        => $item['m3'],
-                    'harga'                     => $item['harga'],
-                    'hit_kbk'                   => $item['hit_kbk'],
-                    'jumlah'                    => $jumlah,
-                    'status'                    => true,
-                    'created_by'                => $userId,
-                    'updated_by'                => $userId,
+                    'urut' => $urut++,
+                    'nama_barang' => $item['keterangan'] ?: $item['nama_akun'],
+                    'no_dokumen' => $noDokumen,
+                    'keterangan' => $item['keterangan'] ?: $item['nama'],
+                    'banyak' => $item['banyak'],
+                    'm3' => $item['m3'],
+                    'harga' => $item['harga'],
+                    'hit_kbk' => $item['hit_kbk'],
+                    'jumlah' => $jumlah,
+                    'status' => true,
+                    'created_by' => $userId,
+                    'updated_by' => $userId,
                 ]);
             }
 
@@ -266,8 +267,8 @@ class ImportJurnalProduksiService
         }
 
         $this->results[] = [
-            'no_dokumen'   => $noDokumen,
-            'headers'      => $headersDibuat,
+            'no_dokumen' => $noDokumen,
+            'headers' => $headersDibuat,
             'jumlah_baris' => count($jurnal['items']),
         ];
     }
@@ -278,19 +279,22 @@ class ImportJurnalProduksiService
 
     private function parseDate(mixed $val): string
     {
-        if (empty($val)) return now()->format('Y-m-d');
+        if (empty($val))
+            return now()->format('Y-m-d');
 
         if (is_numeric($val) && $val > 1000) {
             try {
                 return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $val)
                     ->format('Y-m-d');
-            } catch (\Exception) {}
+            } catch (\Exception) {
+            }
         }
 
         $str = trim((string) $val);
         foreach (['d-m-Y', 'd/m/Y', 'Y-m-d', 'm/d/Y'] as $fmt) {
             $dt = \DateTime::createFromFormat($fmt, $str);
-            if ($dt) return $dt->format('Y-m-d');
+            if ($dt)
+                return $dt->format('Y-m-d');
         }
 
         return now()->format('Y-m-d');
@@ -298,15 +302,18 @@ class ImportJurnalProduksiService
 
     private function parseNumber(mixed $val): ?float
     {
-        if ($val === null || $val === '') return null;
-        if (is_int($val) || is_float($val)) return (float) $val;
+        if ($val === null || $val === '')
+            return null;
+        if (is_int($val) || is_float($val))
+            return (float) $val;
 
         $str = trim((string) $val);
-        if (strtolower($str) === 'nan' || $str === '-' || $str === '') return null;
+        if (strtolower($str) === 'nan' || $str === '-' || $str === '')
+            return null;
 
         $clean = preg_replace('/[^\d,.\-]/', '', $str);
 
-        $dotCount   = substr_count($clean, '.');
+        $dotCount = substr_count($clean, '.');
         $commaCount = substr_count($clean, ',');
 
         if ($dotCount > 1) {
@@ -323,9 +330,14 @@ class ImportJurnalProduksiService
     private function parseHitKbk(mixed $val): ?string
     {
         $v = strtolower(trim((string) ($val ?? '')));
-        if ($v === 'm' || $v === 'k') return 'm'; 
-        if ($v === 'b') return 'b';               
-        return null;                              
+
+        if ($v === 'm')
+            return 'm';
+        else if ($v === 'b')
+            return 'b';
+        else if ($v === k)
+            return 'm';
+        return null;
     }
 
     private function resolveAkun(string $kodeAsli): array
@@ -334,9 +346,9 @@ class ImportJurnalProduksiService
             return $this->akunCache[$kodeAsli];
         }
 
-        $kodeTitik = $kodeAsli;                                  
-        $kodeStrip = str_replace('.', '-', $kodeAsli);           
-        $kodePolosCandidate = strtok($kodeAsli, '.-');            
+        $kodeTitik = $kodeAsli;
+        $kodeStrip = str_replace('.', '-', $kodeAsli);
+        $kodePolosCandidate = strtok($kodeAsli, '.-');
 
         if ($kodeAsli === $kodePolosCandidate) {
             $anak = AnakAkun::where('kode_anak_akun', $kodeAsli)->where('status', 'aktif')->first();
