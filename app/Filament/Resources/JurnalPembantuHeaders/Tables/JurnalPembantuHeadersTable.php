@@ -272,12 +272,44 @@ class JurnalPembantuHeadersTable
                                         ->update(['jurnal' => $nomorFinal]);
                                 }
 
+                                // ---------------------------------------------------------
+                                // FIX: CARI NAMA DAN NO DOKUMEN GLOBAL UNTUK 1 TRANSAKSI
+                                // ---------------------------------------------------------
+                                $namaGlobal = null;
+                                $noDokumenGlobal = null;
+
+                                foreach ($headers as $h) {
+                                    if (empty($noDokumenGlobal) && !empty($h->no_dokumen)) {
+                                        $noDokumenGlobal = $h->no_dokumen;
+                                    }
+
+                                    if (empty($namaGlobal)) {
+                                        $parts = explode('|', $h->keterangan);
+                                        $parsedNama = isset($parts[2]) ? trim($parts[2]) : null;
+
+                                        if (!empty($parsedNama)) {
+                                            $namaGlobal = $parsedNama;
+                                        } else {
+                                            $firstItem = $h->items->first();
+                                            if ($firstItem) {
+                                                $namaGlobal = $firstItem->nama_pihak ?: $firstItem->nama_barang;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Jika di semua baris tidak ketemu nama, pakai jenis transaksi
+                                if (empty($namaGlobal)) {
+                                    $namaGlobal = JurnalPembantuHeader::JENIS[$headers->first()->jenis_transaksi] ?? null;
+                                }
+                                // ---------------------------------------------------------
+
                                 foreach ($headers as $header) {
 
                                     $items = $header->items;
                                     $totalBanyak = (float) $items->sum('banyak');
                                     $totalM3 = (float) $items->sum('m3');
-                                    $totalNilaiHeader = (float) $header->total_nilai; // ← FIX: pakai total_nilai header
+                                    $totalNilaiHeader = (float) $header->total_nilai;
             
                                     $firstItem = $items->first();
                                     $itemHitKbk = $firstItem?->hit_kbk;
@@ -309,7 +341,6 @@ class JurnalPembantuHeadersTable
                                         $hitKbk = 'b';
                                     }
 
-                                    // ← FIX: gunakan total_nilai header sebagai sumber kebenaran
                                     if ($hitKbk === 'm') {
                                         $m3 = $totalM3;
                                         $banyak = $totalBanyak > 0 ? $totalBanyak : null;
@@ -330,9 +361,6 @@ class JurnalPembantuHeadersTable
                                         $harga = $totalNilaiHeader;
                                     }
 
-                                    $parts = explode('|', $header->keterangan);
-                                    $parsedNama = isset($parts[2]) ? trim($parts[2]) : null;
-
                                     JurnalUmum::create([
                                         'tgl' => $header->tgl_transaksi
                                             ? $header->tgl_transaksi->format('Y-m-d')
@@ -340,8 +368,11 @@ class JurnalPembantuHeadersTable
                                         'jurnal' => $nomorFinal,
                                         'no_akun' => $header->no_akun,
                                         'nama_akun' => $header->nama_akun,
-                                        'nama' => $header->no_dokumen
-                                            ?? (JurnalPembantuHeader::JENIS[$header->jenis_transaksi] ?? null),
+                                        
+                                        // FIX: Menggunakan data seragam untuk satu jurnal yang sama
+                                        'no-dokumen' => $noDokumenGlobal, 
+                                        'nama' => $namaGlobal,
+                                        
                                         'keterangan' => $header->keterangan,
                                         'banyak' => $banyak !== null ? round($banyak, 4) : null,
                                         'm3' => $m3 !== null ? round($m3, 4) : null,
