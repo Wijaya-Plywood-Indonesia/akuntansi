@@ -105,12 +105,16 @@ class JurnalUmum extends Page implements HasActions, HasForms
         if (!empty($this->filterTglSampai))
             $query->whereDate('tgl', '<=', $this->filterTglSampai);
 
+        // ── FIX: tambahkan selectRaw "total" agar kolom Debit/Kredit
+        //         per baris di tabel history tidak menampilkan 0.
+        //         Sebelumnya hanya select() kolom mentah tanpa "total",
+        //         sehingga $hj->total selalu null di Blade.
         $data = $query->limit($this->perPage + 1)
             ->select([
                 'id',
                 'tgl',
                 'jurnal',
-                'no-dokumen', // Menggunakan format kolom fisik 'no-dokumen' (hyphen) sesuai database Anda
+                'no-dokumen',
                 'no_akun',
                 'nama_akun',
                 'nama',
@@ -119,10 +123,17 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 'banyak',
                 'm3',
                 'harga',
-                // Kolom 'total' dihapus dari select fisik karena tidak ada di tabel jurnal_umums
                 'map'
             ])
+            ->selectRaw("
+                CASE LOWER(hit_kbk)
+                    WHEN 'b' THEN banyak * harga
+                    WHEN 'm' THEN m3 * harga
+                    ELSE harga
+                END as total
+            ")
             ->get();
+
         $this->hasMorePages = $data->count() > $this->perPage;
         $historyJurnals     = $data->take($this->perPage);
 
@@ -132,8 +143,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
         if (!empty($this->filterTglSampai))
             $totalsQuery->whereDate('tgl', '<=', $this->filterTglSampai);
 
-        // ── OPTIMASI QUERY (MENGGUNAKAN FORMULA CASE WHEN) ──────────────────
-        // Menggunakan formula CASE dinamis karena kolom 'total' tidak ada secara fisik di database
         $totals = $totalsQuery->selectRaw("
                 map,
                 SUM(
@@ -152,9 +161,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $isHistoryBalanced = abs($totalDebitDB - $totalKreditDB) < 0.01;
         $selisihDB         = abs($totalDebitDB - $totalKreditDB);
 
-        $accounts = cache()->remember('sub_anak_akun_options', 600, function () {
-            return SubAnakAkun::selectRaw("kode_sub_anak_akun as no, nama_sub_anak_akun as nama")->get();
+        // OPTIMASI CACHE: Simpan dalam bentuk array agar tidak menyentuh limit 1MB DB Cache
+        $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
+            return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
         });
+        
+        $accounts = collect($accountsMap)->map(fn($nama, $no) => (object) ['no' => $no, 'nama' => $nama])->values();
 
         return [
             'accounts'          => $accounts,
@@ -178,7 +190,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function resetFilter(): void
     {
-        $this->filterTglDariInput  = '';
+        $this->filterTglDariInput   = '';
         $this->filterTglSampaiInput = '';
         $this->filterTglDari       = '';
         $this->filterTglSampai     = '';
@@ -213,13 +225,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
             return;
         }
 
-        $accounts = cache()->remember(
-            'sub_anak_akun_options',
-            600,
-            fn() => SubAnakAkun::selectRaw("kode_sub_anak_akun as no, nama_sub_anak_akun as nama")->get()
-        );
+        // OPTIMASI CACHE: Array ringan
+        $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
+            return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
+        });
 
-        $this->nama_akun = $accounts->firstWhere('no', $value)?->nama ?? '';
+        $this->nama_akun = $accountsMap[$value] ?? '';
     }
 
     public function updatedHitKbk($value): void
@@ -304,7 +315,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'banyak'     => $banyak,
             'm3'         => $m3,
             'harga'      => $harga,
-            'total'      => $total, // Tetap dipertahankan di level draft session PHP
+            'total'      => $total, 
             'map'        => strtolower($this->map),
         ];
 
@@ -342,7 +353,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
         try {
             DB::transaction(function () {
                 foreach ($this->items as $item) {
-                    // Bersihkan array dari key 'total' dan petakan 'no_dokumen' ke 'no-dokumen'
                     $insertData = $item;
                     unset($insertData['total']);
 
@@ -451,22 +461,20 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->required()
                     ->searchable()
                     ->options(function () {
-                        return cache()->remember('sub_anak_akun_options', 600, function () {
-                            return SubAnakAkun::selectRaw("kode_sub_anak_akun as no, nama_sub_anak_akun as nama")->get();
-                        })->mapWithKeys(fn($item) => [
-                            $item->no => "{$item->no} - {$item->nama}"
+                        // OPTIMASI CACHE: Array ringan
+                        $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
+                            return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
+                        });
+                        return collect($accountsMap)->mapWithKeys(fn($nama, $no) => [
+                            $no => "{$no} - {$nama}"
                         ]);
                     })
                     ->live()
                     ->afterStateUpdated(function ($state, Set $set) {
-                        $accounts = cache()->remember(
-                            'sub_anak_akun_options',
-                            600,
-                            fn() => SubAnakAkun::selectRaw("kode_sub_anak_akun as no, nama_sub_anak_akun as nama")->get()
-                        );
-
-                        $name = $accounts->firstWhere('no', $state)?->nama ?? '';
-                        $set('nama_akun', $name);
+                        $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
+                            return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
+                        });
+                        $set('nama_akun', $accountsMap[$state] ?? '');
                     }),
                 TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
 
@@ -557,7 +565,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 if (!$record) return [];
 
                 $data = $record->toArray();
-                // Memetakan no-dokumen ke properti model no_dokumen agar tampil di form modal
                 $data['no_dokumen'] = $record->{'no-dokumen'} ?? $record->no_dokumen;
                 return $data;
             })
@@ -596,7 +603,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 $data['m3']     = $m3;
                 $data['harga']  = $harga;
 
-                // Membersihkan properti 'total' dan memetakan 'no_dokumen' ke 'no-dokumen' sebelum update ke DB
                 $updateData = $data;
                 unset($updateData['total']);
 
