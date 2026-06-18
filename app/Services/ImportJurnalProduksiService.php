@@ -346,14 +346,12 @@ class ImportJurnalProduksiService
     {
         $v = strtolower(trim((string) ($val ?? '')));
 
-        if ($v === 'm') {
+        if ($v === 'm')
             return 'm';
-        } elseif ($v === 'b') {
+        else if ($v === 'b')
             return 'b';
-        } elseif ($v === 'k') {
+        else if ($v === 'k')
             return 'm';
-        }
-
         return null;
     }
 
