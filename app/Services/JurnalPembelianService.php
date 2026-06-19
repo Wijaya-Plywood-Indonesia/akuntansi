@@ -15,12 +15,12 @@ class JurnalPembelianService
     // ──────────────────────────────────────────────────────────────
     // KODE AKUN PATEN (HARDCODE/FIXED) UNTUK KEPERLUAN SAAT INI
     // ──────────────────────────────────────────────────────────────
-    const KODE_KAS_TUNAI        = '110-01'; // Paten Kas Tunai
-    const KODE_BANK_TRANSFER    = '110-02'; // Paten Bank/Transfer
-    const KODE_PPN_MASUKAN      = '116-01'; // Paten PPN Masukan
-    const KODE_HUTANG_DAGANG    = '211-01'; // Paten Hutang Dagang
-    const KODE_BEBAN_ONGKIR     = '512-07'; // Paten Beban Ongkir
-    const KODE_BEBAN_LAIN_LAIN  = '610-99'; // Paten Beban Lain-Lain
+    const KODE_KAS_TUNAI        = '1111.00'; // Paten Kas Tunai
+    const KODE_BANK_TRANSFER    = '1210.00'; // Paten Bank/Transfer
+    const KODE_PPN_MASUKAN      = '1303.04'; // Paten PPN Masukan
+    const KODE_HUTANG_DAGANG    = '2101-00'; // Paten Hutang Dagang
+    const KODE_BEBAN_ONGKIR     = '5860-00'; // Paten Beban Ongkir
+    const KODE_BEBAN_LAIN_LAIN  = '5870.00'; // Paten Beban Lain-Lain
 
     /**
      * Membuat Jurnal Pembantu secara Fleksibel dan Dinamis
@@ -57,10 +57,6 @@ class JurnalPembelianService
 
                 // Ambil DINAMIS dari tabel barang (id_sub_anak_akun)
                 $kodeAkunDebet = $barang?->subAnakAkun?->kode_sub_anak_akun;
-
-                // Jika ingin mengambil akun HPP atau Pendapatan milik barang di masa mendatang:
-                // $kodeAkunHpp = $barang?->akunHpp?->kode_sub_anak_akun;
-                // $kodeAkunPendapatan = $barang?->akunPendapatan?->kode_sub_anak_akun;
 
                 if (!$kodeAkunDebet) {
                     Log::warning("[JurnalPembelian] Barang '{$detail->nama_barang}' belum di-set akun persediaannya. Menggunakan fallback persediaan default '115-01'.");
@@ -99,6 +95,10 @@ class JurnalPembelianService
                     'shadow_harga' => $detail->harga_beli,
                     'shadow_jumlah' => $detail->subtotal,
                     'jumlah'       => $detail->subtotal,
+                    
+                    // ✅ FIX: Parsing hit_kbk dari pembelian agar observer tidak salah hitung
+                    'hit_kbk'      => $detail->hit_kbk ?? 'b', 
+                    
                     'status'       => true,
                     'created_by'   => $userId,
                 ]);
@@ -205,7 +205,6 @@ class JurnalPembelianService
 
             // ─── KREDIT 1: KAS / BANK MENCATAT PENGELUARAN DP (PATEN/HARDCODE) ───
             if ($totalUangMuka > 0) {
-                // Diambil dari konstanta paten kas / bank transfer
                 $metodeUtama = ($methodString === PembelianMetodePembayaran::METODE_TRANSFER)
                     ? self::KODE_BANK_TRANSFER
                     : self::KODE_KAS_TUNAI;
@@ -253,6 +252,10 @@ class JurnalPembelianService
                     'shadow_harga' => $totalUangMuka,
                     'shadow_jumlah' => $totalUangMuka,
                     'jumlah'       => $totalUangMuka,
+                    
+                    // ✅ FIX: Komponen non-barang juga diberi default 'b' agar Observer tidak merusak data
+                    'hit_kbk'      => 'b', 
+                    
                     'status'       => true,
                     'created_by'   => $userId,
                 ]);
@@ -260,7 +263,6 @@ class JurnalPembelianService
 
             // ─── KREDIT 2: HUTANG DAGANG (PATEN/HARDCODE) ───
             if ($sisaHutang > 0) {
-                // Diambil dari konstanta paten hutang dagang
                 $akunHutangDinamis = self::KODE_HUTANG_DAGANG;
                 $namaHutang = $this->getNamaAkun($akunHutangDinamis) ?: 'Hutang Dagang';
 
@@ -315,6 +317,10 @@ class JurnalPembelianService
             'shadow_harga' => $nominal,
             'shadow_jumlah' => $nominal,
             'jumlah'       => $nominal,
+            
+            // ✅ FIX: Parameter nominal statis menggunakan default hit_kbk 'b' (1 x Harga)
+            'hit_kbk'      => 'b', 
+            
             'status'       => true,
             'created_by'   => $userId,
         ]);

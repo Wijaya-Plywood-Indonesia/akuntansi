@@ -60,9 +60,13 @@ class JurnalBalikService
                             'no_referensi'              => $itemAsli->no_referensi,
                             'keterangan'                => 'BALIK: ' . $itemAsli->keterangan,
                             'banyak'                    => $itemAsli->banyak,
-                            'm3'                        => $itemAsli->m3, // <--- REVISI SALIN M3
+                            'm3'                        => $itemAsli->m3, 
                             'harga'                     => $itemAsli->harga,
-                            'jumlah'                    => $itemAsli->jumlah, // <--- DI-PASSING LANGSUNG AGAR OBSERVER AMAN
+                            'jumlah'                    => $itemAsli->jumlah,
+                            
+                            // ✅ FIX: Wajib disalin agar jurnal balik tidak menderita bug yg sama
+                            'hit_kbk'                   => $itemAsli->hit_kbk, 
+                            
                             'status'                    => true,
                             'created_by'                => $userId,
                             'updated_by'                => $userId,
