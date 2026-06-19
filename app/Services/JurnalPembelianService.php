@@ -12,22 +12,15 @@ use Illuminate\Support\Facades\Log;
 
 class JurnalPembelianService
 {
-    // ──────────────────────────────────────────────────────────────
-    // KODE AKUN PATEN (HARDCODE/FIXED) UNTUK KEPERLUAN SAAT INI
-    // ──────────────────────────────────────────────────────────────
-    const KODE_KAS_TUNAI        = '1111.00'; // Paten Kas Tunai
-    const KODE_BANK_TRANSFER    = '1210.00'; // Paten Bank/Transfer
-    const KODE_PPN_MASUKAN      = '1303.04'; // Paten PPN Masukan
-    const KODE_HUTANG_DAGANG    = '2101-00'; // Paten Hutang Dagang
-    const KODE_BEBAN_ONGKIR     = '5860-00'; // Paten Beban Ongkir
-    const KODE_BEBAN_LAIN_LAIN  = '5870.00'; // Paten Beban Lain-Lain
+    const KODE_KAS_TUNAI        = '1111.00'; 
+    const KODE_BANK_TRANSFER    = '1210.00'; 
+    const KODE_PPN_MASUKAN      = '1303.04'; 
+    const KODE_HUTANG_DAGANG    = '2101-00'; 
+    const KODE_BEBAN_ONGKIR     = '5860-00'; 
+    const KODE_BEBAN_LAIN_LAIN  = '5870.00'; 
 
-    /**
-     * Membuat Jurnal Pembantu secara Fleksibel dan Dinamis
-     */
     public function buatJurnalDariPembelian(Pembelian $pembelian, int $userId): void
     {
-        // Load relasi barang (termasuk persediaan, hpp, dan pendapatan)
         $pembelian->loadMissing([
             'detailPembelians.barang.subAnakAkun',
             'detailPembelians.barang.akunHpp',
@@ -46,16 +39,14 @@ class JurnalPembelianService
             $supplier = $pembelian->supplier_name ?: 'Supplier';
             $grandTotal = (float) $pembelian->grand_total;
 
-            // Generate nomor urut jurnal pembantu baru
             $noJurnal = JurnalPembantuHeader::lockForUpdate()->max('jurnal') + 1;
 
             // ──────────────────────────────────────────────────────────────
-            // SISI DEBIT (D) 1: Nilai Pokok Barang (Persediaan Gudang dari Tabel Barang)
+            // SISI DEBIT (D) 1: Nilai Pokok Barang
             // ──────────────────────────────────────────────────────────────
             foreach ($pembelian->detailPembelians as $detail) {
                 $barang = $detail->barang;
 
-                // Ambil DINAMIS dari tabel barang (id_sub_anak_akun)
                 $kodeAkunDebet = $barang?->subAnakAkun?->kode_sub_anak_akun;
 
                 if (!$kodeAkunDebet) {
@@ -81,6 +72,20 @@ class JurnalPembelianService
                     'dibuat_oleh'        => $userId,
                 ]);
 
+                // ✅ FIX: Deteksi otomatis hit_kbk (Jika hasil m3 * harga cocok dengan subtotal)
+                $m3Detail = (float) ($detail->kubikasi ?? 0);
+                $hargaDetail = (float) $detail->harga_beli;
+                $subtotalDetail = (float) $detail->subtotal;
+                
+                $hitKbk = $detail->hit_kbk ?? null;
+                if (empty($hitKbk)) {
+                    if ($m3Detail > 0 && abs($subtotalDetail - ($m3Detail * $hargaDetail)) < 0.01) {
+                        $hitKbk = 'm';
+                    } else {
+                        $hitKbk = 'b';
+                    }
+                }
+
                 JurnalPembantuItem::create([
                     'jurnal_pembantu_header_id' => $headerD->id,
                     'urut'         => 1,
@@ -90,22 +95,19 @@ class JurnalPembelianService
                     'no_dokumen'   => $nota,
                     'keterangan'   => "Masuk Gudang " . (float)$detail->qty . " {$detail->satuan}",
                     'banyak'       => $detail->qty,
-                    'm3'           => $detail->kubikasi ?? 0,
-                    'harga'        => $detail->harga_beli,
-                    'shadow_harga' => $detail->harga_beli,
-                    'shadow_jumlah' => $detail->subtotal,
-                    'jumlah'       => $detail->subtotal,
-                    
-                    // ✅ FIX: Parsing hit_kbk dari pembelian agar observer tidak salah hitung
-                    'hit_kbk'      => $detail->hit_kbk ?? 'b', 
-                    
+                    'm3'           => $m3Detail,
+                    'harga'        => $hargaDetail,
+                    'shadow_harga' => $hargaDetail,
+                    'shadow_jumlah' => $subtotalDetail,
+                    'jumlah'       => $subtotalDetail,
+                    'hit_kbk'      => $hitKbk, // Parameter presisi yang dikirimkan
                     'status'       => true,
                     'created_by'   => $userId,
                 ]);
             }
 
             // ──────────────────────────────────────────────────────────────
-            // SISI DEBIT (D) 2: PAJAK PPN MASUKAN (PATEN/HARDCODE)
+            // SISI DEBIT (D) 2: PAJAK PPN MASUKAN
             // ──────────────────────────────────────────────────────────────
             $ppnNominal = (float) ($pembelian->total_ppn ?? 0);
             if ($ppnNominal > 0) {
@@ -132,7 +134,7 @@ class JurnalPembelianService
             }
 
             // ──────────────────────────────────────────────────────────────
-            // SISI DEBIT (D) 3: BEBAN ONGKIR (PATEN/HARDCODE)
+            // SISI DEBIT (D) 3: BEBAN ONGKIR
             // ──────────────────────────────────────────────────────────────
             $ongkir = (float) ($pembelian->ongkir ?? 0);
             if ($ongkir > 0) {
@@ -159,7 +161,7 @@ class JurnalPembelianService
             }
 
             // ──────────────────────────────────────────────────────────────
-            // SISI DEBIT (D) 4: BIAYA LAIN-LAIN (PATEN/HARDCODE)
+            // SISI DEBIT (D) 4: BIAYA LAIN-LAIN
             // ──────────────────────────────────────────────────────────────
             $biayaLain = (float) ($pembelian->biaya_lain ?? 0);
             if ($biayaLain > 0) {
@@ -203,7 +205,6 @@ class JurnalPembelianService
                 $sisaHutang    = max(0, $grandTotal - $nominalUangMuka);
             }
 
-            // ─── KREDIT 1: KAS / BANK MENCATAT PENGELUARAN DP (PATEN/HARDCODE) ───
             if ($totalUangMuka > 0) {
                 $metodeUtama = ($methodString === PembelianMetodePembayaran::METODE_TRANSFER)
                     ? self::KODE_BANK_TRANSFER
@@ -252,16 +253,12 @@ class JurnalPembelianService
                     'shadow_harga' => $totalUangMuka,
                     'shadow_jumlah' => $totalUangMuka,
                     'jumlah'       => $totalUangMuka,
-                    
-                    // ✅ FIX: Komponen non-barang juga diberi default 'b' agar Observer tidak merusak data
                     'hit_kbk'      => 'b', 
-                    
                     'status'       => true,
                     'created_by'   => $userId,
                 ]);
             }
 
-            // ─── KREDIT 2: HUTANG DAGANG (PATEN/HARDCODE) ───
             if ($sisaHutang > 0) {
                 $akunHutangDinamis = self::KODE_HUTANG_DAGANG;
                 $namaHutang = $this->getNamaAkun($akunHutangDinamis) ?: 'Hutang Dagang';
@@ -317,10 +314,7 @@ class JurnalPembelianService
             'shadow_harga' => $nominal,
             'shadow_jumlah' => $nominal,
             'jumlah'       => $nominal,
-            
-            // ✅ FIX: Parameter nominal statis menggunakan default hit_kbk 'b' (1 x Harga)
             'hit_kbk'      => 'b', 
-            
             'status'       => true,
             'created_by'   => $userId,
         ]);

@@ -41,7 +41,10 @@ class JurnalBalikService
                         'keterangan'          => 'BALIK: ' . $headerAsli->keterangan,
                         'no_dokumen'          => $headerAsli->no_dokumen,
                         'catatan_internal'    => 'Jurnal balik atas pembatalan validasi nota ' . $headerAsli->no_dokumen,
-                        'total_nilai'         => 0, // dihitung ulang oleh observer
+                        
+                        // ✅ FIX 1: Copy langsung total nilai dari aslinya, jangan diset 0
+                        'total_nilai'         => $headerAsli->total_nilai, 
+                        
                         'status'              => JurnalPembantuHeader::STATUS_DRAFT,
                         'adalah_jurnal_balik' => true,
                         'membalik_id'         => $headerAsli->id,
@@ -64,7 +67,10 @@ class JurnalBalikService
                             'harga'                     => $itemAsli->harga,
                             'jumlah'                    => $itemAsli->jumlah,
                             
-                            // ✅ FIX: Wajib disalin agar jurnal balik tidak menderita bug yg sama
+                            // ✅ FIX 2: Sertakan shadow_harga dan shadow_jumlah agar Observer tidak "buta"
+                            'shadow_harga'              => $itemAsli->shadow_harga ?? $itemAsli->harga,
+                            'shadow_jumlah'             => $itemAsli->shadow_jumlah ?? $itemAsli->jumlah,
+                            
                             'hit_kbk'                   => $itemAsli->hit_kbk, 
                             
                             'status'                    => true,
