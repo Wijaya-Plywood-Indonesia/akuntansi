@@ -795,6 +795,23 @@
         document.addEventListener('livewire:initialized', () => {
             let isSavingOrSaved = false;
 
+            // Check if page load is a reload/refresh
+            let isReload = false;
+            try {
+                const entries = performance.getEntriesByType('navigation');
+                if (entries.length > 0) {
+                    isReload = entries[0].type === 'reload';
+                } else {
+                    isReload = performance.navigation && performance.navigation.type === 1;
+                }
+            } catch (e) {
+                console.error('Error checking navigation type:', e);
+            }
+
+            if (!isReload) {
+                localStorage.removeItem('pembelian_state');
+            }
+
             const savedState = localStorage.getItem('pembelian_state');
             if (savedState) {
                 try {
@@ -847,6 +864,11 @@
 
             window.addEventListener('clearLocalStorage', () => {
                 isSavingOrSaved = true;
+                localStorage.removeItem('pembelian_state');
+            });
+
+            // Listen to Livewire SPA navigation event (navigating away)
+            document.addEventListener('livewire:navigating', () => {
                 localStorage.removeItem('pembelian_state');
             });
         });

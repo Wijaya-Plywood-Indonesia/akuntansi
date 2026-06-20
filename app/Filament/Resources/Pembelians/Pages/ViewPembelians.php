@@ -21,7 +21,6 @@ class ViewPembelians extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            // ✅ ACTION: VALIDASI PEMBELIAN (Dipindah ke View)
             Action::make('validasi_pembelian')
                 ->label('Validasi')
                 ->icon('heroicon-o-check-badge')
@@ -62,7 +61,6 @@ class ViewPembelians extends ViewRecord
                         ->send();
                 }),
 
-            // ❌ ACTION: BATAL VALIDASI (Dipindah ke View)
             Action::make('batal_validasi')
                 ->label('Batal Validasi')
                 ->icon('heroicon-o-x-circle')
@@ -101,11 +99,32 @@ class ViewPembelians extends ViewRecord
 
                             foreach ($headersAsli as $header) {
                                 $itemsAktif = $header->items()->where('status', true)->get();
-                                $totalBanyak = $itemsAktif->sum('banyak');
-                                $totalJumlah = $itemsAktif->sum('jumlah');
+                                
+                                $totalBanyak = (float) $itemsAktif->sum('banyak');
+                                $totalM3 = (float) $itemsAktif->sum('m3');
+                                $totalNilaiHeader = (float) $header->total_nilai;
 
-                                $banyak = $totalBanyak > 0 ? $totalBanyak : 1;
-                                $hargaRata = $totalBanyak > 0 ? $totalJumlah / $totalBanyak : $header->total_nilai;
+                                $firstItem = $itemsAktif->first();
+                                $itemHitKbk = $firstItem?->hit_kbk ?? 'b';
+                                $hitKbk = $itemHitKbk;
+
+                                $prefix = substr($header->no_akun, 0, 3);
+                                $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
+                                if ($isCashOrPayment) {
+                                    $hitKbk = 'b';
+                                }
+
+                                // ✅ FIX: Pastikan M3 dan Banyak SELALU dibawa ke Jurnal Umum, jangan di-null-kan
+                                $m3 = $totalM3 > 0 ? $totalM3 : null;
+                                $banyak = $totalBanyak > 0 ? $totalBanyak : null;
+
+                                // Penentuan pembagian harga saja yang bergantung pada hitKbk
+                                if ($hitKbk === 'm') {
+                                    $hargaRata = $totalM3 > 0 ? ($totalNilaiHeader / $totalM3) : $totalNilaiHeader;
+                                } else {
+                                    if (!$banyak && !$isCashOrPayment) $banyak = 1;
+                                    $hargaRata = $totalBanyak > 0 ? ($totalNilaiHeader / $totalBanyak) : $totalNilaiHeader;
+                                }
 
                                 \App\Models\JurnalUmum::create([
                                     'tgl'        => now()->format('Y-m-d'),
@@ -114,8 +133,10 @@ class ViewPembelians extends ViewRecord
                                     'nama_akun'  => $header->nama_akun,
                                     'nama'       => $record->supplier_name ?? $header->no_dokumen,
                                     'keterangan' => $header->keterangan . ' (Otomatis Terposting karena Pembatalan)',
-                                    'banyak'     => $banyak,
+                                    'banyak'     => $banyak !== null ? round($banyak, 4) : null,
+                                    'm3'         => $m3 !== null ? round($m3, 4) : null,
                                     'harga'      => round($hargaRata, 2),
+                                    'hit_kbk'    => $hitKbk,
                                     'map'        => strtolower($header->map),
                                 ]);
                             }
