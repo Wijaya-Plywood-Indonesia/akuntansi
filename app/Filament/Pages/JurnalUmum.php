@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Exports\JurnalUmumExport;
 use App\Models\SubAnakAkun;
 use App\Models\JurnalUmum as JurnalModel;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -19,6 +20,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
 class JurnalUmum extends Page implements HasActions, HasForms
@@ -95,6 +97,52 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'hitkbk'  => $this->hit_kbk,
             'total'   => $this->total,
         ]);
+    }
+
+    /**
+     * ── FITUR EXPORT JURNAL UMUM ──────────────────────────────
+     * Menampilkan tombol "Export Excel" di header halaman.
+     * Saat diklik, muncul modal untuk memilih rentang tanggal,
+     * lalu file .xlsx otomatis terdownload dengan format yang
+     * sama persis seperti sheet "isi jurnal" pada file referensi.
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('exportJurnal')
+                ->label('Export Excel')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('success')
+                ->modalHeading('Export Jurnal Umum')
+                ->modalDescription('Pilih rentang tanggal yang ingin diexport. Kosongkan jika ingin export semua data.')
+                ->modalSubmitActionLabel('Export')
+                ->form([
+                    Grid::make(2)->schema([
+                        DatePicker::make('tgl_dari')
+                            ->label('Dari Tanggal')
+                            ->native(true),
+                        DatePicker::make('tgl_sampai')
+                            ->label('Sampai Tanggal')
+                            ->native(true)
+                            ->default(now()->format('Y-m-d')),
+                    ]),
+                ])
+                ->action(function (array $data) {
+                    $tglDari   = $data['tgl_dari']   ?? null;
+                    $tglSampai = $data['tgl_sampai'] ?? null;
+
+                    $fileName = 'jurnal-umum';
+                    if ($tglDari || $tglSampai) {
+                        $fileName .= '_' . ($tglDari ?: 'awal') . '_sd_' . ($tglSampai ?: 'akhir');
+                    }
+                    $fileName .= '.xlsx';
+
+                    return Excel::download(
+                        new JurnalUmumExport($tglDari, $tglSampai),
+                        $fileName
+                    );
+                }),
+        ];
     }
 
     protected function getViewData(): array
