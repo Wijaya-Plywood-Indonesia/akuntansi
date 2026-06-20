@@ -1,0 +1,502 @@
+<x-filament-panels::page>
+
+    {{-- ============================================================
+         INJECT STYLE: Nunito Font + Animasi Konfeti + Custom Style
+         ============================================================ --}}
+    @push('styles')
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    @endpush
+
+    <style>
+        /* ---- Font Override ---- */
+        .lb-wrap,
+        .lb-wrap * {
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        }
+
+        /* ---- Konfeti ---- */
+        @keyframes confettiFall {
+            0% {
+                transform: translateY(-10vh) rotate(0deg);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(110vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        .confetti-piece {
+            animation: confettiFall linear forwards;
+        }
+
+        /* ---- Slide-Over Drawer ---- */
+        #lb-drawer {
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+
+        #lb-drawer.lb-drawer--open {
+            transform: translateX(0);
+        }
+
+        #lb-overlay {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        #lb-overlay.lb-overlay--visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* ---- Row hover smooth ---- */
+        .lb-row {
+            transition: filter 0.15s ease, background-color 0.15s ease;
+        }
+
+        .lb-row:hover .lb-chevron {
+            transform: translateX(4px);
+        }
+
+        .lb-chevron {
+            transition: transform 0.2s ease;
+        }
+
+        /* ---- Medal shape ---- */
+        .medal-svg {
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .18));
+        }
+
+        /* ---- Scrollbar tipis di drawer ---- */
+        #lb-drawer-body::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #lb-drawer-body::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 4px;
+        }
+
+        /* ---- Duolingo-style button ---- */
+        .lb-btn-close {
+            box-shadow: 0 4px 0 #46a302;
+            transition: box-shadow 0.1s, transform 0.1s;
+        }
+
+        .lb-btn-close:active {
+            box-shadow: 0 1px 0 #46a302;
+            transform: translateY(3px);
+        }
+    </style>
+
+    {{-- ============================================================
+         KONFETI (hanya muncul 3 detik pertama via JS)
+         ============================================================ --}}
+    <div id="lb-confetti" class="fixed inset-0 overflow-hidden pointer-events-none z-[60]" aria-hidden="true"></div>
+
+    {{-- ============================================================
+         MAIN WRAPPER
+         ============================================================ --}}
+    <div class="lb-wrap max-w-3xl mx-auto px-2 py-6 relative">
+
+        {{-- ---- League Header ---- --}}
+        <div class="flex flex-col items-center mb-8 mt-4 text-center">
+            <div class="mb-4">
+                <img
+                    src="https://api.dicebear.com/10.x/identicon/svg?seed=Luna"
+                    alt="Maskot Season"
+                    class="w-24 h-24 object-contain drop-shadow-md cursor-pointer select-none" />
+            </div>
+            <h1 class="text-3xl font-extrabold text-[#4b4b4b] dark:text-white mb-1">
+                Season Supplier Aktif
+            </h1>
+            <p class="text-[#a5a5a5] dark:text-zinc-400 font-semibold text-[15px]">
+                Peringkat berdasarkan total nilai pembelian (Nota Hutang / Cicilan / Lunas)
+            </p>
+        </div>
+
+        {{-- ---- Search Bar (Livewire) ---- --}}
+        <div class="mb-6 relative max-w-2xl mx-auto">
+            <svg class="absolute left-4 top-3.5 w-5 h-5 text-slate-300 dark:text-zinc-500 pointer-events-none"
+                fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+                type="text"
+                wire:model.live.debounce.300ms="search"
+                placeholder="Cari mitra supplier..."
+                class="w-full bg-slate-50 dark:bg-zinc-800/50 border-2 border-slate-100 dark:border-zinc-700/50
+                       text-slate-700 dark:text-zinc-100 font-bold px-12 py-3 rounded-2xl
+                       focus:outline-none focus:border-[#58cc02] focus:bg-white dark:focus:bg-zinc-800
+                       transition-all placeholder:text-slate-400 placeholder:font-semibold" />
+            @if ($search)
+            <button wire:click="$set('search', '')"
+                class="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+            </button>
+            @endif
+        </div>
+
+        {{-- ---- Leaderboard Table ---- --}}
+        <div class="border-t-2 border-slate-100 dark:border-zinc-800 pt-6">
+            @if ($leaderboard->isEmpty())
+            <div class="text-center py-16 text-slate-400 dark:text-zinc-500 font-bold text-lg">
+                Tidak ada supplier ditemukan.
+            </div>
+            @else
+            <div class="w-full overflow-x-auto pb-4">
+                <table class="w-full text-left border-separate border-spacing-y-2 min-w-[560px]">
+
+                    {{-- Table Header --}}
+                    <thead>
+                        <tr class="text-slate-400 dark:text-zinc-500 font-extrabold text-[11px] uppercase tracking-wider">
+                            <th class="pb-2 px-3 text-center w-16">Rank</th>
+                            <th class="pb-2 px-2">Mitra Supplier</th>
+                            <th class="pb-2 px-4 text-center w-24">Nota</th>
+                            <th class="pb-2 px-4 text-right">Total Belanja</th>
+                            <th class="pb-2 px-3 w-10"></th>
+                        </tr>
+                    </thead>
+
+                    {{-- Table Body --}}
+                    <tbody>
+                        @foreach ($leaderboard as $supplier)
+                        @php
+                        $rank = $supplier->rank;
+                        $isTop3 = $rank <= 3;
+                            $bgClass='bg-white dark:bg-zinc-800/40 hover:bg-slate-50 dark:hover:bg-zinc-800' ;
+                            $borderClass='border-transparent' ;
+
+                            // Medal colors
+                            $medalBg=match($rank) { 1=> '#facc15', 2 => '#e2e8f0', 3 => '#f59e0b', default => null };
+                            $medalText = match($rank) { 1 => '#fff', 2 => '#64748b', 3 => '#fff', default => null };
+                            @endphp
+
+                            <tr
+                                class="lb-row group cursor-pointer {{ $bgClass }}"
+                                onclick="lbOpenDrawer({{ $supplier->supplier_id }}, {{ json_encode($supplier->supplier_name) }})">
+                                {{-- Kolom 1: Rank / Medal (sudut kiri rounded) --}}
+                                <td class="py-3 px-3 rounded-l-2xl border-y-2 border-l-2 {{ $borderClass }} {{ $bgClass }}">
+                                    @if ($isTop3)
+                                    <div class="relative w-8 h-10 flex flex-col items-center justify-center -mt-1 mx-auto">
+                                        <svg viewBox="0 0 24 32" class="absolute inset-0 w-full h-full medal-svg">
+                                            <path
+                                                d="M0 6 C0 2.7 2.7 0 6 0 L18 0 C21.3 0 24 2.7 24 6 L24 24 L12 30 L0 24 Z"
+                                                fill="{{ $medalBg }}" />
+                                        </svg>
+                                        <span class="relative z-10 font-bold text-sm" style="color: {{ $medalText }}">
+                                            {{ $rank }}
+                                        </span>
+                                    </div>
+                                    @else
+                                    <div class="w-full font-bold text-[#58cc02] dark:text-[#7ae629] text-center text-lg">
+                                        {{ $rank }}
+                                    </div>
+                                    @endif
+                                </td>
+
+                                {{-- Kolom 2: Avatar & Name --}}
+                                <td class="py-3 px-2 border-y-2 {{ $borderClass }} {{ $bgClass }}">
+                                    <div class="flex items-center gap-3">
+                                        {{-- DiceBear Lorelei Avatar --}}
+                                        <div class="relative flex-shrink-0">
+                                            <div class="w-12 h-12 rounded-full overflow-hidden border-2 border-slate-200 dark:border-zinc-700 bg-[#f0f0f0] dark:bg-zinc-700 transition-colors">
+                                                <img
+                                                    src="https://api.dicebear.com/9.x/lorelei/svg?seed={{ urlencode($supplier->supplier_name) }}&backgroundColor=transparent"
+                                                    alt="avatar {{ $supplier->supplier_name }}"
+                                                    class="w-full h-full object-cover"
+                                                    loading="lazy" />
+                                            </div>
+                                            {{-- Online dot --}}
+                                            <div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#58cc02] dark:bg-[#7ae629] border-2 border-white dark:border-zinc-800 rounded-full z-10"></div>
+                                        </div>
+
+                                        {{-- Nama --}}
+                                        <span class="font-bold text-[16px] md:text-[17px] whitespace-nowrap text-[#4b4b4b] dark:text-zinc-100">
+                                            {{ $supplier->supplier_name }}
+                                        </span>
+                                    </div>
+                                </td>
+
+                                {{-- Kolom 3: Nota Dicetak --}}
+                                <td class="py-3 px-4 text-center border-y-2 {{ $borderClass }} {{ $bgClass }}">
+                                    <span class="text-xs font-extrabold text-slate-400 dark:text-zinc-400">
+                                        {{ $supplier->nota_dicetak }}x
+                                    </span>
+                                </td>
+
+                                {{-- Kolom 4: Total Belanja --}}
+                                <td class="py-3 px-4 text-right border-y-2 {{ $borderClass }} {{ $bgClass }}">
+                                    <span class="font-extrabold text-[15px] whitespace-nowrap text-[#afafaf] dark:text-zinc-300">
+                                        Rp {{ number_format($supplier->total_pembelian, 0, ',', '.') }}
+                                    </span>
+                                </td>
+
+                                {{-- Kolom 5: Chevron (sudut kanan rounded) --}}
+                                <td class="py-3 px-3 rounded-r-2xl border-y-2 border-r-2 text-right {{ $borderClass }} {{ $bgClass }}">
+                                    <svg class="lb-chevron w-5 h-5 ml-auto text-slate-300 dark:text-zinc-600 group-hover:text-slate-400"
+                                        fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                        <path d="m9 18 6-6-6-6" />
+                                    </svg>
+                                </td>
+                            </tr>
+                            @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endif
+        </div>
+
+    </div>{{-- /lb-wrap --}}
+
+
+    {{-- ============================================================
+         SLIDE-OVER DRAWER + OVERLAY
+         ============================================================ --}}
+
+    {{-- Overlay --}}
+    <div id="lb-overlay"
+        class="fixed inset-0 z-40 bg-slate-900/30 dark:bg-black/60 backdrop-blur-sm"
+        onclick="lbCloseDrawer()"
+        aria-hidden="true">
+    </div>
+
+    {{-- Drawer Panel --}}
+    <div id="lb-drawer"
+        class="fixed inset-y-0 right-0 z-50 w-screen max-w-md flex flex-col
+                bg-white dark:bg-zinc-900 shadow-2xl rounded-l-3xl"
+        role="dialog" aria-modal="true" aria-label="Detail Supplier">
+
+        {{-- Drawer: Scrollable body --}}
+        <div id="lb-drawer-body" class="flex-1 overflow-y-auto p-6 sm:p-8">
+
+            {{-- Header Detail --}}
+            <div class="flex items-start justify-between pb-6 border-b-2 border-slate-100 dark:border-zinc-800 mb-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 rounded-full bg-slate-100 dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 overflow-hidden">
+                        <img id="lb-drawer-avatar" src="" alt="avatar" class="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                        <h3 id="lb-drawer-name"
+                            class="text-xl font-extrabold text-[#4b4b4b] dark:text-white leading-tight mb-1">
+                            —
+                        </h3>
+                        <span class="inline-flex items-center gap-1 text-xs font-bold text-[#58cc02] dark:text-[#7ae629] bg-[#ddf4c5] dark:bg-[#1f3f0e] px-2 py-0.5 rounded-md">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                            </svg>
+                            Mitra Terverifikasi
+                        </span>
+                    </div>
+                </div>
+                <button onclick="lbCloseDrawer()"
+                    class="p-2 rounded-full bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-500 dark:text-zinc-400 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            {{-- Ringkasan 2 Kartu --}}
+            <div class="grid grid-cols-2 gap-3 mb-8">
+                <div class="bg-slate-50 dark:bg-zinc-800/50 border-2 border-slate-100 dark:border-zinc-700/50 p-4 rounded-2xl text-center">
+                    <span class="block text-[11px] text-slate-400 dark:text-zinc-500 font-extrabold tracking-widest uppercase mb-1">
+                        Total Belanja
+                    </span>
+                    <span id="lb-drawer-total" class="text-lg font-black text-[#4b4b4b] dark:text-zinc-100">—</span>
+                </div>
+                <div class="bg-slate-50 dark:bg-zinc-800/50 border-2 border-slate-100 dark:border-zinc-700/50 p-4 rounded-2xl text-center">
+                    <span class="block text-[11px] text-slate-400 dark:text-zinc-500 font-extrabold tracking-widest uppercase mb-1">
+                        Nota Tercetak
+                    </span>
+                    <span id="lb-drawer-nota" class="text-lg font-black text-[#4b4b4b] dark:text-zinc-100">—</span>
+                </div>
+            </div>
+
+            {{-- Judul Riwayat --}}
+            <h4 class="text-sm font-extrabold text-[#4b4b4b] dark:text-zinc-200 uppercase mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4 text-slate-400 dark:text-zinc-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                </svg>
+                Riwayat Nota Pembelian
+            </h4>
+
+            {{-- Tabel Riwayat (diisi JS) --}}
+            <div class="rounded-2xl border-2 border-slate-100 dark:border-zinc-800 overflow-hidden">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-zinc-800/80 text-slate-400 dark:text-zinc-500 font-extrabold text-[10px] uppercase tracking-wider border-b-2 border-slate-100 dark:border-zinc-800">
+                            <th class="py-3 px-4">Tanggal</th>
+                            <th class="py-3 px-4">No. Nota</th>
+                            <th class="py-3 px-4 text-right">Nominal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lb-drawer-invoices"
+                        class="divide-y-2 divide-slate-100 dark:divide-zinc-800 text-sm">
+                        <tr>
+                            <td colspan="3" class="py-8 text-center text-slate-400 dark:text-zinc-500 font-bold">
+                                Memuat data…
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>{{-- /lb-drawer-body --}}
+
+    </div>{{-- /lb-drawer --}}
+
+
+    {{-- ============================================================
+         JAVASCRIPT
+         ============================================================ --}}
+    <script>
+        (function() {
+
+            /* ---- Konfeti ---- */
+            (function spawnConfetti() {
+                const container = document.getElementById('lb-confetti');
+                if (!container) return;
+                const colors = ['#58cc02', '#ffc800', '#ce82ff', '#ff4b4b', '#1cb0f6'];
+                for (let i = 0; i < 45; i++) {
+                    const el = document.createElement('div');
+                    el.className = 'confetti-piece';
+                    Object.assign(el.style, {
+                        position: 'absolute',
+                        top: '-20px',
+                        left: Math.random() * 100 + '%',
+                        width: '10px',
+                        height: '24px',
+                        borderRadius: '3px',
+                        backgroundColor: colors[Math.floor(Math.random() * colors.length)],
+                        animationDuration: (Math.random() * 2 + 1.5) + 's',
+                        animationDelay: (Math.random() * 0.5) + 's',
+                        opacity: 0,
+                    });
+                    container.appendChild(el);
+                }
+                // Fade out konfeti setelah 2s, hapus dari DOM setelah 3s
+                setTimeout(() => {
+                    container.style.transition = 'opacity 1s';
+                    container.style.opacity = '0';
+                }, 2000);
+                setTimeout(() => {
+                    container.remove();
+                }, 3000);
+            })();
+
+            /* ---- Format helpers ---- */
+            function formatRupiah(number) {
+                return new Intl.NumberFormat('id-ID', {
+                    style: 'currency',
+                    currency: 'IDR',
+                    minimumFractionDigits: 0
+                }).format(number);
+            }
+
+            function formatDate(dateStr) {
+                if (!dateStr) return '-';
+                return new Date(dateStr).toLocaleDateString('id-ID', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            }
+
+            /* ---- Status badge helper ---- */
+            function statusLabel(status) {
+                const map = {
+                    hutang: {
+                        label: 'Hutang',
+                        color: '#ef4444'
+                    },
+                    cicilan: {
+                        label: 'Cicilan',
+                        color: '#f59e0b'
+                    },
+                    lunas: {
+                        label: 'Lunas',
+                        color: '#58cc02'
+                    },
+                };
+                const s = map[status] || {
+                    label: status,
+                    color: '#94a3b8'
+                };
+                return `<span style="color:${s.color};font-weight:800;font-size:11px;">${s.label}</span>`;
+            }
+
+            /* ---- Drawer State ---- */
+            const drawer = document.getElementById('lb-drawer');
+            const overlay = document.getElementById('lb-overlay');
+
+            window.lbOpenDrawer = function(supplierId, supplierName) {
+                // Tampilkan drawer langsung, data menyusul via fetch
+                document.getElementById('lb-drawer-name').textContent = supplierName;
+                document.getElementById('lb-drawer-avatar').src =
+                    `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(supplierName)}&backgroundColor=transparent`;
+                document.getElementById('lb-drawer-total').textContent = '—';
+                document.getElementById('lb-drawer-nota').textContent = '—';
+                document.getElementById('lb-drawer-invoices').innerHTML =
+                    '<tr><td colspan="3" class="py-8 text-center text-slate-400 dark:text-zinc-500 font-bold">Memuat data…</td></tr>';
+
+                drawer.classList.add('lb-drawer--open');
+                overlay.classList.add('lb-overlay--visible');
+                document.body.style.overflow = 'hidden';
+
+                /* Fetch detail via Livewire call() */
+                Livewire.find(
+                        document.querySelector('[wire\\:id]')?.getAttribute('wire:id')
+                    )?.call('getSupplierDetail', supplierId)
+                    .then(function(detail) {
+                        if (!detail) return;
+
+                        document.getElementById('lb-drawer-total').textContent = formatRupiah(detail.total_pembelian);
+                        document.getElementById('lb-drawer-nota').textContent = detail.nota_dicetak + 'x';
+
+                        const tbody = document.getElementById('lb-drawer-invoices');
+                        if (!detail.invoices || detail.invoices.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-400 font-bold">Belum ada nota.</td></tr>';
+                            return;
+                        }
+
+                        tbody.innerHTML = detail.invoices.map(inv => `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/40 transition-colors">
+                        <td class="py-3.5 px-4 font-bold text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+                            ${formatDate(inv.tanggal)}
+                        </td>
+                        <td class="py-3.5 px-4 font-extrabold text-[#4b4b4b] dark:text-zinc-200">
+                            ${inv.nomor_nota || '-'}
+                        </td>
+                        <td class="py-3.5 px-4 text-right">
+                            <div class="font-extrabold text-[#58cc02] dark:text-[#7ae629]">${formatRupiah(inv.grand_total)}</div>
+                            <div class="mt-0.5">${statusLabel(inv.status)}</div>
+                        </td>
+                    </tr>
+                `).join('');
+                    });
+            };
+
+            window.lbCloseDrawer = function() {
+                drawer.classList.remove('lb-drawer--open');
+                overlay.classList.remove('lb-overlay--visible');
+                document.body.style.overflow = '';
+            };
+
+            /* Tutup dengan ESC */
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') lbCloseDrawer();
+            });
+
+        })();
+    </script>
+
+</x-filament-panels::page>
