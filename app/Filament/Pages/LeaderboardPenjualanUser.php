@@ -73,34 +73,49 @@ class LeaderboardPenjualanUser extends Page
 
     public function getViewData(): array
     {
-        // Query database to aggregate purchases by customer
-        $query = Penjualan::query()
-            ->select(
-                DB::raw("CASE WHEN nama_customer IS NULL OR TRIM(nama_customer) = '' THEN 'Customer' ELSE nama_customer END as customer_name"),
-                DB::raw('SUM(total) as total_belanja'),
-                DB::raw('COUNT(*) as total_transaksi')
-            )
+        // Base query
+        $baseQuery = Penjualan::query()
+            ->selectRaw("
+            CASE
+                WHEN nama_customer IS NULL OR TRIM(nama_customer) = ''
+                THEN 'Customer'
+                ELSE nama_customer
+            END AS customer_name,
+            total
+        ")
             ->where('status_transaksi', '!=', 'DIBATALKAN');
 
         // Apply date filter
         if ($this->startDate) {
-            $query->whereDate('tanggal', '>=', $this->startDate);
+            $baseQuery->whereDate('tanggal', '>=', $this->startDate);
         }
+
         if ($this->endDate) {
-            $query->whereDate('tanggal', '<=', $this->endDate);
+            $baseQuery->whereDate('tanggal', '<=', $this->endDate);
         }
 
-        $sortByField = $this->sortBy === 'transaksi' ? 'total_transaksi' : 'total_belanja';
-        $secondarySortField = $this->sortBy === 'transaksi' ? 'total_belanja' : 'total_transaksi';
+        $sortByField = $this->sortBy === 'transaksi'
+            ? 'total_transaksi'
+            : 'total_belanja';
 
-        $records = $query->groupBy(DB::raw("CASE WHEN nama_customer IS NULL OR TRIM(nama_customer) = '' THEN 'Customer' ELSE nama_customer END"))
+        $secondarySortField = $this->sortBy === 'transaksi'
+            ? 'total_belanja'
+            : 'total_transaksi';
+
+        $records = DB::query()
+            ->fromSub($baseQuery, 'customers')
+            ->selectRaw('
+            customer_name,
+            SUM(total) as total_belanja,
+            COUNT(*) as total_transaksi
+        ')
+            ->groupBy('customer_name')
             ->orderByDesc($sortByField)
             ->orderByDesc($secondarySortField)
             ->get()
             ->map(function ($row) {
-                // Generate a randomized-looking but deterministic avatar url using the customer name as seed
-                // Dicebear URL with bottts-neutral style
                 $seed = urlencode($row->customer_name);
+
                 $avatar = "https://api.dicebear.com/10.x/bottts-neutral/svg?seed={$seed}";
 
                 return (object) [
@@ -116,27 +131,15 @@ class LeaderboardPenjualanUser extends Page
 
         // Re-arrange top3 to fit the podium layout: [2nd, 1st, 3rd]
         $podium = [];
-        if ($top3->has(1)) {
-            $podium[] = $top3->get(1); // 2nd Place
-        } else {
-            $podium[] = null;
-        }
 
-        if ($top3->has(0)) {
-            $podium[] = $top3->get(0); // 1st Place
-        } else {
-            $podium[] = null;
-        }
-
-        if ($top3->has(2)) {
-            $podium[] = $top3->get(2); // 3rd Place
-        } else {
-            $podium[] = null;
-        }
+        $podium[] = $top3->has(1) ? $top3->get(1) : null;
+        $podium[] = $top3->has(0) ? $top3->get(0) : null;
+        $podium[] = $top3->has(2) ? $top3->get(2) : null;
 
         $others = $records->slice(3)->values()->all();
 
         $customerTransactions = [];
+
         if ($this->selectedCustomer) {
             $txQuery = Penjualan::query()
                 ->with(['details'])
@@ -144,7 +147,7 @@ class LeaderboardPenjualanUser extends Page
                 ->where(function ($query) {
                     if ($this->selectedCustomer === 'Customer') {
                         $query->whereNull('nama_customer')
-                            ->orWhere(DB::raw('TRIM(nama_customer)'), '');
+                            ->orWhereRaw("TRIM(nama_customer) = ''");
                     } else {
                         $query->where('nama_customer', $this->selectedCustomer);
                     }
@@ -154,11 +157,13 @@ class LeaderboardPenjualanUser extends Page
             if ($this->startDate) {
                 $txQuery->whereDate('tanggal', '>=', $this->startDate);
             }
+
             if ($this->endDate) {
                 $txQuery->whereDate('tanggal', '<=', $this->endDate);
             }
 
-            $customerTransactions = $txQuery->orderByDesc('tanggal')
+            $customerTransactions = $txQuery
+                ->orderByDesc('tanggal')
                 ->get()
                 ->all();
         }
