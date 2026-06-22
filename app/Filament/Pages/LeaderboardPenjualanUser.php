@@ -13,15 +13,15 @@ class LeaderboardPenjualanUser extends Page
 {
     use HasPageShield;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
+    protected static string|UnitEnum|null $navigationGroup = 'Leaderboard';
 
     protected string $view = 'filament.pages.leaderboard-penjualan-user';
 
-    protected static ?string $navigationLabel = 'Leaderboard';
+    protected static ?string $navigationLabel = 'Leaderboard Customer';
 
     protected static ?string $title = 'Leaderboard Penjualan';
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-trophy';
+    // protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-trophy';
 
     public ?string $selectedCustomer = null;
 
@@ -30,6 +30,18 @@ class LeaderboardPenjualanUser extends Page
     public ?string $endDate = null;
 
     public string $sortBy = 'belanja'; // 'belanja' or 'transaksi'
+
+    public function mount(): void
+    {
+        $this->endDate = now()
+            ->setTimezone('Asia/Jakarta')
+            ->format('Y-m-d');
+
+        $this->startDate = now()
+            ->setTimezone('Asia/Jakarta')
+            ->subYear()
+            ->format('Y-m-d');
+    }
 
     public function showCustomer(string $name): void
     {
@@ -44,11 +56,16 @@ class LeaderboardPenjualanUser extends Page
     public function updatedStartDate($value): void
     {
         $today = now()->setTimezone('Asia/Jakarta')->format('Y-m-d');
+
         if ($value && $value > $today) {
             $this->startDate = $today;
         }
 
-        if ($this->startDate && $this->endDate && $this->startDate > $this->endDate) {
+        if (
+            $this->startDate &&
+            $this->endDate &&
+            $this->startDate > $this->endDate
+        ) {
             $this->endDate = $this->startDate;
         }
     }
@@ -56,36 +73,45 @@ class LeaderboardPenjualanUser extends Page
     public function updatedEndDate($value): void
     {
         $today = now()->setTimezone('Asia/Jakarta')->format('Y-m-d');
+
         if ($value && $value > $today) {
             $this->endDate = $today;
         }
 
-        if ($this->startDate && $this->endDate && $this->endDate < $this->startDate) {
+        if (
+            $this->startDate &&
+            $this->endDate &&
+            $this->endDate < $this->startDate
+        ) {
             $this->startDate = $this->endDate;
         }
     }
 
     public function resetFilters(): void
     {
-        $this->startDate = null;
-        $this->endDate = null;
+        $this->endDate = now()
+            ->setTimezone('Asia/Jakarta')
+            ->format('Y-m-d');
+
+        $this->startDate = now()
+            ->setTimezone('Asia/Jakarta')
+            ->subYear()
+            ->format('Y-m-d');
     }
 
     public function getViewData(): array
     {
-        // Base query
         $baseQuery = Penjualan::query()
             ->selectRaw("
-            CASE
-                WHEN nama_customer IS NULL OR TRIM(nama_customer) = ''
-                THEN 'Customer'
-                ELSE nama_customer
-            END AS customer_name,
-            total
-        ")
+                CASE
+                    WHEN nama_customer IS NULL OR TRIM(nama_customer) = ''
+                    THEN 'Customer'
+                    ELSE nama_customer
+                END AS customer_name,
+                total
+            ")
             ->where('status_transaksi', '!=', 'DIBATALKAN');
 
-        // Apply date filter
         if ($this->startDate) {
             $baseQuery->whereDate('tanggal', '>=', $this->startDate);
         }
@@ -105,10 +131,10 @@ class LeaderboardPenjualanUser extends Page
         $records = DB::query()
             ->fromSub($baseQuery, 'customers')
             ->selectRaw('
-            customer_name,
-            SUM(total) as total_belanja,
-            COUNT(*) as total_transaksi
-        ')
+                customer_name,
+                SUM(total) as total_belanja,
+                COUNT(*) as total_transaksi
+            ')
             ->groupBy('customer_name')
             ->orderByDesc($sortByField)
             ->orderByDesc($secondarySortField)
@@ -126,10 +152,9 @@ class LeaderboardPenjualanUser extends Page
                 ];
             });
 
-        // Split into Top 3 for the podium and the rest for the normal list
         $top3 = $records->take(3);
 
-        // Re-arrange top3 to fit the podium layout: [2nd, 1st, 3rd]
+        // Podium order: 2nd, 1st, 3rd
         $podium = [];
 
         $podium[] = $top3->has(1) ? $top3->get(1) : null;
@@ -153,7 +178,6 @@ class LeaderboardPenjualanUser extends Page
                     }
                 });
 
-            // Apply date filter
             if ($this->startDate) {
                 $txQuery->whereDate('tanggal', '>=', $this->startDate);
             }
