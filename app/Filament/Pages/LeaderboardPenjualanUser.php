@@ -3,25 +3,32 @@
 namespace App\Filament\Pages;
 
 use App\Models\Penjualan;
+use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
-use BackedEnum;
 use UnitEnum;
 
-class LeaderboardPenjualan extends Page
+class LeaderboardPenjualanUser extends Page
 {
     use HasPageShield;
 
     protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
-    protected string $view = 'filament.pages.leaderboard-penjualan';
+
+    protected string $view = 'filament.pages.leaderboard-penjualan-user';
+
     protected static ?string $navigationLabel = 'Leaderboard';
+
     protected static ?string $title = 'Leaderboard Penjualan';
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-trophy';
 
     public ?string $selectedCustomer = null;
+
     public ?string $startDate = null;
+
     public ?string $endDate = null;
+
     public string $sortBy = 'belanja'; // 'belanja' or 'transaksi'
 
     public function showCustomer(string $name): void
@@ -70,8 +77,8 @@ class LeaderboardPenjualan extends Page
         $query = Penjualan::query()
             ->select(
                 DB::raw("CASE WHEN nama_customer IS NULL OR TRIM(nama_customer) = '' THEN 'Customer' ELSE nama_customer END as customer_name"),
-                DB::raw("SUM(total) as total_belanja"),
-                DB::raw("COUNT(*) as total_transaksi")
+                DB::raw('SUM(total) as total_belanja'),
+                DB::raw('COUNT(*) as total_transaksi')
             )
             ->where('status_transaksi', '!=', 'DIBATALKAN');
 
@@ -95,8 +102,8 @@ class LeaderboardPenjualan extends Page
                 // Dicebear URL with bottts-neutral style
                 $seed = urlencode($row->customer_name);
                 $avatar = "https://api.dicebear.com/10.x/bottts-neutral/svg?seed={$seed}";
-                
-                return (object)[
+
+                return (object) [
                     'name' => $row->customer_name,
                     'total_belanja' => (float) $row->total_belanja,
                     'total_transaksi' => (int) $row->total_transaksi,
@@ -106,7 +113,7 @@ class LeaderboardPenjualan extends Page
 
         // Split into Top 3 for the podium and the rest for the normal list
         $top3 = $records->take(3);
-        
+
         // Re-arrange top3 to fit the podium layout: [2nd, 1st, 3rd]
         $podium = [];
         if ($top3->has(1)) {
@@ -137,7 +144,7 @@ class LeaderboardPenjualan extends Page
                 ->where(function ($query) {
                     if ($this->selectedCustomer === 'Customer') {
                         $query->whereNull('nama_customer')
-                              ->orWhere(DB::raw("TRIM(nama_customer)"), '');
+                            ->orWhere(DB::raw('TRIM(nama_customer)'), '');
                     } else {
                         $query->where('nama_customer', $this->selectedCustomer);
                     }
