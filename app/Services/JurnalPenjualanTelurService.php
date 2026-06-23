@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
  */
 class JurnalPenjualanTelurService
 {
-    const KODE_KAS           = '1111.00';
+    const KODE_KAS           = '1101.1';
     const KG_PER_PETI        = 10;
     const HARGA_PETI_DEFAULT = 6000;
 

@@ -12,12 +12,12 @@ use Illuminate\Support\Facades\Log;
 
 class JurnalPembelianService
 {
-    const KODE_KAS_TUNAI        = '1111.00'; 
-    const KODE_BANK_TRANSFER    = '1210.00'; 
-    const KODE_PPN_MASUKAN      = '1303.04'; 
-    const KODE_HUTANG_DAGANG    = '2101-00'; 
-    const KODE_BEBAN_ONGKIR     = '5860-00'; 
-    const KODE_BEBAN_LAIN_LAIN  = '5870.00'; 
+    const KODE_KAS_TUNAI        = '1101.1'; 
+    const KODE_BANK_TRANSFER    = '1101.7'; 
+    const KODE_PPN_MASUKAN      = '1423.0'; 
+    const KODE_HUTANG_DAGANG    = '2102-0'; 
+    const KODE_BEBAN_ONGKIR     = '5313-0'; 
+    const KODE_BEBAN_LAIN_LAIN  = '5499.0'; 
 
     public function buatJurnalDariPembelian(Pembelian $pembelian, int $userId): void
     {
