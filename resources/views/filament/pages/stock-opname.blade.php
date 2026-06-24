@@ -1,7 +1,7 @@
 <x-filament::page>
 
     {{-- ===========================
-    FORM PILIH TOKO
+    FORM MULAI OPNAME
     =========================== --}}
     @if (!$opname)
     <x-filament::section heading="Mulai Stock Opname">
@@ -66,7 +66,6 @@
                 <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     <tr>
                         <th class="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">No Opname</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Toko</th>
                         <th class="px-4 py-3 text-center font-semibold text-gray-900 dark:text-gray-100">Tanggal</th>
                         <th class="px-4 py-3 text-center font-semibold text-gray-900 dark:text-gray-100">Status</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Dibuat Oleh</th>
@@ -93,9 +92,6 @@
                     <tr class="{{ $rowBgClass }} hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150">
                         <td class="px-4 py-3 font-mono text-xs font-semibold text-gray-900 dark:text-gray-100">
                             {{ $row['no_opname'] }}
-                        </td>
-                        <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
-                            {{ $row['toko'] }}
                         </td>
                         <td class="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
                             {{ $row['tanggal'] }}
@@ -142,7 +138,6 @@
                 <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     <tr>
                         <th class="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">No Opname</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Toko</th>
                         <th class="px-4 py-3 text-center font-semibold text-gray-900 dark:text-gray-100">Tgl Opname</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Dibuat Oleh</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100">Disetujui Oleh</th>
@@ -157,7 +152,6 @@
                         <td class="px-4 py-3 font-mono text-xs font-semibold text-gray-900 dark:text-gray-100">
                             {{ $row['no_opname'] }}
                         </td>
-                        <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{{ $row['toko'] }}</td>
                         <td class="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{{ $row['tanggal'] }}</td>
                         <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ $row['created_by'] }}</td>
                         <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ $row['approved_by'] }}</td>
@@ -200,10 +194,6 @@
                 <div class="flex gap-2 items-center">
                     <span class="text-xs text-gray-500 dark:text-gray-400 min-w-[90px]">No Opname</span>
                     <strong class="text-sm text-gray-900 dark:text-gray-100">{{ $opname->no_opname }}</strong>
-                </div>
-                <div class="flex gap-2 items-center">
-                    <span class="text-xs text-gray-500 dark:text-gray-400 min-w-[90px]">Toko</span>
-                    <strong class="text-sm text-gray-900 dark:text-gray-100">{{ $opname->toko->nama_toko }}</strong>
                 </div>
                 <div class="flex gap-2 items-center">
                     <span class="text-xs text-gray-500 dark:text-gray-400 min-w-[90px]">Tanggal</span>
