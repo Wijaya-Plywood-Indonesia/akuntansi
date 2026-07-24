@@ -4,8 +4,8 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\LabaRugi;
 use App\Filament\Pages\NeracaPage;
-use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use App\Filament\Pages\TreeAkunPage;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -37,7 +37,7 @@ class AdminPanelProvider extends PanelProvider
             ->theme('resources/css/filament/admin/theme.css')
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->login()
-            ->brandName('Akuntansi')
+            ->brandName('Dyson')
             ->colors([
                 'primary' => Color::Amber,
             ])
@@ -81,7 +81,6 @@ class AdminPanelProvider extends PanelProvider
                     ->icon('heroicon-o-book-open')
                     ->collapsed(true),
             ])
-            ->sidebarCollapsibleOnDesktop()
-        ;
+            ->sidebarCollapsibleOnDesktop();
     }
 }

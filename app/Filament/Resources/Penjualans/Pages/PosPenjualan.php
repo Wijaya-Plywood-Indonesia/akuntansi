@@ -4,11 +4,11 @@ namespace App\Filament\Resources\Penjualans\Pages;
 
 use App\Filament\Resources\Penjualans\PenjualanResource;
 use App\Models\Barang;
-use App\Models\IdentitasToko;
+use App\Models\DetailPenjualan;
 use App\Models\Pembeli;
 use App\Models\Penjualan;
-use App\Models\DetailPenjualan;
 use App\Models\RekeningPerusahaan;
+use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Illuminate\Support\Collection;
@@ -18,85 +18,105 @@ use Livewire\Attributes\On;
 class PosPenjualan extends Page
 {
     protected static string $resource = PenjualanResource::class;
+
     protected string $view = 'filament.resources.penjualans.pages.pos-penjualan';
 
     /* ================= IDENTITAS TOKO ================= */
     public ?int $toko_id = null;
+
     public ?string $kodeToko = null;
+
     public ?string $namaToko = null;
 
     /* ================= STATE ================= */
     public string $search = '';
+
     public Collection $searchResults;
+
     public array $cart = [];
+
     public int $is_member = 0;
+
     public int $total = 0;
 
     /* ================= CUSTOMER ================= */
     public string $searchCustomer = '';
+
     public $customerResults = [];
+
     public ?int $pembeli_id = null;
+
     public string $nama_customer = '';
+
     public string $alamat = '';
+
     public string $telepon = '';
 
     /* ================= PEMBAYARAN ================= */
     public string $metode_pembayaran = 'TUNAI';
+
     public int $bayar = 0;
+
     public int $bayar_tunai = 0;
+
     public int $bayar_transfer = 0;
+
     public ?int $rekening_perusahaan_id = null;
+
     public $rekeningPerusahaan = [];
+
     public ?RekeningPerusahaan $selectedBank = null;
+
     public string $kode_member = '';
 
     /* ================= PENGIRIMAN ================= */
     public string $metode_pengiriman = 'DIBAWA_SENDIRI';
+
     public ?string $kendaraan = null;
+
     public ?string $plat_kendaraan = null;
+
     public ?string $nama_sopir = null;
+
     public $no_nota;
+
     public ?string $tanggal = null;
+
     public ?string $keterangan_pembayaran = null;
+
     public ?string $keterangan_nota = null;
 
     public function mount(): void
     {
         $this->searchResults = collect();
-        $user = auth()->user();
-        $tokoUser = $user->tokoUtama()->first();
 
-        if ($tokoUser) {
-            $this->toko_id = $tokoUser->id_toko;
-            $this->kodeToko = $tokoUser->toko->kode_toko;
-            $this->namaToko = $tokoUser->toko->nama_toko;
-            $this->no_nota = $this->generateNoNota();
-        }
+        // Logic multi-toko dimatikan karena web ini hanya untuk 1 toko
+        // $user = auth()->user();
+        // $tokoUser = $user->tokoUtama()->first();
+        // if ($tokoUser) {
+        //     $this->toko_id = $tokoUser->id_toko;
+        //     $this->kodeToko = $tokoUser->toko->kode_toko;
+        //     $this->namaToko = $tokoUser->toko->nama_toko;
+        // }
 
+        $this->no_nota = $this->generateNoNota();
         $this->tanggal = now()->format('Y-m-d\TH:i');
     }
 
     public function generateNoNota()
     {
-        if (!$this->toko_id) {
-            return 'XXX-000001';
+        $prefix = Filament::getCurrentPanel()?->getBrandName() ?? 'POS';
+
+        // ddmmyy + HHmmss
+        $noNota = strtoupper($prefix).'-'.now()->format('dmyHis');
+
+        // Jaring pengaman kalau ada 2 transaksi persis di detik yang sama
+        while (Penjualan::where('no_nota', $noNota)->exists()) {
+            sleep(1); // tunggu 1 detik lalu generate ulang
+            $noNota = $prefix.now()->format('dmyHis');
         }
 
-        $toko = IdentitasToko::find($this->toko_id);
-        $prefix = ($toko?->kode_toko ?? 'XXX') . '-';
-
-        $last = Penjualan::where('no_nota', 'LIKE', $prefix . '%')
-            ->orderBy('id', 'DESC')
-            ->first();
-
-        if (!$last) {
-            return $prefix . '000001';
-        }
-
-        $lastNumber = (int) str_replace($prefix, '', $last->no_nota);
-        $newNumber = $lastNumber + 1;
-
-        return $prefix . str_pad($newNumber, 6, '0', STR_PAD_LEFT);
+        return $noNota;
     }
 
     public function updatedTokoId()
@@ -111,6 +131,7 @@ class PosPenjualan extends Page
     {
         if (strlen($this->search) < 1) {
             $this->searchResults = collect();
+
             return;
         }
 
@@ -125,7 +146,7 @@ class PosPenjualan extends Page
         foreach ($this->searchResults as $barang) {
             $barang->stok_aktual = $barang->stok_buku_besar;
         }
-        
+
         $this->showDropdown = true;
     }
 
@@ -142,7 +163,9 @@ class PosPenjualan extends Page
     public function selectBarang(int $id): void
     {
         $barang = Barang::with('satuan')->find($id);
-        if (!$barang) return;
+        if (! $barang) {
+            return;
+        }
 
         $stok = $barang->stok_buku_besar;
 
@@ -152,6 +175,7 @@ class PosPenjualan extends Page
                 ->body("Barang {$barang->nama_barang} habis.")
                 ->danger()
                 ->send();
+
             return;
         }
 
@@ -161,6 +185,7 @@ class PosPenjualan extends Page
                     ->title('Stok tidak mencukupi')
                     ->warning()
                     ->send();
+
                 return;
             }
             $this->cart[$id]['qty']++;
@@ -188,13 +213,15 @@ class PosPenjualan extends Page
 
     protected function calculateTotal(): void
     {
-        $this->total = max(0, collect($this->cart)->sum(fn($i) => $i['subtotal'] ?? 0));
+        $this->total = max(0, collect($this->cart)->sum(fn ($i) => $i['subtotal'] ?? 0));
     }
 
     /* ================= CART ================= */
     public function updateQty(int $id): void
     {
-        if (!isset($this->cart[$id])) return;
+        if (! isset($this->cart[$id])) {
+            return;
+        }
 
         $barang = Barang::find($id);
         $stock = $barang ? $barang->stok_buku_besar : 0;
@@ -226,6 +253,7 @@ class PosPenjualan extends Page
     {
         if ((float) $this->cart[$id]['qty'] <= 1) {
             $this->removeFromCart($id);
+
             return;
         }
 
@@ -241,7 +269,9 @@ class PosPenjualan extends Page
 
     public function updatePotongan(int $id): void
     {
-        if (!isset($this->cart[$id])) return;
+        if (! isset($this->cart[$id])) {
+            return;
+        }
 
         $potongan = max(0, (float) $this->cart[$id]['potongan']);
         $qty = max(0.01, (float) $this->cart[$id]['qty']);
@@ -254,7 +284,9 @@ class PosPenjualan extends Page
 
     public function updateHargaJual(int $id): void
     {
-        if (!isset($this->cart[$id])) return;
+        if (! isset($this->cart[$id])) {
+            return;
+        }
 
         $harga = max(0, (int) ($this->cart[$id]['harga_jual'] ?? 0));
         $this->cart[$id]['harga_jual'] = $harga;
@@ -264,7 +296,9 @@ class PosPenjualan extends Page
 
     protected function updateSubtotal(int $id): void
     {
-        if (!isset($this->cart[$id])) return;
+        if (! isset($this->cart[$id])) {
+            return;
+        }
 
         $item = $this->cart[$id];
         $this->cart[$id]['subtotal'] = max(0, ($item['harga_jual'] * $item['qty']) - ($item['total_potongan'] ?? 0));
@@ -275,6 +309,7 @@ class PosPenjualan extends Page
     {
         if (strlen($this->searchCustomer) < 2) {
             $this->customerResults = [];
+
             return;
         }
 
@@ -290,6 +325,7 @@ class PosPenjualan extends Page
     {
         if (strlen($this->kode_member) < 2) {
             $this->customerResults = [];
+
             return;
         }
 
@@ -299,6 +335,7 @@ class PosPenjualan extends Page
             $this->selectCustomer($pembeli->id);
             Notification::make()->title('Member Ditemukan')->success()->send();
             $this->customerResults = [];
+
             return;
         }
 
@@ -362,10 +399,10 @@ class PosPenjualan extends Page
     /* ================= COMPUTED ================= */
     public function getKembalianProperty(): int
     {
-        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER') 
-            ? ($this->bayar_tunai + $this->bayar_transfer) 
+        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+            ? ($this->bayar_tunai + $this->bayar_transfer)
             : ($this->bayar ?? 0);
-            
+
         return max($totalBayar - $this->total, 0);
     }
 
@@ -386,7 +423,7 @@ class PosPenjualan extends Page
         foreach ($this->cart as $id => $item) {
             if ($this->is_member) {
                 // ONLY add if not already active
-                if (!isset($this->cart[$id]['member_discount_active']) || !$this->cart[$id]['member_discount_active']) {
+                if (! isset($this->cart[$id]['member_discount_active']) || ! $this->cart[$id]['member_discount_active']) {
                     $this->cart[$id]['potongan'] += 0; // diskon member + 0 (sebelumnya + 5000)
                     $this->cart[$id]['member_discount_active'] = true;
                 }
@@ -397,7 +434,7 @@ class PosPenjualan extends Page
                     $this->cart[$id]['member_discount_active'] = false;
                 }
             }
-            
+
             // Sync total_potongan and subtotal
             $this->cart[$id]['total_potongan'] = $this->cart[$id]['potongan'] * $this->cart[$id]['qty'];
             $this->updateSubtotal($id);
@@ -417,39 +454,43 @@ class PosPenjualan extends Page
     public function simpanPenjualan(): void
     {
 
-    if (empty($this->no_nota)) {
-        Notification::make()
-            ->title('No Nota Kosong')
-            ->body('No nota tidak boleh kosong')
-            ->danger()
-            ->send();
-        return;
-    }
+        if (empty($this->no_nota)) {
+            Notification::make()
+                ->title('No Nota Kosong')
+                ->body('No nota tidak boleh kosong')
+                ->danger()
+                ->send();
 
-    if (Penjualan::where('no_nota', $this->no_nota)->exists()) {
-        Notification::make()
-            ->title('No Nota Sudah Digunakan')
-            ->body("Nomor nota '{$this->no_nota}' sudah terdaftar di sistem. Silakan gunakan nomor nota yang lain.")
-            ->danger()
-            ->send();
-        return;
-    }
-
-        if (empty($this->cart)) {
-            Notification::make()->title('Keranjang Kosong')->danger()->send();
             return;
         }
 
-        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER') 
-            ? ($this->bayar_tunai + $this->bayar_transfer) 
+        if (Penjualan::where('no_nota', $this->no_nota)->exists()) {
+            Notification::make()
+                ->title('No Nota Sudah Digunakan')
+                ->body("Nomor nota '{$this->no_nota}' sudah terdaftar di sistem. Silakan gunakan nomor nota yang lain.")
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        if (empty($this->cart)) {
+            Notification::make()->title('Keranjang Kosong')->danger()->send();
+
+            return;
+        }
+
+        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+            ? ($this->bayar_tunai + $this->bayar_transfer)
             : ($this->bayar ?? 0);
 
-        if (!$this->is_member && $totalBayar < $this->total) {
+        if (! $this->is_member && $totalBayar < $this->total) {
             Notification::make()
                 ->title('Pembayaran Kurang')
                 ->body('Nominal pembayaran kurang.')
                 ->danger()
                 ->send();
+
             return;
         }
 
@@ -459,15 +500,17 @@ class PosPenjualan extends Page
                 ->body('Total transaksi harus lebih dari 0.')
                 ->danger()
                 ->send();
+
             return;
         }
 
-        if (($this->metode_pembayaran === 'TRANSFER' || ($this->metode_pembayaran === 'TUNAI & TRANSFER' && $this->bayar_transfer > 0)) && !$this->rekening_perusahaan_id) {
+        if (($this->metode_pembayaran === 'TRANSFER' || ($this->metode_pembayaran === 'TUNAI & TRANSFER' && $this->bayar_transfer > 0)) && ! $this->rekening_perusahaan_id) {
             Notification::make()
                 ->title('Rekening Belum Dipilih')
                 ->body('Silahkan pilih rekening perusahaan untuk pembayaran transfer.')
                 ->danger()
                 ->send();
+
             return;
         }
 
@@ -484,8 +527,8 @@ class PosPenjualan extends Page
                     ? RekeningPerusahaan::find($this->rekening_perusahaan_id)
                     : null;
 
-                $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER') 
-                    ? ($this->bayar_tunai + $this->bayar_transfer) 
+                $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+                    ? ($this->bayar_tunai + $this->bayar_transfer)
                     : ($this->bayar ?? 0);
 
                 $penjualan = Penjualan::create([
@@ -540,7 +583,7 @@ class PosPenjualan extends Page
 
             Notification::make()
                 ->title('Transaksi Berhasil')
-                ->body("Kembalian: Rp " . number_format($kembalian))
+                ->body('Kembalian: Rp '.number_format($kembalian))
                 ->success()
                 ->send();
 
