@@ -6,9 +6,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
@@ -25,7 +23,7 @@ class PenjualansTable
                 TextColumn::make('status_transaksi')
                     ->label('Status')
                     ->badge()
-                    ->color(fn(string $state): string => match ($state) {
+                    ->color(fn (string $state): string => match ($state) {
                         'LUNAS' => 'success',
                         'COD' => 'warning',
                         'PENDING' => 'gray',
@@ -47,7 +45,7 @@ class PenjualansTable
                     ->searchable()
                     ->placeholder('Belum Divalidasi') // Menampilkan teks jika belum ada yang validasi
                     ->badge() // Opsional: menjadikannya badge agar lebih menonjol
-                    ->color(fn($state) => $state ? 'success' : 'gray') // Warna hijau jika ada validator, abu-abu jika belum
+                    ->color(fn ($state) => $state ? 'success' : 'gray') // Warna hijau jika ada validator, abu-abu jika belum
                     ->toggleable(),
 
                 TextColumn::make('tanggal')->dateTime()->sortable(),
@@ -83,48 +81,46 @@ class PenjualansTable
                     ->label('Cetak Nota')
                     ->icon('heroicon-o-printer')
                     ->color('primary')
-                    ->url(fn($record) => route('nota.cetak', $record))
+                    ->url(fn ($record) => route('nota.cetak', $record))
                     ->openUrlInNewTab()
                     ->visible(
-                        fn($record) =>
-                        !empty($record->validated_by)
-                            && in_array($record->status_transaksi, [
-                                'LUNAS',
-                                'COD',
-                                'PENDING',
-                            ]) // ✅ Syarat baru: muncul jika status ada di dalam daftar ini
+                        // fn($record) =>
+                        // !empty($record->validated_by)
+                        //     && in_array($record->status_transaksi, [
+                        //         'LUNAS',
+                        //         'COD',
+                        //         'PENDING',
+                        //     ]) // ✅ Syarat baru: muncul jika status ada di dalam daftar ini
                     ),
 
                 Action::make('cetakThermal')
                     ->label('Cetak Thermal')
                     ->icon('heroicon-o-printer')
                     ->color('primary')
-                    ->url(fn($record) => route('nota.cetakThermal', $record))
+                    ->url(fn ($record) => route('nota.cetakThermal', $record))
                     ->openUrlInNewTab()
                     ->visible(
-                        fn($record) =>
-                        !empty($record->validated_by)
+                        fn ($record) => ! empty($record->validated_by)
                             && in_array($record->status_transaksi, [
                                 'LUNAS',
                                 'COD',
                                 'PENDING',
-                            ]) 
+                            ])
                     ),
 
                 Action::make('suratJalan')
                     ->label('Cetak Surat Jalan')
                     ->icon('heroicon-o-truck')
                     ->color('warning')
-                    ->url(fn($record) => route('surat-jalan.cetak', $record))
+                    ->url(fn ($record) => route('surat-jalan.cetak', $record))
                     ->openUrlInNewTab()
                     ->visible(
-                        fn($record) =>
-                        !empty($record->validated_by)
+                        fn ($record) => ! empty($record->validated_by)
                             && in_array($record->status_transaksi, [
                                 'LUNAS',
                                 'COD',
                                 'PENDING',
-                            ]) 
+                            ])
                     ),
 
                 Action::make('edit_keterangan')
@@ -157,6 +153,7 @@ class PenjualansTable
                         if ($user->hasRole('super_admin')) {
                             return true;
                         }
+
                         // Staff hanya bisa lihat jika belum divalidasi
                         return empty($record->validated_by);
                     })
@@ -165,7 +162,7 @@ class PenjualansTable
 
                         // 1. Cek relasi yang ada di model Penjualan
                         $adaDetailBarang = $record->details()->exists();
-                        $adaReturn       = $record->returns()->exists();
+                        $adaReturn = $record->returns()->exists();
 
                         // 2. Logika validasi
                         if ($adaDetailBarang || $adaReturn) {
