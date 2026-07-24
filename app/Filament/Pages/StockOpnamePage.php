@@ -3,10 +3,12 @@
 namespace App\Filament\Pages;
 
 use App\Models\Barang;
+use App\Models\JurnalUmum;
 use App\Models\StockOpname;
 use App\Models\StockOpnameDetail;
 use App\Services\StockOpnameService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -20,7 +22,7 @@ class StockOpnamePage extends Page implements HasForms
 {
     use InteractsWithForms;
     use HasPageShield;
-    
+
     public static ?string $navigationLabel = 'Stock Opname';
     protected static string|UnitEnum|null $navigationGroup = 'Stock Barang';
     protected static ?int $navigationSort = 10;
@@ -34,6 +36,7 @@ class StockOpnamePage extends Page implements HasForms
      |  STATE
      ========================= */
 
+    public ?string $tanggal_opname = null;
     public ?string $catatan = null;
     public ?StockOpname $opname = null;
     public array $details = [];
@@ -72,6 +75,17 @@ class StockOpnamePage extends Page implements HasForms
     public function form(Schema $schema): Schema
     {
         return $schema->components([
+            DatePicker::make('tanggal_opname')
+                ->label('Tanggal Opname')
+                ->native(false)
+                ->displayFormat('d/m/Y')
+                ->format('Y-m-d')
+                ->maxDate(now())
+                ->default(now())
+                ->closeOnDateSelection()
+                ->suffixIcon('heroicon-o-calendar')
+                ->suffixIconColor('primary'),
+
             Textarea::make('catatan')
                 ->label('Catatan Opname')
                 ->placeholder('Opsional')
@@ -88,7 +102,6 @@ class StockOpnamePage extends Page implements HasForms
         $query = StockOpname::with(['createdBy', 'approvedBy'])
             ->where('status', 'disetujui');
 
-        // Filter tanggal opname
         if ($this->filterTanggalDari) {
             $query->whereDate('tanggal_opname', '>=', $this->filterTanggalDari);
         }
@@ -113,12 +126,10 @@ class StockOpnamePage extends Page implements HasForms
         $query = StockOpname::with(['createdBy'])
             ->whereIn('status', ['draft', 'menunggu', 'ditolak']);
 
-        // Terapkan filter status jika dipilih (hanya untuk status berjalan)
         if ($this->filterStatus && in_array($this->filterStatus, ['draft', 'menunggu', 'ditolak'])) {
             $query->where('status', $this->filterStatus);
         }
 
-        // Filter tanggal pada daftar berjalan
         if ($this->filterTanggalDari) {
             $query->whereDate('tanggal_opname', '>=', $this->filterTanggalDari);
         }
@@ -172,15 +183,66 @@ class StockOpnamePage extends Page implements HasForms
     }
 
     /* =========================
+     |  HITUNG STOK BUKU BESAR (BATCH)
+     ========================= */
+
+    /**
+     * Menghitung stok buku besar untuk sekumpulan barang sekaligus dalam
+     * SATU query agregat ke JurnalUmum (meniru logika StokMatrix::mount()
+     * di web telur), alih-alih memanggil accessor per-barang di dalam loop
+     * (yang menyebabkan N+1 query dan halaman terasa berat).
+     *
+     * @param  \Illuminate\Support\Collection|iterable  $barangs  Koleksi Barang, WAJIB sudah eager-load relasi subAnakAkun
+     * @return array<int, float>  key = barang_id, value = stok
+     */
+    protected function hitungStokBukuBesarBatch(iterable $barangs): array
+    {
+        $barangs = collect($barangs);
+
+        $kodeAkuns = $barangs->map(fn($barang) => $barang->subAnakAkun?->kode_sub_anak_akun)
+            ->filter()
+            ->unique()
+            ->toArray();
+
+        $transaksisGrouped = JurnalUmum::select('no_akun', 'map', DB::raw('SUM(COALESCE(banyak, 0)) as total_qty'))
+            ->whereIn('no_akun', $kodeAkuns)
+            ->groupBy('no_akun', 'map')
+            ->get()
+            ->groupBy('no_akun');
+
+        $hasil = [];
+
+        foreach ($barangs as $barang) {
+            $kodeAkun = $barang->subAnakAkun?->kode_sub_anak_akun;
+
+            $totalQty = 0.0;
+            if ($kodeAkun && isset($transaksisGrouped[$kodeAkun])) {
+                foreach ($transaksisGrouped[$kodeAkun] as $trx) {
+                    $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
+                    $qty = (float) $trx->total_qty;
+
+                    $totalQty += $isDebit ? $qty : -$qty;
+                }
+            }
+
+            $hasil[$barang->id] = $totalQty;
+        }
+
+        return $hasil;
+    }
+
+    /* =========================
      |  MULAI OPNAME
      ========================= */
 
     public function mulaiOpname(): void
     {
         $state = $this->form->getState();
+        $tanggalOpname = $state['tanggal_opname'] ?? today()->format('Y-m-d');
 
-        // Lanjutkan jika ada opname draft/menunggu yang belum selesai
-        $existing = StockOpname::whereIn('status', ['draft', 'menunggu'])
+        // Cek apakah sudah ada opname draft/menunggu di tanggal yang sama
+        $existing = StockOpname::whereDate('tanggal_opname', $tanggalOpname)
+            ->whereIn('status', ['draft', 'menunggu'])
             ->latest()
             ->first();
 
@@ -188,13 +250,12 @@ class StockOpnamePage extends Page implements HasForms
             $this->opname = $existing;
         } else {
             $this->opname = StockOpname::create([
-                'tanggal_opname' => today(),
+                'tanggal_opname' => $tanggalOpname,
                 'catatan' => $state['catatan'] ?? null,
                 'status' => 'draft',
                 'created_by' => auth()->id(),
             ]);
 
-            // Load semua barang aktif yang terhubung dengan akun jurnal
             $barangs = Barang::with(['subAnakAkun', 'satuan'])
                 ->whereHas('subAnakAkun', function ($query) {
                     $query->whereNotNull('kode_sub_anak_akun')
@@ -203,9 +264,11 @@ class StockOpnamePage extends Page implements HasForms
                 ->orderBy('nama_barang')
                 ->get();
 
+            // Hitung stok buku besar untuk semua barang sekaligus (1 query), bukan per-barang
+            $stokBukuBesarMap = $this->hitungStokBukuBesarBatch($barangs);
+
             foreach ($barangs as $barang) {
-                // Sisa Stok dihitung dari total saldo berjalan
-                $qtyJurnal = (float) ($barang->stok_buku_besar ?? 0.0);
+                $qtyJurnal = $stokBukuBesarMap[$barang->id] ?? 0.0;
 
                 StockOpnameDetail::create([
                     'stock_opname_id' => $this->opname->id,
@@ -229,10 +292,11 @@ class StockOpnamePage extends Page implements HasForms
         if (!$this->opname)
             return;
 
-        // 💡 JIKA MASIH DRAFT: Sinkronkan barang-barang baru
+        // 💡 JIKA MASIH DRAFT: Sinkronkan barang-barang baru yang baru dihubungkan ke Jurnal secara dinamis
         if ($this->opname->isDraft()) {
             DB::transaction(function () {
-                $barangs = Barang::whereHas('subAnakAkun', function ($query) {
+                $barangs = Barang::with('subAnakAkun')
+                    ->whereHas('subAnakAkun', function ($query) {
                         $query->whereNotNull('kode_sub_anak_akun')
                             ->where('kode_sub_anak_akun', '!=', '');
                     })
@@ -240,16 +304,20 @@ class StockOpnamePage extends Page implements HasForms
 
                 $existingBarangIds = $this->opname->details()->pluck('barang_id')->toArray();
 
-                foreach ($barangs as $barang) {
-                    if (!in_array($barang->id, $existingBarangIds)) {
-                        $qtyJurnal = (float) ($barang->stok_buku_besar ?? 0.0);
+                $barangBaru = $barangs->reject(fn($barang) => in_array($barang->id, $existingBarangIds));
+
+                if ($barangBaru->isNotEmpty()) {
+                    $stokBukuBesarMap = $this->hitungStokBukuBesarBatch($barangBaru);
+
+                    foreach ($barangBaru as $barang) {
+                        $qtyJurnal = $stokBukuBesarMap[$barang->id] ?? 0.0;
 
                         StockOpnameDetail::create([
                             'stock_opname_id' => $this->opname->id,
-                            'barang_id'       => $barang->id,
-                            'stok_sistem'     => $qtyJurnal,
-                            'stok_aktual'     => null,
-                            'selisih'         => null,
+                            'barang_id' => $barang->id,
+                            'stok_sistem' => $qtyJurnal,
+                            'stok_aktual' => null,
+                            'selisih' => null,
                         ]);
                     }
                 }
@@ -259,13 +327,18 @@ class StockOpnamePage extends Page implements HasForms
         // Muat ulang detail relasi barang terbaru dari database
         $this->opname->load(['details.barang.subAnakAkun']);
 
+        // Jika masih draft, hitung stok buku besar terbaru untuk SEMUA barang di detail sekaligus (1 query)
+        $stokBukuBesarMap = $this->opname->isDraft()
+            ? $this->hitungStokBukuBesarBatch($this->opname->details->pluck('barang')->filter())
+            : [];
+
         $this->details = $this->opname->details
             ->filter(function ($d) {
                 return $d->barang && $d->barang->subAnakAkun && !empty($d->barang->subAnakAkun->kode_sub_anak_akun);
             })
-            ->map(function ($d) {
+            ->map(function ($d) use ($stokBukuBesarMap) {
                 $stokSistem = $this->opname->isDraft()
-                    ? (float) ($d->barang?->stok_buku_besar ?? 0.0)
+                    ? ($stokBukuBesarMap[$d->barang_id] ?? 0.0)
                     : (float) $d->stok_sistem;
 
                 return [
@@ -356,6 +429,9 @@ class StockOpnamePage extends Page implements HasForms
                 $maxJP = (int) (\App\Models\JurnalPembantuHeader::max('jurnal') ?? 0);
                 $nextJurnalNo = max($nextJurnalNo, $maxJP) + 1;
 
+                // Hitung stok buku besar untuk SEMUA barang di opname ini sekaligus (1 query)
+                $stokBukuBesarMap = $this->hitungStokBukuBesarBatch($this->opname->details->pluck('barang')->filter());
+
                 foreach ($this->opname->details as $detail) {
                     $barang = $detail->barang;
                     $subAkun = $barang?->subAnakAkun;
@@ -366,7 +442,7 @@ class StockOpnamePage extends Page implements HasForms
                         continue;
                     }
 
-                    $stokBukuBesarTerkini = (float) ($barang->stok_buku_besar ?? 0.0);
+                    $stokBukuBesarTerkini = $stokBukuBesarMap[$barang->id] ?? 0.0;
                     $stokAktualFisik = (float) ($detail->stok_aktual ?? 0);
                     $selisihOpname = $stokAktualFisik - $stokBukuBesarTerkini;
 
@@ -386,13 +462,13 @@ class StockOpnamePage extends Page implements HasForms
                         'jenis_transaksi'     => 'so',
                         'modul_asal'          => 'stock_opname',
                         'jurnal'              => $nextJurnalNo,
-                        'no_akun'             => $kodeAkun, 
+                        'no_akun'             => $kodeAkun,
                         'nama_akun'           => $namaAkun,
                         'map'                 => $mapHeaderType,
                         'no_dokumen'          => $this->opname->no_opname ?? 'OPNAME_STOK',
                         'keterangan'          => 'Opname Penyesuaian Fisik: ' . $barang->nama_barang . ' (Selisih: ' . ($selisihOpname > 0 ? '+' : '') . $selisihOpname . ')',
-                        'total_nilai'         => 0.0, 
-                        'status'              => \App\Models\JurnalPembantuHeader::STATUS_DRAFT, 
+                        'total_nilai'         => 0.0,
+                        'status'              => \App\Models\JurnalPembantuHeader::STATUS_DRAFT,
                         'adalah_jurnal_balik' => false,
                         'dibuat_oleh'         => auth()->id(),
                     ]);
@@ -406,9 +482,9 @@ class StockOpnamePage extends Page implements HasForms
                         'nama_barang'  => $barang->nama_barang,
                         'no_dokumen'   => $this->opname->no_opname ?? 'OPNAME_STOK',
                         'banyak'       => $qtyPenyesuaian,
-                        'harga'        => 0.0, 
-                        'jumlah'       => 0.0, 
-                        'status'       => true, 
+                        'harga'        => 0.0,
+                        'jumlah'       => 0.0,
+                        'status'       => true,
                         'keterangan'   => 'Opname Penyesuaian Fisik: ' . $barang->nama_barang . ' (Selisih: ' . ($selisihOpname > 0 ? '+' : '') . $selisihOpname . ')',
                         'created_by'   => auth()->id(),
                     ]);
@@ -420,7 +496,7 @@ class StockOpnamePage extends Page implements HasForms
                 ->success()
                 ->send();
 
-            $this->reset(['opname', 'details', 'catatan_approval', 'catatan']);
+            $this->reset(['opname', 'details', 'catatan_approval', 'tanggal_opname', 'catatan']);
             $this->form->fill();
             $this->refreshDaftarOpname();
             $this->refreshRiwayatOpname();
@@ -447,7 +523,7 @@ class StockOpnamePage extends Page implements HasForms
 
             Notification::make()->title('Opname ditolak')->warning()->send();
 
-            $this->reset(['opname', 'details', 'catatan_approval', 'catatan']);
+            $this->reset(['opname', 'details', 'catatan_approval', 'tanggal_opname', 'catatan']);
             $this->form->fill();
             $this->refreshDaftarOpname();
             $this->refreshRiwayatOpname();
@@ -462,7 +538,7 @@ class StockOpnamePage extends Page implements HasForms
 
     public function batal(): void
     {
-        $this->reset(['opname', 'details', 'catatan_approval', 'catatan']);
+        $this->reset(['opname', 'details', 'catatan_approval', 'tanggal_opname', 'catatan']);
         $this->form->fill();
         $this->refreshDaftarOpname();
         $this->refreshRiwayatOpname();
