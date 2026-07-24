@@ -1,15 +1,29 @@
 @php
 $saldoNormal = strtolower($saldoNormal ?? 'debit');
 $isKredit    = in_array($saldoNormal, ['kredit', 'credit', 'k']);
-$running     = (float) $saldoAwal;
+
+// $saldoAwalQty / $saldoAwalM3 bernilai null jika akun ini BUKAN akun
+// persediaan satu barang. Untuk kasus itu, agregat qty/m3 tidak punya arti
+// fisik dan harus ditampilkan sebagai "—", bukan angka gado-gado.
+$isPersediaan = !is_null($saldoAwalQty);
+
+// $saldoAwal, $saldoAwalQty, $saldoAwalM3 datang dari controller dalam
+// konvensi RAW (debit positif). Untuk akun kredit-normal, tanda perlu
+// dibalik dulu di sini supaya konsisten dengan cara $running dihitung
+// di bawah (yang menambah saat kredit, mengurangi saat debit untuk akun
+// kredit-normal).
+$saldoAwal    = $isKredit ? -(float) $saldoAwal : (float) $saldoAwal;
+$saldoAwalQty = $isKredit ? -(float) ($saldoAwalQty ?? 0) : (float) ($saldoAwalQty ?? 0);
+$saldoAwalM3  = $isKredit ? -(float) ($saldoAwalM3 ?? 0)  : (float) ($saldoAwalM3 ?? 0);
+
+$running     = $saldoAwal;
 $totalDebit  = 0.0;
 $totalKredit = 0.0;
 $totalQty    = 0.0;
-$totalM3     = 0.0; // Tambahkan variabel total M3
+$totalM3     = 0.0;
 
 $rows = $transaksis->map(function ($trx) use (&$running, &$totalDebit, &$totalKredit, &$totalQty, &$totalM3, $isKredit) {
-    
-    // Perbaikan logika nominal mengikuti hit_kbk
+
     $nominal = match (strtolower($trx->hit_kbk ?? '')) {
         'b'     => (float) ($trx->banyak ?? 0) * (float) ($trx->harga ?? 0),
         'm'     => (float) ($trx->m3 ?? 0)     * (float) ($trx->harga ?? 0),
@@ -18,7 +32,7 @@ $rows = $transaksis->map(function ($trx) use (&$running, &$totalDebit, &$totalKr
 
     $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
     $qty     = (float) ($trx->banyak ?? 0);
-    $m3      = (float) ($trx->m3 ?? 0); // Ambil nilai M3 dari database
+    $m3      = (float) ($trx->m3 ?? 0);
 
     if ($isKredit) {
         $running += $isDebit ? -$nominal : $nominal;
@@ -28,7 +42,6 @@ $rows = $transaksis->map(function ($trx) use (&$running, &$totalDebit, &$totalKr
 
     if ($isDebit) {
         $totalDebit += $nominal;
-        // Hanya hitung qty jika ada banyak (bukan null dan bukan 1 default)
         if ($trx->banyak !== null && $qty > 0) {
             $totalQty += $qty;
         }
@@ -55,6 +68,11 @@ $rows = $transaksis->map(function ($trx) use (&$running, &$totalDebit, &$totalKr
 
 $saldoAkhir = $running;
 $saldoClass = $saldoAkhir < 0 ? 'lgt-neg' : '';
+
+// Stok/M3 akhir kumulatif (bukan cuma mutasi bulan ini) — samakan dengan
+// Stock Opname nantinya. Hanya relevan untuk akun persediaan.
+$saldoAkhirQty = $isPersediaan ? ($saldoAwalQty + $totalQty) : null;
+$saldoAkhirM3  = $isPersediaan ? ($saldoAwalM3 + $totalM3)   : null;
 @endphp
 
 <style>
@@ -91,7 +109,7 @@ $saldoClass = $saldoAkhir < 0 ? 'lgt-neg' : '';
 .lgt-nama   { max-width:140px; overflow:hidden; text-overflow:ellipsis; font-size:.73rem; color:var(--bb-text-2); }
 .lgt-ket    { max-width:200px; overflow:hidden; text-overflow:ellipsis; font-size:.7rem; color:var(--bb-text-3); }
 .lgt-qty    { width:60px; font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--bb-text-3); text-align:right; }
-.lgt-m3     { width:60px; font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--bb-text-3); text-align:right; } /* Tambahan class M3 */
+.lgt-m3     { width:60px; font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--bb-text-3); text-align:right; }
 .lgt-harga  { width:100px; font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--bb-text-3); text-align:right; }
 .lgt-debit  { width:110px; font-family:'JetBrains Mono',monospace; font-weight:600; color:var(--bb-debit); text-align:right; }
 .lgt-kredit { width:110px; font-family:'JetBrains Mono',monospace; font-weight:600; color:var(--bb-kredit); text-align:right; }
@@ -126,7 +144,8 @@ $saldoClass = $saldoAkhir < 0 ? 'lgt-neg' : '';
             <th class="lgt-nama">Nama</th>
             <th class="lgt-ket">Keterangan</th>
             <th class="lgt-qty r">Qty</th>
-            <th class="lgt-m3 r">M3</th> <th class="lgt-harga r">Harga</th>
+            <th class="lgt-m3 r">M3</th>
+            <th class="lgt-harga r">Harga</th>
             <th class="lgt-debit r" style="color:var(--bb-debit)">Debit</th>
             <th class="lgt-kredit r" style="color:var(--bb-kredit)">Kredit</th>
             <th class="lgt-saldo r">Saldo</th>
@@ -140,8 +159,25 @@ $saldoClass = $saldoAkhir < 0 ? 'lgt-neg' : '';
                 style="font-size:.65rem;letter-spacing:.06em;text-transform:uppercase">
                 Saldo Awal Periode
             </td>
-            <td class="lgt-qty r">—</td>
-            <td class="lgt-m3 r">—</td> <td class="lgt-harga r">—</td>
+            <td class="lgt-qty r">
+                @if($isPersediaan && $saldoAwalQty != 0)
+                    <span class="{{ $saldoAwalQty < 0 ? 'lgt-neg' : '' }}">
+                        {{ (float)$saldoAwalQty == (int)$saldoAwalQty ? number_format(abs($saldoAwalQty), 0, ',', '.') : rtrim(rtrim(number_format(abs($saldoAwalQty), 4, ',', '.'), '0'), ',') }}
+                    </span>
+                @else
+                    —
+                @endif
+            </td>
+            <td class="lgt-m3 r">
+                @if($isPersediaan && $saldoAwalM3 != 0)
+                    <span class="{{ $saldoAwalM3 < 0 ? 'lgt-neg' : '' }}">
+                        {{ rtrim(rtrim(number_format(abs($saldoAwalM3), 4, ',', '.'), '0'), ',') }}
+                    </span>
+                @else
+                    —
+                @endif
+            </td>
+            <td class="lgt-harga r">—</td>
             <td class="lgt-debit r">—</td>
             <td class="lgt-kredit r">—</td>
             <td class="lgt-saldo r {{ $saldoAwal < 0 ? 'lgt-neg' : '' }}">
@@ -216,7 +252,7 @@ $saldoClass = $saldoAkhir < 0 ? 'lgt-neg' : '';
         <tr class="lgt-foot">
             <td colspan="4" class="lgt-foot-lbl">Total Mutasi Bulan Ini</td>
             <td class="lgt-qty r">
-                @if($totalQty != 0)
+                @if($isPersediaan && $totalQty != 0)
                     <span class="{{ $totalQty < 0 ? 'lgt-neg' : '' }}">
                         {{ (float)$totalQty == (int)$totalQty ? number_format(abs($totalQty), 0, ',', '.') : rtrim(rtrim(number_format(abs($totalQty), 4, ',', '.'), '0'), ',') }}
                     </span>
@@ -225,7 +261,7 @@ $saldoClass = $saldoAkhir < 0 ? 'lgt-neg' : '';
                 @endif
             </td>
             <td class="lgt-m3 r">
-                @if($totalM3 != 0)
+                @if($isPersediaan && $totalM3 != 0)
                     <span class="{{ $totalM3 < 0 ? 'lgt-neg' : '' }}">
                         {{ rtrim(rtrim(number_format(abs($totalM3), 4, ',', '.'), '0'), ',') }}
                     </span>
@@ -245,6 +281,25 @@ $saldoClass = $saldoAkhir < 0 ? 'lgt-neg' : '';
                 {{ number_format(abs($saldoAkhir), 0, ',', '.') }}
             </td>
         </tr>
+        @if($isPersediaan)
+        <tr class="lgt-foot" style="background:var(--bb-accent-soft)">
+            <td colspan="4" class="lgt-foot-lbl" style="color:var(--bb-accent-text)">Stok Akhir (Kumulatif)</td>
+            <td class="lgt-qty r" style="color:var(--bb-accent-text);font-weight:800">
+                <span class="{{ $saldoAkhirQty < 0 ? 'lgt-neg' : '' }}">
+                    {{ (float)$saldoAkhirQty == (int)$saldoAkhirQty ? number_format(abs($saldoAkhirQty), 0, ',', '.') : rtrim(rtrim(number_format(abs($saldoAkhirQty), 4, ',', '.'), '0'), ',') }}
+                </span>
+            </td>
+            <td class="lgt-m3 r" style="color:var(--bb-accent-text);font-weight:800">
+                <span class="{{ $saldoAkhirM3 < 0 ? 'lgt-neg' : '' }}">
+                    {{ rtrim(rtrim(number_format(abs($saldoAkhirM3), 4, ',', '.'), '0'), ',') }}
+                </span>
+            </td>
+            <td class="lgt-harga r"></td>
+            <td class="lgt-debit r"></td>
+            <td class="lgt-kredit r"></td>
+            <td class="lgt-saldo r"></td>
+        </tr>
+        @endif
     </tfoot>
 </table>
 </div>
