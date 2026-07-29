@@ -27,10 +27,15 @@ class BukuKitabsTable
                     ->label('Kategori')
                     ->badge()
                     ->sortable(),
-                TextColumn::make('akunDetail_count')
+                TextColumn::make('akun_detail_count')
                     ->label('Jumlah Baris Akun')
                     ->counts('akunDetail')
                     ->alignCenter(),
+                TextColumn::make('keterangan')
+                    ->label('Catatan')
+                    ->limit(50)
+                    ->tooltip(fn($state) => $state)
+                    ->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('is_active')
                     ->label('Aktif')
                     ->boolean(),
