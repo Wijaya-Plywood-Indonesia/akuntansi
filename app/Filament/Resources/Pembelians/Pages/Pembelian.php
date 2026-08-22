@@ -558,6 +558,8 @@ class Pembelian extends Page
         $this->payment_method = in_array($restoredMethod, [
             PembelianMetodePembayaran::METODE_TUNAI,
             PembelianMetodePembayaran::METODE_TRANSFER,
+            PembelianMetodePembayaran::METODE_CICILAN,
+            PembelianMetodePembayaran::METODE_LAINNYA,
         ], true) ? $restoredMethod : PembelianMetodePembayaran::METODE_TUNAI;
         $this->payment_amount    = $state['payment_amount'] ?? null;
         $this->tanggal_bayar     = $state['tanggal_bayar'] ?? now()->format('Y-m-d');
