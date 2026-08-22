@@ -62,15 +62,17 @@ class SubAnakAkunsTable
                     ->label('Tanggal Dibuat')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort(function ($query) {
+                return $query
+                    ->orderByRaw('CAST(SUBSTRING_INDEX(kode_sub_anak_akun, ".", 1) AS UNSIGNED) asc')
+                    ->orderByRaw('CAST(SUBSTRING_INDEX(kode_sub_anak_akun, ".", -1) AS UNSIGNED) asc');
+            })
             ->filters([
                 //
             ])

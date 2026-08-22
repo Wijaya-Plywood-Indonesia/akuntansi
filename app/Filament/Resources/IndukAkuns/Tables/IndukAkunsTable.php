@@ -57,6 +57,7 @@ class IndukAkunsTable
                     ->dateTime('d M Y')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('kode_induk_akun', 'asc')
             ->filters([
                 //
                 SelectFilter::make('status')

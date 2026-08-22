@@ -46,15 +46,18 @@ class AnakAkunsTable
                         'success' => 'aktif',
                         'danger' => 'nonaktif',
                     ]),
+
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('kode_anak_akun', 'asc')
             ->filters([
                 //
             ])
