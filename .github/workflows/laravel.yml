@@ -124,7 +124,7 @@ jobs:
           set -euo pipefail
           BUILD_DIR=./build_deploy
           mkdir -p "$BUILD_DIR"
-          
+
           # rsync memilah file, abaikan storage dan .env agar data aman
           rsync -a --delete \
             --exclude '.git/' \
@@ -159,37 +159,37 @@ jobs:
 
             TARGET_DIR="/home/${{ secrets.SSH_USERNAME }}/akuntansi.wijayaplywoods.com"
             cd "$TARGET_DIR"
-            
+
             # 🛡️ Safety net: apapun hasil script ini, situs WAJIB balik online di akhir.
             trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
-            
+
             php artisan down || true
-            
+
             find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
-            
+
             unzip -oq ../deploy.zip -d .
             echo "✅ Unzip selesai tanpa error"
-            
+
             php artisan optimize:clear
-            
+
             # Symlink — pakai TARGET_DIR, konsisten dgn deklarasi di atas
             cd "$TARGET_DIR/public"
             if [ ! -e "storage" ]; then
               ln -s "$TARGET_DIR/storage/app/public" storage
             fi
             cd "$TARGET_DIR"
-            
+
             php artisan filament:assets
-            
+
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-            
-            # php artisan migrate --force
-            
+
+            php artisan migrate --force
+
             php artisan shield:generate --all --panel=admin --no-interaction
-            
+
             chmod -R 775 storage bootstrap/cache
-            
+
             rm -f ../deploy.zip
             echo "🚀 Deployment Akuntansi Sukses!"
