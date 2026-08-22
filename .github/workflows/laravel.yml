@@ -156,47 +156,40 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
+
             TARGET_DIR="/home/${{ secrets.SSH_USERNAME }}/akuntansi.wijayaplywoods.com"
             cd "$TARGET_DIR"
-
-            # 1. Mode Perbaikan
+            
+            # 🛡️ Safety net: apapun hasil script ini, situs WAJIB balik online di akhir.
+            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
+            
             php artisan down || true
-
-            # 2. Hapus file lama KECUALI storage dan .env
+            
             find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
-
-            # 3. Ekstrak file baru — cek benar2 sukses
+            
             unzip -oq ../deploy.zip -d .
             echo "✅ Unzip selesai tanpa error"
-
-            # 5. Optimasi Laravel
+            
             php artisan optimize:clear
             
-            # 5.2 Symlink
-            cd "$TARGET/public"
+            # Symlink — pakai TARGET_DIR, konsisten dgn deklarasi di atas
+            cd "$TARGET_DIR/public"
             if [ ! -e "storage" ]; then
-              ln -s "$TARGET/storage/app/public" storage
+              ln -s "$TARGET_DIR/storage/app/public" storage
             fi
-            cd "$TARGET"
-
-            # 4b. (Opsional, kalau pakai custom Filament resource/plugin dgn asset sendiri)
+            cd "$TARGET_DIR"
+            
             php artisan filament:assets
             
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-
-            # 6. Migrasi Database
+            
             php artisan migrate --force
-
-            # Shield Generate 
+            
             php artisan shield:generate --all --panel=admin --no-interaction
-
-            # 7. Set permission ulang (folder baru dari unzip biasanya permission-nya beda)
+            
             chmod -R 775 storage bootstrap/cache
-
-            # 8. Online Kembali
-            php artisan up
-
+            
             rm -f ../deploy.zip
             echo "🚀 Deployment Akuntansi Sukses!"
