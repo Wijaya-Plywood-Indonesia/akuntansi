@@ -169,21 +169,18 @@ jobs:
             unzip -oq ../deploy.zip -d .
             echo "✅ Unzip selesai tanpa error"
 
-            # 4. Buat ulang symlink storage (WAJIB tiap deploy karena public/ dihapus total di step 2)
-            php artisan storage:link
-
-            # 4b. (Opsional, kalau pakai custom Filament resource/plugin dgn asset sendiri)
-            php artisan filament:assets
-
             # 5. Optimasi Laravel
             php artisan optimize:clear
-
+            
             # 5.2 Symlink
             cd "$TARGET/public"
             if [ ! -e "storage" ]; then
               ln -s "$TARGET/storage/app/public" storage
             fi
             cd "$TARGET"
+
+            # 4b. (Opsional, kalau pakai custom Filament resource/plugin dgn asset sendiri)
+            php artisan filament:assets
             
             php artisan config:cache
             php artisan route:cache
