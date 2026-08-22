@@ -108,31 +108,46 @@ class PosPenjualan extends Page
     public bool $showDropdown = false;
 
     public function updatedSearch(): void
-    {
-        if (strlen($this->search) < 1) {
-            $this->searchResults = collect();
-            return;
-        }
+{
+    if (strlen($this->search) < 1) {
+        $this->searchResults = collect();
+        return;
+    }
 
+    // GLOBAL: tidak difilter stok, supaya barang stok 0 tetap muncul untuk crosscheck
+    $this->searchResults = Barang::with('satuan')
+        ->where(function ($query) {
+            $query->where('barangs.nama_barang', 'like', "%{$this->search}%")
+                ->orWhere('barangs.barcode', 'like', "%{$this->search}%");
+        })
+        ->limit(10)
+        ->get();
+
+    foreach ($this->searchResults as $barang) {
+        $barang->stok_aktual = $barang->stok_buku_besar;
+    }
+
+    $this->showDropdown = true;
+}
+
+public function openDropdown(): void
+{
+    $this->showDropdown = true;
+
+    if (strlen(trim($this->search)) < 1) {
+        // DEFAULT LIST: hanya barang yang ada stoknya
         $this->searchResults = Barang::with('satuan')
-            ->where(function ($query) {
-                $query->where('barangs.nama_barang', 'like', "%{$this->search}%")
-                    ->orWhere('barangs.barcode', 'like', "%{$this->search}%");
-            })
-            ->limit(10)
-            ->get();
+            ->orderBy('nama_barang', 'asc')
+            ->get()
+            ->filter(fn ($barang) => $barang->stok_buku_besar > 0)
+            ->take(10)
+            ->values();
 
         foreach ($this->searchResults as $barang) {
             $barang->stok_aktual = $barang->stok_buku_besar;
         }
-        
-        $this->showDropdown = true;
     }
-
-    public function openDropdown(): void
-    {
-        $this->showDropdown = true;
-    }
+}
 
     public function closeDropdown(): void
     {
