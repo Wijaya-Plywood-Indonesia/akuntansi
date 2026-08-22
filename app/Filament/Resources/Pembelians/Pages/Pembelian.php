@@ -7,6 +7,7 @@ use App\Models\Barang;
 use App\Models\DetailPembelian;
 use App\Models\Pembelian as ModelsPembelian;
 use App\Models\PembelianMetodePembayaran;
+use App\Models\RekeningPerusahaan;
 use App\Models\Supplier;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
@@ -59,6 +60,10 @@ class Pembelian extends Page
     public $tanggal_bayar;
     public $payment_reference = '';
     public $payment_catatan   = '';
+
+    public $rekening_perusahaan_id = null;
+    public $rekeningPerusahaan     = [];
+    public ?RekeningPerusahaan $selectedBank = null;
 
     public function mount(): void
     {
@@ -191,6 +196,24 @@ class Pembelian extends Page
         } else {
             $this->reset(['supplier_name', 'supplier_phone', 'supplier_address']);
         }
+    }
+
+    public function updatedPaymentMethod(): void
+    {
+        if ($this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER) {
+            $this->rekeningPerusahaan = RekeningPerusahaan::all();
+        } else {
+            $this->rekeningPerusahaan = [];
+            $this->rekening_perusahaan_id = null;
+            $this->selectedBank = null;
+        }
+    }
+
+    public function updatedRekeningPerusahaanId(): void
+    {
+        $this->selectedBank = $this->rekening_perusahaan_id
+            ? RekeningPerusahaan::find($this->rekening_perusahaan_id)
+            : null;
     }
 
     public function addItem(): void
@@ -379,20 +402,27 @@ class Pembelian extends Page
         $grand   = $this->grandTotal();
         $dibayar = $this->parseNumber($this->payment_amount);
 
-        if (!in_array($this->payment_method, [
-            PembelianMetodePembayaran::METODE_TUNAI,
-            PembelianMetodePembayaran::METODE_TRANSFER,
-        ], true)) {
-            $this->payment_method = PembelianMetodePembayaran::METODE_TUNAI; // fallback aman
-        }
-
-        if ($grand > 0 && $dibayar < $grand) {
+        if ($this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER
+            && $dibayar > 0
+            && empty($this->rekening_perusahaan_id)
+        ) {
             Notification::make()
-                ->title('Pembayaran Kurang')
-                ->body('Pembelian hanya mendukung Tunai atau Transfer secara lunas. Nominal bayar harus sama dengan Grand Total.')
+                ->title('Rekening Belum Dipilih')
+                ->body('Silakan pilih rekening perusahaan tujuan transfer.')
                 ->danger()
                 ->send();
             return;
+        }
+
+        if (($this->payment_method === PembelianMetodePembayaran::METODE_TUNAI || $this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER) && $grand > 0) {
+            if ($dibayar < $grand) {
+                Notification::make()
+                    ->title('Pembayaran Kurang')
+                    ->body('Untuk metode pembayaran ' . ($this->payment_method === PembelianMetodePembayaran::METODE_TUNAI ? 'Tunai' : 'Transfer Bank') . ', nominal pembayaran harus lunas. Silakan gunakan metode Cicilan atau Down Payment (DP) jika ingin membayar sebagian.')
+                    ->danger()
+                    ->send();
+                return;
+            }
         }
 
         DB::beginTransaction();
@@ -469,13 +499,16 @@ class Pembelian extends Page
 
             if ($dibayar > 0) {
                 PembelianMetodePembayaran::create([
-                    'pembelian_id'     => $pembelian->id,
-                    'created_by'       => $this->created_by,
-                    'tanggal_bayar'    => $this->tanggal_bayar,
-                    'amount'           => $dibayar,
-                    'payment_method'   => $this->payment_method,
-                    'reference_number' => $this->payment_reference,
-                    'catatan'          => $this->payment_catatan,
+                    'pembelian_id'            => $pembelian->id,
+                    'created_by'              => $this->created_by,
+                    'tanggal_bayar'           => $this->tanggal_bayar,
+                    'amount'                  => $dibayar,
+                    'payment_method'          => $this->payment_method,
+                    'rekening_perusahaan_id'  => $this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER
+                        ? $this->rekening_perusahaan_id
+                        : null,
+                    'reference_number'        => $this->payment_reference,
+                    'catatan'                 => $this->payment_catatan,
                 ]);
             }
 
@@ -530,6 +563,14 @@ class Pembelian extends Page
         $this->tanggal_bayar     = $state['tanggal_bayar'] ?? now()->format('Y-m-d');
         $this->payment_reference = $state['payment_reference'] ?? '';
         $this->payment_catatan   = $state['payment_catatan'] ?? '';
+
+        $this->rekening_perusahaan_id = $state['rekening_perusahaan_id'] ?? null;
+        if ($this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER) {
+            $this->rekeningPerusahaan = RekeningPerusahaan::all();
+            if ($this->rekening_perusahaan_id) {
+                $this->selectedBank = RekeningPerusahaan::find($this->rekening_perusahaan_id);
+            }
+        }
 
         $this->recalculateSubTotal();
     }

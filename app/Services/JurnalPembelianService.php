@@ -25,7 +25,7 @@ class JurnalPembelianService
             'detailPembelians.barang.subAnakAkun',
             'detailPembelians.barang.akunHpp',
             'detailPembelians.barang.akunPendapatan',
-            'metodePembayarans',
+            'metodePembayarans.rekeningPerusahaan.subAnakAkun',
             'supplier'
         ]);
 
@@ -206,9 +206,15 @@ class JurnalPembelianService
             }
 
             if ($totalUangMuka > 0) {
-                $metodeUtama = ($methodString === PembelianMetodePembayaran::METODE_TRANSFER)
-                    ? self::KODE_BANK_TRANSFER
-                    : self::KODE_KAS_TUNAI;
+                if ($methodString === PembelianMetodePembayaran::METODE_TRANSFER) {
+                    // Ambil kode akun dari rekening bank spesifik yang dipilih kasir.
+                    // Fallback ke akun bank transfer generik kalau rekening tidak ter-set
+                    // (mis. data lama sebelum fitur pemilihan rekening ditambahkan).
+                    $kodeAkunRekening = $pembayaranPertama?->rekeningPerusahaan?->subAnakAkun?->kode_sub_anak_akun;
+                    $metodeUtama = $kodeAkunRekening ?: self::KODE_BANK_TRANSFER;
+                } else {
+                    $metodeUtama = self::KODE_KAS_TUNAI;
+                }
 
                 $namaKas = $this->getNamaAkun($metodeUtama);
                 if (empty($namaKas)) {

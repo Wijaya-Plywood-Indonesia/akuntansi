@@ -15,6 +15,7 @@
                 isNewSupplier: @entangle('is_new_supplier'),
                 catatan: @entangle('catatan'),
                 paymentMethod: @entangle('payment_method'),
+                rekeningPerusahaanId: @entangle('rekening_perusahaan_id'),
                 tanggalBayar: @entangle('tanggal_bayar'),
                 paymentReference: @entangle('payment_reference'),
                 paymentCatatan: @entangle('payment_catatan'),
@@ -83,6 +84,7 @@
                         ongkir: this.ongkir,
                         biaya_lain: this.biayaLain,
                         payment_method: this.paymentMethod,
+                        rekening_perusahaan_id: this.rekeningPerusahaanId,
                         payment_amount: this.bayar,
                         tanggal_bayar: this.tanggalBayar,
                         payment_reference: this.paymentReference,
@@ -717,6 +719,21 @@
                                         </button>
                                         @endforeach
                                     </div>
+
+                                    @if($payment_method === \App\Models\PembelianMetodePembayaran::METODE_TRANSFER)
+                                    <div class="flex flex-col gap-1.5">
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Rekening Tujuan</label>
+                                        <select wire:model.live="rekening_perusahaan_id"
+                                            class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer dark:text-white">
+                                            <option value="">Pilih Rekening...</option>
+                                            @foreach($rekeningPerusahaan as $rek)
+                                            <option value="{{ $rek->id }}">
+                                                {{ $rek->atas_nama }} | {{ $rek->nama_bank }} | {{ $rek->no_rekening }}
+                                            </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    @endif
 
                                     <div class="grid grid-cols-2 gap-3">
                                         <div class="flex flex-col gap-1.5">
