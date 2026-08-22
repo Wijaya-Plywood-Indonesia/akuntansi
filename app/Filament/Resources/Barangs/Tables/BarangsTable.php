@@ -65,6 +65,9 @@ class BarangsTable
                     ->badge()
                     ->color('warning')
                     ->placeholder('Belum diset')
+                    ->alignment('center')
+                    ->wrap()
+                    ->description(fn ($record) => $record->subAnakAkun?->nama_sub_anak_akun)
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->orWhereHas('subAnakAkun', function (Builder $q) use ($search) {
                             $q->where('kode_sub_anak_akun', 'like', "%{$search}%");
@@ -86,14 +89,20 @@ class BarangsTable
                     ->label('Akun Pendapatan')
                     ->badge()
                     ->color('success')
-                    ->placeholder('Belum diset'),
-                
+                    ->placeholder('Belum diset')
+                    ->alignment('center')
+                    ->wrap()
+                    ->description(fn ($record) => $record->akunPendapatan?->nama_sub_anak_akun),
+
                 // ── TAMPILAN AKUN HPP ───────────────────────────────────────
                 TextColumn::make('akunHpp.kode_sub_anak_akun')
                     ->label('Akun HPP')
                     ->badge()
                     ->color('danger')
-                    ->placeholder('Belum diset'),
+                    ->placeholder('Belum diset')
+                    ->alignment('center')
+                    ->wrap()
+                    ->description(fn ($record) => $record->akunHpp?->nama_sub_anak_akun),
 
                 IconColumn::make('is_active')
                     ->label('Status')
