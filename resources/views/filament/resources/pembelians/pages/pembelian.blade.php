@@ -705,7 +705,10 @@
                                     </h3>
 
                                     <div class="grid grid-cols-2 gap-1 p-1 bg-gray-100/50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                        @foreach(\App\Models\PembelianMetodePembayaran::labelMetode() as $val => $label)
+                                        @foreach([
+                                        \App\Models\PembelianMetodePembayaran::METODE_TUNAI => 'Tunai',
+                                        \App\Models\PembelianMetodePembayaran::METODE_TRANSFER => 'Transfer',
+                                        ] as $val => $label)
                                         <button type="button"
                                             @click="paymentMethod = '{{ $val }}'"
                                             :class="paymentMethod === '{{ $val }}'
@@ -775,8 +778,8 @@
 
                                         <div class="pt-0.5 flex justify-between items-center" x-show="grandTotal > 0">
                                             <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
-                                                x-text="sisaBayar > 0 ? 'Kurang (Hutang)' : (sisaBayar < 0 ? 'Kembali' : 'Pas')"></span>
-                                            <span class="text-base lg:text-lg font-bold"
+                                                x-text="sisaBayar > 0 ? 'Kurang Bayar' : (sisaBayar < 0 ? 'Kembalian' : 'Pas')"
+                                                <span class="text-base lg:text-lg font-bold"
                                                 :class="sisaBayar > 0 ? 'text-red-500' : (sisaBayar < 0 ? 'text-green-500' : 'text-primary-600')"
                                                 x-text="fmt(Math.abs(sisaBayar))">
                                             </span>

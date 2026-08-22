@@ -4,15 +4,19 @@ namespace App\Filament\Pages;
 
 use App\Models\Pembelian;
 use App\Models\Supplier;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
+use UnitEnum;
 
 class LeaderBoardSupplier extends Page
 {
+    use HasPageShield;
     // protected static ?string $navigationIcon = 'heroicon-o-trophy';
     protected static ?string $navigationLabel = 'Leaderboard Supplier';
     protected static ?string $title = 'Leaderboard Supplier';
+    protected static string|UnitEnum|null $navigationGroup = 'Leaderboard';
     protected static ?int $navigationSort = 99;
 
     protected string $view = 'filament.pages.leader-board-supplier';

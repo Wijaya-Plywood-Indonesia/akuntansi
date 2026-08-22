@@ -39,7 +39,7 @@ class Pembelian extends Page
     public $catatan;
     public $foto_nota = [];
     public $items = [];
-    public $status; // Menambahkan deklarasi properti untuk menghindari ralat undefined property
+    public $status;
 
     public string $search        = '';
     public array  $searchResults = [];
@@ -370,6 +370,7 @@ class Pembelian extends Page
                 'tanggal'              => 'required|date',
                 'supplier_id'          => 'required_unless:is_new_supplier,true',
                 'supplier_name'        => 'required_if:is_new_supplier,true',
+                'status_barang'        => 'required|in:belum_datang,sebagian_datang,sudah_datang',
                 'items'                => 'required|array|min:1',
                 'items.*.barang_id'    => 'required',
                 'items.*.qty'          => 'required|numeric|min:0.01',
@@ -381,6 +382,7 @@ class Pembelian extends Page
                 'tanggal.required'            => 'Tanggal pembelian wajib diisi.',
                 'supplier_id.required_unless' => 'Silakan pilih supplier atau tambah supplier baru.',
                 'supplier_name.required_if'   => 'Nama supplier baru wajib diisi.',
+                'status_barang.required' => 'Status kedatangan barang wajib dipilih.',
                 'items.required'              => 'Keranjang pembelian minimal harus berisi 1 barang.',
                 'items.min'                   => 'Keranjang pembelian minimal harus berisi 1 barang.',
                 'items.*.qty.required'        => 'Qty barang harus diisi.',
@@ -440,12 +442,14 @@ class Pembelian extends Page
             foreach ($this->foto_nota as $foto) {
                 $paths[] = $foto->store('pembelian', 'public');
             }
-
-            $this->status = match (true) {
-                $grand > 0 && $dibayar >= $grand  => ModelsPembelian::STATUS_LUNAS,
-                $dibayar > 0 && $dibayar < $grand => ModelsPembelian::STATUS_CICILAN,
-                default                           => ModelsPembelian::STATUS_HUTANG,
-            };
+            // Buat instance sementara untuk menghitung status via method model,
+            // supaya logic TIDAK diduplikasi di Livewire (single source of truth).
+            $tempPembelian = new ModelsPembelian([
+                'grand_total' => $grand,
+            ]);
+            // totalSudahDibayar() butuh relasi tersimpan di DB, jadi untuk kasus baru
+            // (belum ada record), kita hitung manual dari $dibayar yang sudah kita tahu:
+            $this->status = ModelsPembelian::STATUS_LUNAS;
 
             $pembelian = ModelsPembelian::create([
                 'nomor_nota'       => $this->nomor_nota,
@@ -456,6 +460,7 @@ class Pembelian extends Page
                 'supplier_phone'   => $this->supplier_phone,
                 'supplier_address' => $this->supplier_address,
                 'status'           => $this->status,
+                'status_barang'          => $this->status_barang,
                 'catatan'          => $this->catatan,
                 'foto'             => !empty($paths) ? $paths : null,
                 'sub_total'        => $this->sub_total,
@@ -549,7 +554,11 @@ class Pembelian extends Page
 
         $this->ongkir            = $state['ongkir'] ?? null;
         $this->biaya_lain        = $state['biaya_lain'] ?? null;
-        $this->payment_method    = $state['payment_method'] ?? PembelianMetodePembayaran::METODE_TUNAI;
+        $restoredMethod = $state['payment_method'] ?? PembelianMetodePembayaran::METODE_TUNAI;
+        $this->payment_method = in_array($restoredMethod, [
+            PembelianMetodePembayaran::METODE_TUNAI,
+            PembelianMetodePembayaran::METODE_TRANSFER,
+        ], true) ? $restoredMethod : PembelianMetodePembayaran::METODE_TUNAI;
         $this->payment_amount    = $state['payment_amount'] ?? null;
         $this->tanggal_bayar     = $state['tanggal_bayar'] ?? now()->format('Y-m-d');
         $this->payment_reference = $state['payment_reference'] ?? '';
