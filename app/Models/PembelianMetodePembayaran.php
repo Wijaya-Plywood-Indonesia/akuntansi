@@ -21,6 +21,7 @@ class PembelianMetodePembayaran extends Model
         'tanggal_bayar',
         'amount',
         'payment_method',
+        'rekening_perusahaan_id',
         'reference_number',
         'catatan',
     ];
@@ -48,6 +49,11 @@ class PembelianMetodePembayaran extends Model
     public function validatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'validated_by');
+    }
+
+    public function rekeningPerusahaan(): BelongsTo
+    {
+        return $this->belongsTo(RekeningPerusahaan::class);
     }
 
     // ==================
