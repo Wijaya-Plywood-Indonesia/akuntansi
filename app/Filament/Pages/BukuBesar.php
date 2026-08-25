@@ -29,6 +29,11 @@ class BukuBesar extends Page
     public $saldoAwalQtyMap = [];   // qty berbasis 'banyak'
     public $saldoAwalM3Map = [];    // qty berbasis 'm3'
 
+    /** Toggle: jika true, akun yang saldo/mutasinya nol tetap ditampilkan
+     *  (berguna untuk audit/verifikasi COA). Default false = akun kosong
+     *  disembunyikan supaya tampilan tidak penuh baris-baris kosong. */
+    public bool $tampilkanSemua = false;
+
     /** Kode akun yang merupakan akun persediaan SATU barang
      *  (id_sub_anak_akun di tabel barangs). Hanya akun-akun ini yang
      *  qty/m3-nya bermakna sebagai kuantitas fisik. */
