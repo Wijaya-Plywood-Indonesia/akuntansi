@@ -69,10 +69,19 @@
 .bb-topbar-icon svg { width:20px; height:20px; color:var(--bb-accent); stroke-width:1.8; }
 .bb-topbar-title { font-size:1.1rem; font-weight:800; color:var(--bb-text-1); letter-spacing:-.01em; }
 .bb-topbar-sub { font-size:.72rem; font-weight:600; color:var(--bb-text-3); margin-top:1px; }
+.bb-topbar-right { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
 .bb-period-wrap { display:flex; align-items:center; gap:.6rem; padding:.45rem .9rem; background:var(--bb-surface-2); border:1.5px solid var(--bb-border); border-radius:var(--bb-r-md); transition:border-color .2s; }
 .bb-period-wrap:focus-within { border-color:var(--bb-accent); }
 .bb-period-lbl { font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--bb-text-3); white-space:nowrap; }
 .bb-period-input { font-family:'JetBrains Mono',monospace; font-size:.82rem; font-weight:500; color:var(--bb-text-1); background:transparent; border:none; outline:none; cursor:pointer; min-width:120px; }
+
+.bb-toggle-wrap { display:flex; align-items:center; gap:.55rem; padding:.45rem .9rem; background:var(--bb-surface-2); border:1.5px solid var(--bb-border); border-radius:var(--bb-r-md); cursor:pointer; user-select:none; transition:border-color .2s; }
+.bb-toggle-wrap:hover { border-color:var(--bb-accent-mid); }
+.bb-toggle-lbl { font-size:.72rem; font-weight:700; color:var(--bb-text-2); white-space:nowrap; }
+.bb-switch { position:relative; width:34px; height:19px; border-radius:20px; background:var(--bb-border); border:1.5px solid var(--bb-border); flex-shrink:0; transition:background .2s,border-color .2s; }
+.bb-switch.on { background:var(--bb-accent); border-color:var(--bb-accent); }
+.bb-switch-knob { position:absolute; top:1.5px; left:1.5px; width:14px; height:14px; border-radius:50%; background:var(--bb-surface); box-shadow:var(--bb-shadow-sm); transition:transform .2s; }
+.bb-switch.on .bb-switch-knob { transform:translateX(15px); }
 
 .bb-induk { background:var(--bb-surface); border:1px solid var(--bb-border); border-radius:var(--bb-r-lg); overflow:hidden; box-shadow:var(--bb-shadow-sm); animation:bb-fade .3s ease both; }
 .bb-induk-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem; padding:1rem 1.5rem; cursor:pointer; user-select:none; background:linear-gradient(to right,var(--bb-accent-soft),var(--bb-surface)); border-bottom:1.5px solid var(--bb-border); transition:background .2s; }
@@ -124,12 +133,20 @@
                 </div>
             </div>
         </div>
-        <div class="bb-period-wrap">
-            <span class="bb-period-lbl">Periode</span>
-            <svg style="width:13px;height:13px;color:var(--bb-text-3);flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-            <input type="month" wire:model.live="filterBulan" class="bb-period-input">
+        <div class="bb-topbar-right">
+            <div class="bb-toggle-wrap" wire:click="$toggle('tampilkanSemua')">
+                <span class="bb-toggle-lbl">Tampilkan Semua Akun</span>
+                <div class="bb-switch {{ $tampilkanSemua ? 'on' : '' }}">
+                    <div class="bb-switch-knob"></div>
+                </div>
+            </div>
+            <div class="bb-period-wrap">
+                <span class="bb-period-lbl">Periode</span>
+                <svg style="width:13px;height:13px;color:var(--bb-text-3);flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                <input type="month" wire:model.live="filterBulan" class="bb-period-input">
+            </div>
         </div>
     </div>
 
@@ -158,7 +175,7 @@
         });
     @endphp
 
-    @if($adaMutasiInduk || $totalInduk != 0)
+    @if($tampilkanSemua || $adaMutasiInduk || $totalInduk != 0)
     <div x-data="{ open: true }" class="bb-induk">
 
         <div class="bb-induk-head" @click="open = !open">
@@ -184,7 +201,7 @@
 
         <div x-show="open" x-collapse class="bb-induk-body">
             @foreach($induk->anakAkuns->whereNull('parent') as $anak)
-                @include('filament.pages.partials.buku-besar-anak', ['akun' => $anak, 'depth' => 0])
+                @include('filament.pages.partials.buku-besar-anak', ['akun' => $anak, 'depth' => 0, 'tampilkanSemua' => $tampilkanSemua])
             @endforeach
         </div>
 
@@ -200,4 +217,4 @@
     @endif
 </div>
 
-</x-filament-panels::page>                                  
+</x-filament-panels::page>

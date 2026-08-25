@@ -59,6 +59,11 @@ class SubAnakAkunsRelationManager extends RelationManager
                     ->color(fn($state) => strtolower($state ?? '') === 'kredit' ? 'danger' : 'success')
                     ->formatStateUsing(fn($state) => ucfirst(strtolower($state ?? '-'))),
             ])
+            ->defaultSort(function ($query) {
+                return $query
+                    ->orderByRaw('CAST(SUBSTRING_INDEX(sub_anak_akuns.kode_sub_anak_akun, ".", 1) AS UNSIGNED) asc')
+                    ->orderByRaw('CAST(SUBSTRING_INDEX(sub_anak_akuns.kode_sub_anak_akun, ".", -1) AS UNSIGNED) asc');
+            })
             ->headerActions([
                 AttachAction::make()
                     ->label('Daftarkan Sub Akun')
@@ -76,7 +81,8 @@ class SubAnakAkunsRelationManager extends RelationManager
                         fn($query) => $query
                             ->where('status', 'aktif')
                             ->whereDoesntHave('akunGroups')
-                            ->orderBy('kode_sub_anak_akun')
+                            ->orderByRaw('CAST(SUBSTRING_INDEX(kode_sub_anak_akun, ".", 1) AS UNSIGNED) asc')
+                            ->orderByRaw('CAST(SUBSTRING_INDEX(kode_sub_anak_akun, ".", -1) AS UNSIGNED) asc')
                     ),
             ])
             ->actions([
