@@ -315,30 +315,14 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $this->nama_akun = $accountsMap[$value] ?? '';
 
-        // ── Akun khusus yang WAJIB pilih barang, meski hanya 1 opsi ──
-        $akunWajibPilihBarang = ['1402.2']; // tambahkan kode lain jika perlu
-
         $barangs = Barang::whereHas(
             'subAnakAkun',
             fn($q) => $q->where('kode_sub_anak_akun', $value)
         )->get(['id', 'nama_barang']);
 
-        $isAkunKhusus = in_array($value, $akunWajibPilihBarang);
-
-        if ($barangs->count() === 1 && !$isAkunKhusus) {
-            $this->id_barang        = $barangs->first()->id;
-            $this->barangOptions    = [];
-            $this->showBarangPicker = false;
-        } elseif ($barangs->count() >= 1 && $isAkunKhusus) {
-            // Paksa tampil picker meski hanya 1 barang
-            $this->id_barang        = null;
-            $this->barangOptions    = $barangs->map(fn($b) => [
-                'id'   => $b->id,
-                'nama' => $b->nama_barang,
-            ])->values()->toArray();
-            $this->showBarangPicker = true;
-        } elseif ($barangs->count() > 1) {
-            $this->id_barang        = null;
+        if ($barangs->isNotEmpty()) {
+            // Dinamis: selama akun ini punya barang terkait (1 atau lebih), tampilkan picker
+            $this->id_barang        = $barangs->count() === 1 ? $barangs->first()->id : null;
             $this->barangOptions    = $barangs->map(fn($b) => [
                 'id'   => $b->id,
                 'nama' => $b->nama_barang,
@@ -628,6 +612,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                         $noAkun = $get('no_akun');
                         if (blank($noAkun)) return false;
 
+                        // Dinamis: field muncul jika akun ini punya barang terkait, apapun kodenya
                         return Barang::whereHas(
                             'subAnakAkun',
                             fn($q) => $q->where('kode_sub_anak_akun', $noAkun)
