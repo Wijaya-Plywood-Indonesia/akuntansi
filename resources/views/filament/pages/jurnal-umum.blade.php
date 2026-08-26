@@ -271,6 +271,71 @@
         .row-selected td {
             background-color: rgba(217, 119, 6, 0.08) !important;
         }
+
+        /* ── Konsep B: form satu kesatuan, section dipisah garis, input lebih rounded ── */
+        .concept-b-card {
+            border-radius: 20px !important;
+            box-shadow: none !important;
+        }
+
+        .concept-b-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 1.1rem 1.5rem;
+            background: transparent !important;
+            color: inherit !important;
+        }
+
+        .concept-b-header .concept-b-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #f59e0b;
+            flex-shrink: 0;
+        }
+
+        .concept-b-header h2 {
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: normal;
+            text-transform: none;
+            color: #f5f5f5;
+        }
+
+        .dark .concept-b-header h2 { color: #f5f5f5; }
+        .concept-b-header h2 { color: #18181b; }
+
+        .concept-b-section {
+            padding: 1.25rem 1.5rem;
+            border-top: 1px solid rgba(0,0,0,0.06);
+        }
+
+        .dark .concept-b-section {
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .concept-b-section:first-of-type {
+            border-top: none;
+        }
+
+        .concept-b-card input[type="text"],
+        .concept-b-card select,
+        .concept-b-card .concept-b-box {
+            border-radius: 14px !important;
+            box-shadow: none !important;
+        }
+
+        .concept-b-card .concept-b-btn-ghost {
+            background: transparent !important;
+            border-radius: 14px !important;
+            box-shadow: none !important;
+        }
+
+        .concept-b-card .concept-b-btn-solid {
+            border-radius: 14px !important;
+            box-shadow: none !important;
+        }
     </style>
 
     {{-- Form Input Utama --}}
@@ -300,6 +365,8 @@
             items: @entangle('items'),
             total: @entangle('total'),
             total_display: '',
+            barangSearchTerm: '',
+            isBarangDropdownOpen: false,
 
             get filteredAccounts() {
                 if (this.searchTerm === '') return this.accounts;
@@ -318,6 +385,23 @@
             get showBarangPickerSafe() {
                 return this.showBarangPicker && Array.isArray(this.barangOptions) && this.barangOptions.length > 0;
             },
+            get filteredBarangOptions() {
+                if (!Array.isArray(this.barangOptions)) return [];
+                if (this.barangSearchTerm === '') return this.barangOptions;
+                return this.barangOptions.filter(opt =>
+                    (opt.nama ?? '').toLowerCase().includes(this.barangSearchTerm.toLowerCase())
+                );
+            },
+            selectBarang(opt) {
+                this.id_barang = opt.id;
+                this.barangSearchTerm = opt.nama;
+                this.isBarangDropdownOpen = false;
+            },
+            clearBarang() {
+                this.id_barang = '';
+                this.barangSearchTerm = '';
+                this.isBarangDropdownOpen = false;
+            },
             clearAccount() {
                 this.no_akun = '';
                 this.nama_akun = '';
@@ -326,6 +410,7 @@
                 this.id_barang = '';
                 this.showBarangPicker = false;
                 this.barangOptions = [];
+                this.barangSearchTerm = '';
                 $wire.syncBarangPickerForAkun('');
             },
             formatRupiah(val) {
@@ -437,6 +522,14 @@
                 if (document.activeElement === $refs.totalInput) return;
                 total_display = formatRupiah(value);
             });
+            $watch('barangOptions', () => {
+                barangSearchTerm = '';
+            });
+            $watch('id_barang', value => {
+                if (!value) { barangSearchTerm = ''; return; }
+                const found = (barangOptions || []).find(o => o.id == value);
+                if (found) barangSearchTerm = found.nama;
+            });
 
             const saveLocal = (key, val) => {
                 localStorage.setItem('jurnal_draft_' + key, val ?? '');
@@ -546,12 +639,13 @@
                     hit_kbk = $wire.hit_kbk ?? '';
                     m3 = $wire.m3 ?? '';
                     map = $wire.map ?? 'd';
+                    barangSearchTerm = '';
                 }, 50);
             });
         ">
 
         {{-- Form Input Utama --}}
-        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden mb-6">
+        <div class="concept-b-card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 overflow-hidden mb-6">
             <div class="bg-amber-600 dark:bg-amber-700 px-6 py-4 text-white">
                 <h2 class="text-sm font-bold tracking-tight flex items-center gap-2 uppercase tracking-widest leading-none">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -561,10 +655,10 @@
                 </h2>
             </div>
 
-            <form wire:submit.prevent="addItem" class="p-6 space-y-6">
+            <form wire:submit.prevent="addItem">
                 @csrf
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="concept-b-section grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tanggal Transaksi</label>
                         <input type="text" x-ref="dateInput" readonly class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer shadow-sm">
@@ -579,9 +673,9 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                <div class="concept-b-section grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                     <div class="space-y-1.5 relative" @click.away="isDropdownOpen = false">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cari Nomor Akun</label>
+                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nomor Akun</label>
                         <div class="relative flex items-center">
                             <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true" placeholder="Ketik no/nama..."
                                 class="w-full px-3.5 py-2.5 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-900 rounded-lg font-bold text-amber-700 dark:text-amber-500 outline-none pr-10 focus:ring-1 focus:ring-amber-500 placeholder:text-sm shadow-sm">
@@ -604,7 +698,7 @@
 
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama Akun</label>
-                        <div class="px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center shadow-sm" x-text="nama_akun || 'Pilih akun...'"></div>
+                        <div class="concept-b-box px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center shadow-sm" x-text="nama_akun || 'Pilih akun...'"></div>
                     </div>
 
                     <div class="relative h-[68px]">
@@ -627,22 +721,41 @@
                              x-transition:leave="transition ease-in duration-200"
                              x-transition:leave-start="opacity-100 translate-y-0"
                              x-transition:leave-end="opacity-0 -translate-y-2"
-                             class="space-y-1.5 absolute inset-0 w-full">
+                             class="space-y-1.5 absolute inset-0 w-full"
+                             @click.away="isBarangDropdownOpen = false">
                             <div class="flex items-center gap-1 mb-1">
                                 <span class="text-[11px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wider">Pilih Barang</span>
                                 <span class="text-rose-500 text-[11px]">*</span>
                             </div>
-                            <select x-model="id_barang" class="w-full px-3.5 py-2.5 text-sm bg-amber-50 dark:bg-gray-800 border border-amber-300 dark:border-amber-900 rounded-lg font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-sm">
-                                <option value="">-- pilih barang --</option>
-                                <template x-for="opt in barangOptions" :key="opt.id">
-                                    <option :value="opt.id" x-text="opt.nama"></option>
-                                </template>
-                            </select>
+                            <div class="relative">
+                                <input type="text"
+                                    x-model="barangSearchTerm"
+                                    @focus="isBarangDropdownOpen = true"
+                                    placeholder="Cari barang..."
+                                    class="w-full px-3.5 py-2.5 pr-10 text-sm bg-amber-50 dark:bg-gray-800 border border-amber-300 dark:border-amber-900 rounded-lg font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-sm">
+                                <button type="button" x-show="barangSearchTerm.length > 0 || id_barang" @click="clearBarang()"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-rose-500 transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                                <div x-show="isBarangDropdownOpen" x-cloak
+                                    class="absolute z-50 w-full mt-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-52 overflow-y-auto p-1.5 custom-scroll">
+                                    <template x-if="filteredBarangOptions.length === 0">
+                                        <div class="px-3 py-2 text-xs text-gray-400 italic">Tidak ditemukan</div>
+                                    </template>
+                                    <template x-for="opt in filteredBarangOptions" :key="opt.id">
+                                        <button type="button" @click="selectBarang(opt)"
+                                            class="w-full text-left px-3.5 py-2.5 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-md text-sm font-medium text-gray-800 dark:text-gray-200 transition-none"
+                                            x-text="opt.nama"></button>
+                                    </template>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-6 transition-all duration-500 ease-in-out" :class="showBarangPickerSafe ? 'md:grid-cols-3' : 'md:grid-cols-2'">
+                <div class="concept-b-section grid grid-cols-1 gap-6 transition-all duration-500 ease-in-out" :class="showBarangPickerSafe ? 'md:grid-cols-3' : 'md:grid-cols-2'">
                     <div x-show="showBarangPickerSafe" style="display: none;"
                          x-transition:enter="transition ease-out duration-500 delay-200"
                          x-transition:enter-start="opacity-0 -translate-x-4"
@@ -667,7 +780,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="concept-b-section grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hit KBK <span class="text-amber-500">*</span></label>
                         <select x-model="hit_kbk" @change="$wire.set('hit_kbk', hit_kbk)"
@@ -758,7 +871,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                <div class="concept-b-section grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Harga</label>
                         <div class="relative">
@@ -890,10 +1003,14 @@
                             <button type="button" @click="map = 'd'" :class="map === 'd' ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'" class="py-2.5 rounded-lg border font-black text-xs tracking-widest transition-none shadow-xs">DEBIT</button>
                             <button type="button" @click="map = 'k'" :class="map === 'k' ? 'bg-rose-600 border-rose-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'" class="py-2.5 rounded-lg border font-black text-xs tracking-widest transition-none shadow-xs">KREDIT</button>
                         </div>
+                        {{-- Placeholder tak terlihat: menyamakan tinggi kolom ini dengan kolom
+                             Harga/Total yang memiliki baris tombol "Cari ..." di bawah input,
+                             supaya baris DEBIT/KREDIT sejajar dengan input Harga & Total. --}}
+                        <div class="invisible mt-1 w-full py-1 text-[9.5px] select-none" aria-hidden="true">placeholder</div>
                     </div>
                 </div>
 
-                <div class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-6">
+                <div class="concept-b-section flex items-center justify-end gap-3">
                     <button type="button"
                         @click="
                             if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -901,7 +1018,7 @@
                             }
                             setTimeout(() => { $wire.call('resetForm'); }, 50);
                         "
-                        class="px-6 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-none shadow-xs">Batal</button>
+                        class="concept-b-btn-ghost px-5 py-2.5 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-medium text-[11px] hover:bg-gray-50 dark:hover:bg-gray-800 transition-none">Batal</button>
 
                     <button type="button"
                         x-on:click="
@@ -924,7 +1041,7 @@
                                 );
                             }()
                         "
-                        class="px-10 py-2.5 bg-amber-600 dark:bg-amber-700 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-none flex items-center gap-2 shadow-sm">
+                        class="concept-b-btn-solid px-8 py-2.5 bg-amber-500 hover:bg-amber-600 text-[#1c1305] font-semibold text-[11px] transition-none flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
