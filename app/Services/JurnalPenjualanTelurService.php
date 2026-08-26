@@ -166,6 +166,7 @@ class JurnalPenjualanTelurService
                             'jenis_pihak'  => 'pelanggan',
                             'nama_pihak'   => $customer,
                             'nama_barang'  => $d->nama_barang,
+                            'id_barang'    => $d->barang_id,
                             'no_dokumen'   => $nota,
                             'no_referensi' => (string) $d->id,
                             'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
@@ -209,6 +210,7 @@ class JurnalPenjualanTelurService
                             $this->buatItem($hHpp->id, [
                                 'urut'         => $urut++,
                                 'nama_barang'  => $d->nama_barang,
+                                'id_barang'    => $d->barang_id,
                                 'no_dokumen'   => $nota,
                                 'no_referensi' => (string) $d->id,
                                 'keterangan'   => 'HPP ' . $d->nama_barang,
@@ -243,6 +245,7 @@ class JurnalPenjualanTelurService
                                 $this->buatItem($hPers->id, [
                                     'urut'         => $urut++,
                                     'nama_barang'  => $d->nama_barang,
+                                    'id_barang'    => $d->barang_id,
                                     'no_dokumen'   => $nota,
                                     'no_referensi' => (string) $d->id,
                                     'keterangan'   => 'Keluar stok ' . $d->nama_barang,
@@ -378,6 +381,7 @@ class JurnalPenjualanTelurService
                                 'jenis_pihak'  => 'pelanggan',
                                 'nama_pihak'   => $customer,
                                 'nama_barang'  => $d->nama_barang,
+                                'id_barang'    => $d->barang_id,
                                 'no_dokumen'   => $nota,
                                 'no_referensi' => (string) $d->id,
                                 'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
@@ -413,6 +417,7 @@ class JurnalPenjualanTelurService
                             'jenis_pihak'  => 'pelanggan',
                             'nama_pihak'   => $customer,
                             'nama_barang'  => $d->nama_barang,
+                            'id_barang'    => $d->barang_id,
                             'no_dokumen'   => $nota,
                             'no_referensi' => (string) $d->id,
                             'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
@@ -455,6 +460,7 @@ class JurnalPenjualanTelurService
                                 $this->buatItem($hHpp->id, [
                                     'urut'         => $urut++,
                                     'nama_barang'  => $d->nama_barang,
+                                    'id_barang'    => $d->barang_id,
                                     'no_dokumen'   => $nota,
                                     'no_referensi' => (string) $d->id,
                                     'keterangan'   => 'HPP ' . $d->nama_barang,
@@ -489,6 +495,7 @@ class JurnalPenjualanTelurService
                                     $this->buatItem($hPers->id, [
                                         'urut'         => $urut++,
                                         'nama_barang'  => $d->nama_barang,
+                                        'id_barang'    => $d->barang_id,
                                         'no_dokumen'   => $nota,
                                         'no_referensi' => (string) $d->id,
                                         'keterangan'   => 'Keluar stok ' . $d->nama_barang,
