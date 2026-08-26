@@ -18,6 +18,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -233,7 +234,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
         });
-        
+
         $accounts = collect($accountsMap)->map(fn($nama, $no) => (object) ['no' => $no, 'nama' => $nama])->values();
 
         return [
@@ -308,26 +309,35 @@ class JurnalUmum extends Page implements HasActions, HasForms
             return;
         }
 
-        // OPTIMASI CACHE: Array ringan
         $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
         });
 
         $this->nama_akun = $accountsMap[$value] ?? '';
 
-        // ── Cek apakah akun ini dipakai oleh lebih dari 1 barang ──────
+        // ── Akun khusus yang WAJIB pilih barang, meski hanya 1 opsi ──
+        $akunWajibPilihBarang = ['1402.2']; // tambahkan kode lain jika perlu
+
         $barangs = Barang::whereHas(
             'subAnakAkun',
             fn($q) => $q->where('kode_sub_anak_akun', $value)
         )->get(['id', 'nama_barang']);
 
-        if ($barangs->count() === 1) {
-            // Hanya 1 barang yang pakai akun ini → langsung dipilih otomatis
+        $isAkunKhusus = in_array($value, $akunWajibPilihBarang);
+
+        if ($barangs->count() === 1 && !$isAkunKhusus) {
             $this->id_barang        = $barangs->first()->id;
             $this->barangOptions    = [];
             $this->showBarangPicker = false;
+        } elseif ($barangs->count() >= 1 && $isAkunKhusus) {
+            // Paksa tampil picker meski hanya 1 barang
+            $this->id_barang        = null;
+            $this->barangOptions    = $barangs->map(fn($b) => [
+                'id'   => $b->id,
+                'nama' => $b->nama_barang,
+            ])->values()->toArray();
+            $this->showBarangPicker = true;
         } elseif ($barangs->count() > 1) {
-            // Lebih dari 1 barang berbagi akun ini → wajib pilih manual
             $this->id_barang        = null;
             $this->barangOptions    = $barangs->map(fn($b) => [
                 'id'   => $b->id,
@@ -335,7 +345,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ])->values()->toArray();
             $this->showBarangPicker = true;
         } else {
-            // Akun ini tidak dipakai barang manapun (mis. akun non-persediaan)
             $this->id_barang        = null;
             $this->barangOptions    = [];
             $this->showBarangPicker = false;
@@ -435,7 +444,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'banyak'      => $banyak,
             'm3'          => $m3,
             'harga'       => $harga,
-            'total'       => $total, 
+            'total'       => $total,
             'map'         => strtolower($this->map),
         ];
 
@@ -585,7 +594,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->required()
                     ->searchable()
                     ->options(function () {
-                        // OPTIMASI CACHE: Array ringan
                         $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
                             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
                         });
@@ -599,8 +607,37 @@ class JurnalUmum extends Page implements HasActions, HasForms
                             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
                         });
                         $set('nama_akun', $accountsMap[$state] ?? '');
+                        $set('id_barang', null); // reset pilihan barang saat akun ganti
                     }),
                 TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
+
+                // ── FIELD BARU: Nama Barang, muncul hanya jika akun punya barang terkait ──
+                Select::make('id_barang')
+                    ->label('Nama Barang')
+                    ->searchable()
+                    ->options(function (Get $get) {
+                        $noAkun = $get('no_akun');
+                        if (blank($noAkun)) return [];
+
+                        return Barang::whereHas(
+                            'subAnakAkun',
+                            fn($q) => $q->where('kode_sub_anak_akun', $noAkun)
+                        )->pluck('nama_barang', 'id');
+                    })
+                    ->visible(function (Get $get) {
+                        $noAkun = $get('no_akun');
+                        if (blank($noAkun)) return false;
+
+                        return Barang::whereHas(
+                            'subAnakAkun',
+                            fn($q) => $q->where('kode_sub_anak_akun', $noAkun)
+                        )->exists();
+                    })
+                    ->required(fn(Get $get) => Barang::whereHas(
+                        'subAnakAkun',
+                        fn($q) => $q->where('kode_sub_anak_akun', $get('no_akun'))
+                    )->exists())
+                    ->live(),
 
                 TextInput::make('mm')->label('MM (Tebal Plywood)')->numeric(),
                 TextInput::make('keterangan')->label('Keterangan'),
@@ -690,6 +727,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
                 $data = $record->toArray();
                 $data['no_dokumen'] = $record->{'no-dokumen'} ?? $record->no_dokumen;
+                $data['id_barang']  = $record->id_barang;
                 return $data;
             })
             ->action(function (array $data, array $arguments, Action $action): void {
