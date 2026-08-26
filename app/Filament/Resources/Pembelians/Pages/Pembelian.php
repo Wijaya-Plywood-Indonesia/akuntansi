@@ -370,7 +370,7 @@ class Pembelian extends Page
                 'tanggal'              => 'required|date',
                 'supplier_id'          => 'required_unless:is_new_supplier,true',
                 'supplier_name'        => 'required_if:is_new_supplier,true',
-                'status_barang'        => 'required|in:belum_datang,sebagian_datang,sudah_datang',
+                // 'status_barang'        => 'required|in:belum_datang,sebagian_datang,sudah_datang', // TODO: fitur status kedatangan barang belum dilanjutkan (property, field, & kolom DB belum ada)
                 'items'                => 'required|array|min:1',
                 'items.*.barang_id'    => 'required',
                 'items.*.qty'          => 'required|numeric|min:0.01',
@@ -382,7 +382,7 @@ class Pembelian extends Page
                 'tanggal.required'            => 'Tanggal pembelian wajib diisi.',
                 'supplier_id.required_unless' => 'Silakan pilih supplier atau tambah supplier baru.',
                 'supplier_name.required_if'   => 'Nama supplier baru wajib diisi.',
-                'status_barang.required' => 'Status kedatangan barang wajib dipilih.',
+                // 'status_barang.required' => 'Status kedatangan barang wajib dipilih.', // TODO: nonaktif bersamaan dengan rule di atas
                 'items.required'              => 'Keranjang pembelian minimal harus berisi 1 barang.',
                 'items.min'                   => 'Keranjang pembelian minimal harus berisi 1 barang.',
                 'items.*.qty.required'        => 'Qty barang harus diisi.',
@@ -460,7 +460,7 @@ class Pembelian extends Page
                 'supplier_phone'   => $this->supplier_phone,
                 'supplier_address' => $this->supplier_address,
                 'status'           => $this->status,
-                'status_barang'          => $this->status_barang,
+                // 'status_barang'          => $this->status_barang, // TODO: nonaktif, fitur status kedatangan barang belum dilanjutkan
                 'catatan'          => $this->catatan,
                 'foto'             => !empty($paths) ? $paths : null,
                 'sub_total'        => $this->sub_total,

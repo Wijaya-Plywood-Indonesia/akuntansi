@@ -13,6 +13,7 @@ class JurnalUmum extends Model
         'tgl',
         'jurnal',
         'no_akun',
+        'id_barang',
         'nama_akun',
         'nama',
         'banyak',
@@ -46,6 +47,11 @@ class JurnalUmum extends Model
     }
 
     // RelationShip
+    public function barang()
+    {
+        return $this->belongsTo(Barang::class, 'id_barang');
+    }
+
     public function subAkun()
     {
         return $this->belongsTo(
