@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Exports\JurnalUmumExport;
+use App\Models\Barang;
 use App\Models\SubAnakAkun;
 use App\Models\JurnalUmum as JurnalModel;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -42,6 +43,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public $hit_kbk = '';
     public $map = 'd';
     public $items = [];
+
+    // ── Pemilihan barang saat 1 akun dipakai oleh >1 barang ──────────
+    public $id_barang = null;
+    public array $barangOptions = [];
+    public bool $showBarangPicker = false;
 
     public bool $wasBalanced = false;
     public $filterTglDariInput = '';
@@ -171,7 +177,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 'banyak',
                 'm3',
                 'harga',
-                'map'
+                'map',
+                'id_barang',
             ])
             ->selectRaw("
                 CASE LOWER(hit_kbk)
@@ -184,6 +191,19 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $this->hasMorePages = $data->count() > $this->perPage;
         $historyJurnals     = $data->take($this->perPage);
+
+        // ── Ambil nama barang untuk baris yang punya id_barang ──────
+        $barangIds = $historyJurnals->pluck('id_barang')->filter()->unique()->values();
+        if ($barangIds->isNotEmpty()) {
+            $barangNames = Barang::whereIn('id', $barangIds)->pluck('nama_barang', 'id');
+            $historyJurnals->each(function ($hj) use ($barangNames) {
+                $hj->nama_barang = $hj->id_barang ? ($barangNames[$hj->id_barang] ?? null) : null;
+            });
+        } else {
+            $historyJurnals->each(function ($hj) {
+                $hj->nama_barang = null;
+            });
+        }
 
         $totalsQuery = JurnalModel::query();
         if (!empty($this->filterTglDari))
@@ -268,8 +288,23 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function updatedNoAkun($value): void
     {
+        $this->syncBarangPickerForAkun($value);
+    }
+
+    /**
+     * Sinkronkan nama_akun + opsi barang untuk kode akun yang dipilih.
+     * Dipanggil dari hook Livewire (updatedNoAkun) DAN secara eksplisit
+     * lewat $wire.syncBarangPickerForAkun(...) di Alpine — supaya tidak
+     * bergantung sepenuhnya pada timing hook otomatis yang kadang tidak
+     * ter-trigger saat properti diubah langsung dari sisi Alpine.
+     */
+    public function syncBarangPickerForAkun($value): void
+    {
         if (blank($value)) {
-            $this->nama_akun = '';
+            $this->nama_akun        = '';
+            $this->id_barang        = null;
+            $this->barangOptions    = [];
+            $this->showBarangPicker = false;
             return;
         }
 
@@ -279,6 +314,32 @@ class JurnalUmum extends Page implements HasActions, HasForms
         });
 
         $this->nama_akun = $accountsMap[$value] ?? '';
+
+        // ── Cek apakah akun ini dipakai oleh lebih dari 1 barang ──────
+        $barangs = Barang::whereHas(
+            'subAnakAkun',
+            fn($q) => $q->where('kode_sub_anak_akun', $value)
+        )->get(['id', 'nama_barang']);
+
+        if ($barangs->count() === 1) {
+            // Hanya 1 barang yang pakai akun ini → langsung dipilih otomatis
+            $this->id_barang        = $barangs->first()->id;
+            $this->barangOptions    = [];
+            $this->showBarangPicker = false;
+        } elseif ($barangs->count() > 1) {
+            // Lebih dari 1 barang berbagi akun ini → wajib pilih manual
+            $this->id_barang        = null;
+            $this->barangOptions    = $barangs->map(fn($b) => [
+                'id'   => $b->id,
+                'nama' => $b->nama_barang,
+            ])->values()->toArray();
+            $this->showBarangPicker = true;
+        } else {
+            // Akun ini tidak dipakai barang manapun (mis. akun non-persediaan)
+            $this->id_barang        = null;
+            $this->barangOptions    = [];
+            $this->showBarangPicker = false;
+        }
     }
 
     public function updatedHitKbk($value): void
@@ -290,6 +351,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     private array $transientProps = [
         'no_akun',
+        'id_barang',
         'nama_akun',
         'nama',
         'keterangan',
@@ -321,6 +383,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         if (blank($this->no_akun))   $errors[] = 'No. Akun wajib dipilih.';
         if (blank($this->nama_akun)) $errors[] = 'Nama Akun belum terisi.';
+        if ($this->showBarangPicker && !empty($this->barangOptions) && blank($this->id_barang))
+            $errors[] = 'Akun ini dipakai oleh beberapa barang, pilih barangnya terlebih dahulu.';
         if (blank($this->harga) || (float) $this->harga < 0.01)
             $errors[] = 'Harga wajib diisi (minimal Rp 1).';
 
@@ -350,21 +414,29 @@ class JurnalUmum extends Page implements HasActions, HasForms
             return;
         }
 
+        // ── Resolve nama barang (hanya untuk ditampilkan di draft, TIDAK diinsert ke DB) ──
+        $namaBarangTerpilih = null;
+        if (!blank($this->id_barang)) {
+            $namaBarangTerpilih = Barang::find($this->id_barang)?->nama_barang;
+        }
+
         $this->items[] = [
-            'tgl'        => $this->tgl,
-            'jurnal'     => $this->jurnal,
-            'no_dokumen' => $this->no_dokumen,
-            'no_akun'    => $this->no_akun,
-            'nama_akun'  => $this->nama_akun,
-            'nama'       => $this->nama,
-            'mm'         => $this->mm === '' ? null : (int) $this->mm,
-            'keterangan' => $this->keterangan,
-            'hit_kbk'    => $this->hit_kbk,
-            'banyak'     => $banyak,
-            'm3'         => $m3,
-            'harga'      => $harga,
-            'total'      => $total, 
-            'map'        => strtolower($this->map),
+            'tgl'         => $this->tgl,
+            'jurnal'      => $this->jurnal,
+            'no_dokumen'  => $this->no_dokumen,
+            'no_akun'     => $this->no_akun,
+            'id_barang'   => $this->id_barang,
+            'nama_barang' => $namaBarangTerpilih,
+            'nama_akun'   => $this->nama_akun,
+            'nama'        => $this->nama,
+            'mm'          => $this->mm === '' ? null : (int) $this->mm,
+            'keterangan'  => $this->keterangan,
+            'hit_kbk'     => $this->hit_kbk,
+            'banyak'      => $banyak,
+            'm3'          => $m3,
+            'harga'       => $harga,
+            'total'       => $total, 
+            'map'         => strtolower($this->map),
         ];
 
         $this->reset([
@@ -377,7 +449,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'no_dokumen',
             'harga',
             'total',
-            'hit_kbk'
+            'hit_kbk',
+            'id_barang',
+            'barangOptions',
+            'showBarangPicker',
         ]);
         $this->banyak = '';
 
@@ -403,6 +478,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 foreach ($this->items as $item) {
                     $insertData = $item;
                     unset($insertData['total']);
+                    unset($insertData['nama_barang']); // bukan kolom DB, hanya untuk tampilan draft
 
                     if (array_key_exists('no_dokumen', $insertData)) {
                         $insertData['no-dokumen'] = $insertData['no_dokumen'];
@@ -425,7 +501,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $this->items       = [];
         $this->wasBalanced = false;
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'id_barang', 'barangOptions', 'showBarangPicker']);
         $this->harga   = '';
         $this->banyak  = '';
         $this->map     = 'd';
@@ -440,7 +516,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function resetForm(): void
     {
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3']);
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'id_barang', 'barangOptions', 'showBarangPicker']);
         $this->harga   = '';
         $this->map     = 'd';
         $this->hit_kbk = '';

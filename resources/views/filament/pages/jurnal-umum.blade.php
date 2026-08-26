@@ -290,6 +290,9 @@
             no_dokumen: @entangle('no_dokumen'),
             no_akun: @entangle('no_akun'),
             nama_akun: @entangle('nama_akun'),
+            id_barang: @entangle('id_barang'),
+            showBarangPicker: @entangle('showBarangPicker'),
+            barangOptions: @entangle('barangOptions'),
             nama: @entangle('nama'),
             mm: @entangle('mm'),
             keterangan: @entangle('keterangan'),
@@ -318,12 +321,20 @@
                 this.nama_akun = acc.nama;
                 this.searchTerm = acc.no;
                 this.isDropdownOpen = false;
+                $wire.syncBarangPickerForAkun(acc.no);
+            },
+            get showBarangPickerSafe() {
+                return this.showBarangPicker && Array.isArray(this.barangOptions) && this.barangOptions.length > 0;
             },
             clearAccount() {
                 this.no_akun = '';
                 this.nama_akun = '';
                 this.searchTerm = '';
                 this.isDropdownOpen = false;
+                this.id_barang = '';
+                this.showBarangPicker = false;
+                this.barangOptions = [];
+                $wire.syncBarangPickerForAkun('');
             },
             formatRupiah(val) {
                 if (val === null || val === undefined || val === '') return '';
@@ -445,8 +456,6 @@
             };
 
             $watch('no_dokumen', value => { saveLocal('no_dokumen', value); });
-            $watch('no_akun', value => { saveLocal('no_akun', value); });
-            $watch('nama_akun', value => { saveLocal('nama_akun', value); });
             $watch('nama', value => { saveLocal('nama', value); });
             $watch('mm', value => { saveLocal('mm', value); });
             $watch('keterangan', value => { saveLocal('keterangan', value); });
@@ -508,17 +517,9 @@
                     $wire.set('no_dokumen', localNoDokumen);
                 }
 
-                const localNoAkun = localStorage.getItem('jurnal_draft_no_akun');
-                if (localNoAkun !== null) {
-                    no_akun = localNoAkun;
-                    $wire.set('no_akun', localNoAkun);
-                }
-
-                const localNamaAkun = localStorage.getItem('jurnal_draft_nama_akun');
-                if (localNamaAkun !== null) {
-                    nama_akun = localNamaAkun;
-                    $wire.set('nama_akun', localNamaAkun);
-                }
+                // Sengaja TIDAK me-restore no_akun / nama_akun dari localStorage —
+                // akun transaksi harus selalu dipilih ulang secara sadar tiap
+                // membuka halaman, tidak boleh ke-default ke akun terakhir.
 
                 const localNama = localStorage.getItem('jurnal_draft_nama');
                 if (localNama !== null) {
@@ -615,6 +616,22 @@
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama Akun</label>
                         <div class="px-3 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-[4px] text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center" x-text="nama_akun || 'Pilih akun...'"></div>
+
+                        <template x-if="showBarangPickerSafe">
+                            <div class="pt-1">
+                                <div class="flex items-center gap-1 mb-1">
+                                    <span class="text-[10px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wider">Pilih Barang</span>
+                                    <span class="text-rose-500 text-[10px]">*</span>
+                                    <span class="text-[10px] text-gray-400 dark:text-gray-500" title="Akun ini dipakai lebih dari satu barang, pilih barangnya agar stok tercatat benar">(akun dipakai &gt;1 barang)</span>
+                                </div>
+                                <select x-model="id_barang" class="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-900 rounded-[4px] font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-amber-500">
+                                    <option value="">-- pilih --</option>
+                                    <template x-for="opt in barangOptions" :key="opt.id">
+                                        <option :value="opt.id" x-text="opt.nama"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </template>
                     </div>
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama</label>
@@ -982,6 +999,14 @@
                                         <span class="font-bold text-gray-800 dark:text-gray-100 text-sm truncate"
                                             x-text="row.nama_akun"></span>
                                     </div>
+                                    <div x-show="row.nama_barang" class="mt-1">
+    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] bg-blue-50 dark:bg-blue-900/20 text-[10px] font-black text-blue-600 dark:text-blue-400 tracking-wider">
+        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+        <span x-text="row.nama_barang"></span>
+    </span>
+</div>
                                     <div class="mt-1 flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
                                         <span x-show="row.nama" x-text="row.nama" class="font-medium text-gray-500 dark:text-gray-400 shrink-0"></span>
                                         <span x-show="row.nama && row.keterangan" class="text-gray-300 dark:text-gray-600">·</span>
@@ -1304,6 +1329,7 @@
                                     <input type="checkbox" class="row-checkbox" :checked="selectAll" @change="toggleSelectAll()" title="Pilih semua">
                                 </th>
                                 <th class="px-4 py-4">Nama Akun</th>
+                                <th class="px-4 py-4">Barang</th>
                                 <th class="px-4 py-4">Tanggal</th>
                                 <th class="px-4 py-4 text-center">No. Jurnal</th>
                                 <th class="px-4 py-4">No Akun</th>
@@ -1392,6 +1418,15 @@
                                 </td>
 
                                 <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 whitespace-nowrap">{{ $hj->nama_akun }}</td>
+                                <td class="px-4 py-4 whitespace-nowrap">   {{-- ← tambahkan ini --}}
+    @if($hj->nama_barang)
+    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] bg-blue-50 dark:bg-blue-900/20 text-[10px] font-black text-blue-600 dark:text-blue-400 tracking-wider">
+        {{ $hj->nama_barang }}
+    </span>
+    @else
+    <span class="text-gray-300 dark:text-gray-600">-</span>
+    @endif
+</td>
                                 <td class="px-4 py-4 text-gray-500 font-medium whitespace-nowrap">{{ $hj->tgl->format('d-m-Y') }}</td>
                                 <td class="px-4 py-4 text-center text-gray-400 font-medium">{{ $hj->jurnal }}</td>
                                 <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{{ $hj->no_akun }}</td>
