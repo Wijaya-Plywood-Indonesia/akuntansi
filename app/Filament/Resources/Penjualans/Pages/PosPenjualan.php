@@ -4,10 +4,10 @@ namespace App\Filament\Resources\Penjualans\Pages;
 
 use App\Filament\Resources\Penjualans\PenjualanResource;
 use App\Models\Barang;
+use App\Models\DetailPenjualan;
 use App\Models\IdentitasToko;
 use App\Models\Pembeli;
 use App\Models\Penjualan;
-use App\Models\DetailPenjualan;
 use App\Models\RekeningPerusahaan;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
@@ -18,46 +18,72 @@ use Livewire\Attributes\On;
 class PosPenjualan extends Page
 {
     protected static string $resource = PenjualanResource::class;
+
     protected string $view = 'filament.resources.penjualans.pages.pos-penjualan';
 
     /* ================= IDENTITAS TOKO ================= */
     public ?int $toko_id = null;
+
     public ?string $kodeToko = null;
+
     public ?string $namaToko = null;
 
     /* ================= STATE ================= */
     public string $search = '';
+
     public Collection $searchResults;
+
     public array $cart = [];
+
     public int $is_member = 0;
+
     public int $total = 0;
 
     /* ================= CUSTOMER ================= */
     public string $searchCustomer = '';
+
     public $customerResults = [];
+
     public ?int $pembeli_id = null;
+
     public string $nama_customer = '';
+
     public string $alamat = '';
+
     public string $telepon = '';
 
     /* ================= PEMBAYARAN ================= */
     public string $metode_pembayaran = 'TUNAI';
+
     public int $bayar = 0;
+
     public int $bayar_tunai = 0;
+
     public int $bayar_transfer = 0;
+
     public ?int $rekening_perusahaan_id = null;
+
     public $rekeningPerusahaan = [];
+
     public ?RekeningPerusahaan $selectedBank = null;
+
     public string $kode_member = '';
 
     /* ================= PENGIRIMAN ================= */
     public string $metode_pengiriman = 'DIBAWA_SENDIRI';
+
     public ?string $kendaraan = null;
+
     public ?string $plat_kendaraan = null;
+
     public ?string $nama_sopir = null;
+
     public $no_nota;
+
     public ?string $tanggal = null;
+
     public ?string $keterangan_pembayaran = null;
+
     public ?string $keterangan_nota = null;
 
     public function mount(): void
@@ -78,25 +104,25 @@ class PosPenjualan extends Page
 
     public function generateNoNota()
     {
-        if (!$this->toko_id) {
+        if (! $this->toko_id) {
             return 'XXX-000001';
         }
 
         $toko = IdentitasToko::find($this->toko_id);
-        $prefix = ($toko?->kode_toko ?? 'XXX') . '-';
+        $prefix = ($toko?->kode_toko ?? 'XXX').'-';
 
-        $last = Penjualan::where('no_nota', 'LIKE', $prefix . '%')
+        $last = Penjualan::where('no_nota', 'LIKE', $prefix.'%')
             ->orderBy('id', 'DESC')
             ->first();
 
-        if (!$last) {
-            return $prefix . '000001';
+        if (! $last) {
+            return $prefix.'000001';
         }
 
         $lastNumber = (int) str_replace($prefix, '', $last->no_nota);
         $newNumber = $lastNumber + 1;
 
-        return $prefix . str_pad($newNumber, 6, '0', STR_PAD_LEFT);
+        return $prefix.str_pad($newNumber, 6, '0', STR_PAD_LEFT);
     }
 
     public function updatedTokoId()
@@ -108,46 +134,47 @@ class PosPenjualan extends Page
     public bool $showDropdown = false;
 
     public function updatedSearch(): void
-{
-    if (strlen($this->search) < 1) {
-        $this->searchResults = collect();
-        return;
-    }
+    {
+        if (strlen($this->search) < 1) {
+            $this->searchResults = collect();
 
-    // GLOBAL: tidak difilter stok, supaya barang stok 0 tetap muncul untuk crosscheck
-    $this->searchResults = Barang::with('satuan')
-        ->where(function ($query) {
-            $query->where('barangs.nama_barang', 'like', "%{$this->search}%")
-                ->orWhere('barangs.barcode', 'like', "%{$this->search}%");
-        })
-        ->limit(10)
-        ->get();
+            return;
+        }
 
-    foreach ($this->searchResults as $barang) {
-        $barang->stok_aktual = $barang->stok_buku_besar;
-    }
-
-    $this->showDropdown = true;
-}
-
-public function openDropdown(): void
-{
-    $this->showDropdown = true;
-
-    if (strlen(trim($this->search)) < 1) {
-        // DEFAULT LIST: hanya barang yang ada stoknya
+        // GLOBAL: tidak difilter stok, supaya barang stok 0 tetap muncul untuk crosscheck
         $this->searchResults = Barang::with('satuan')
-            ->orderBy('nama_barang', 'asc')
-            ->get()
-            ->filter(fn ($barang) => $barang->stok_buku_besar > 0)
-            ->take(10)
-            ->values();
+            ->where(function ($query) {
+                $query->where('barangs.nama_barang', 'like', "%{$this->search}%")
+                    ->orWhere('barangs.barcode', 'like', "%{$this->search}%");
+            })
+            ->limit(10)
+            ->get();
 
         foreach ($this->searchResults as $barang) {
-            $barang->stok_aktual = $barang->stok_buku_besar;
+            $barang->stok_aktual = $barang->stok_matrix;
+        }
+
+        $this->showDropdown = true;
+    }
+
+    public function openDropdown(): void
+    {
+        $this->showDropdown = true;
+
+        if (strlen(trim($this->search)) < 1) {
+            // DEFAULT LIST: hanya barang yang ada stoknya
+            $this->searchResults = Barang::with('satuan')
+                ->orderBy('nama_barang', 'asc')
+                ->get()
+                ->filter(fn ($barang) => $barang->stok_matrix > 0)
+                ->take(10)
+                ->values();
+
+            foreach ($this->searchResults as $barang) {
+                $barang->stok_aktual = $barang->stok_matrix;
+            }
         }
     }
-}
 
     public function closeDropdown(): void
     {
@@ -157,9 +184,11 @@ public function openDropdown(): void
     public function selectBarang(int $id): void
     {
         $barang = Barang::with('satuan')->find($id);
-        if (!$barang) return;
+        if (! $barang) {
+            return;
+        }
 
-        $stok = $barang->stok_buku_besar;
+        $stok = $barang->stok_matrix;
 
         if ($stok < 0.01) {
             Notification::make()
@@ -167,6 +196,7 @@ public function openDropdown(): void
                 ->body("Barang {$barang->nama_barang} habis.")
                 ->danger()
                 ->send();
+
             return;
         }
 
@@ -176,6 +206,7 @@ public function openDropdown(): void
                     ->title('Stok tidak mencukupi')
                     ->warning()
                     ->send();
+
                 return;
             }
             $this->cart[$id]['qty']++;
@@ -203,16 +234,18 @@ public function openDropdown(): void
 
     protected function calculateTotal(): void
     {
-        $this->total = max(0, collect($this->cart)->sum(fn($i) => $i['subtotal'] ?? 0));
+        $this->total = max(0, collect($this->cart)->sum(fn ($i) => $i['subtotal'] ?? 0));
     }
 
     /* ================= CART ================= */
     public function updateQty(int $id): void
     {
-        if (!isset($this->cart[$id])) return;
+        if (! isset($this->cart[$id])) {
+            return;
+        }
 
         $barang = Barang::find($id);
-        $stock = $barang ? $barang->stok_buku_besar : 0;
+        $stock = $barang ? $barang->stok_matrix : 0;
 
         $qty = max(0.01, (float) $this->cart[$id]['qty']);
 
@@ -241,6 +274,7 @@ public function openDropdown(): void
     {
         if ((float) $this->cart[$id]['qty'] <= 1) {
             $this->removeFromCart($id);
+
             return;
         }
 
@@ -256,7 +290,9 @@ public function openDropdown(): void
 
     public function updatePotongan(int $id): void
     {
-        if (!isset($this->cart[$id])) return;
+        if (! isset($this->cart[$id])) {
+            return;
+        }
 
         $potongan = max(0, (float) $this->cart[$id]['potongan']);
         $qty = max(0.01, (float) $this->cart[$id]['qty']);
@@ -269,7 +305,9 @@ public function openDropdown(): void
 
     public function updateHargaJual(int $id): void
     {
-        if (!isset($this->cart[$id])) return;
+        if (! isset($this->cart[$id])) {
+            return;
+        }
 
         $harga = max(0, (int) ($this->cart[$id]['harga_jual'] ?? 0));
         $this->cart[$id]['harga_jual'] = $harga;
@@ -279,7 +317,9 @@ public function openDropdown(): void
 
     protected function updateSubtotal(int $id): void
     {
-        if (!isset($this->cart[$id])) return;
+        if (! isset($this->cart[$id])) {
+            return;
+        }
 
         $item = $this->cart[$id];
         $this->cart[$id]['subtotal'] = max(0, ($item['harga_jual'] * $item['qty']) - ($item['total_potongan'] ?? 0));
@@ -290,6 +330,7 @@ public function openDropdown(): void
     {
         if (strlen($this->searchCustomer) < 2) {
             $this->customerResults = [];
+
             return;
         }
 
@@ -305,6 +346,7 @@ public function openDropdown(): void
     {
         if (strlen($this->kode_member) < 2) {
             $this->customerResults = [];
+
             return;
         }
 
@@ -314,6 +356,7 @@ public function openDropdown(): void
             $this->selectCustomer($pembeli->id);
             Notification::make()->title('Member Ditemukan')->success()->send();
             $this->customerResults = [];
+
             return;
         }
 
@@ -377,10 +420,10 @@ public function openDropdown(): void
     /* ================= COMPUTED ================= */
     public function getKembalianProperty(): int
     {
-        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER') 
-            ? ($this->bayar_tunai + $this->bayar_transfer) 
+        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+            ? ($this->bayar_tunai + $this->bayar_transfer)
             : ($this->bayar ?? 0);
-            
+
         return max($totalBayar - $this->total, 0);
     }
 
@@ -401,7 +444,7 @@ public function openDropdown(): void
         foreach ($this->cart as $id => $item) {
             if ($this->is_member) {
                 // ONLY add if not already active
-                if (!isset($this->cart[$id]['member_discount_active']) || !$this->cart[$id]['member_discount_active']) {
+                if (! isset($this->cart[$id]['member_discount_active']) || ! $this->cart[$id]['member_discount_active']) {
                     $this->cart[$id]['potongan'] += 0; // diskon member + 0 (sebelumnya + 5000)
                     $this->cart[$id]['member_discount_active'] = true;
                 }
@@ -412,7 +455,7 @@ public function openDropdown(): void
                     $this->cart[$id]['member_discount_active'] = false;
                 }
             }
-            
+
             // Sync total_potongan and subtotal
             $this->cart[$id]['total_potongan'] = $this->cart[$id]['potongan'] * $this->cart[$id]['qty'];
             $this->updateSubtotal($id);
@@ -432,39 +475,43 @@ public function openDropdown(): void
     public function simpanPenjualan(): void
     {
 
-    if (empty($this->no_nota)) {
-        Notification::make()
-            ->title('No Nota Kosong')
-            ->body('No nota tidak boleh kosong')
-            ->danger()
-            ->send();
-        return;
-    }
+        if (empty($this->no_nota)) {
+            Notification::make()
+                ->title('No Nota Kosong')
+                ->body('No nota tidak boleh kosong')
+                ->danger()
+                ->send();
 
-    if (Penjualan::where('no_nota', $this->no_nota)->exists()) {
-        Notification::make()
-            ->title('No Nota Sudah Digunakan')
-            ->body("Nomor nota '{$this->no_nota}' sudah terdaftar di sistem. Silakan gunakan nomor nota yang lain.")
-            ->danger()
-            ->send();
-        return;
-    }
-
-        if (empty($this->cart)) {
-            Notification::make()->title('Keranjang Kosong')->danger()->send();
             return;
         }
 
-        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER') 
-            ? ($this->bayar_tunai + $this->bayar_transfer) 
+        if (Penjualan::where('no_nota', $this->no_nota)->exists()) {
+            Notification::make()
+                ->title('No Nota Sudah Digunakan')
+                ->body("Nomor nota '{$this->no_nota}' sudah terdaftar di sistem. Silakan gunakan nomor nota yang lain.")
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        if (empty($this->cart)) {
+            Notification::make()->title('Keranjang Kosong')->danger()->send();
+
+            return;
+        }
+
+        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+            ? ($this->bayar_tunai + $this->bayar_transfer)
             : ($this->bayar ?? 0);
 
-        if (!$this->is_member && $totalBayar < $this->total) {
+        if (! $this->is_member && $totalBayar < $this->total) {
             Notification::make()
                 ->title('Pembayaran Kurang')
                 ->body('Nominal pembayaran kurang.')
                 ->danger()
                 ->send();
+
             return;
         }
 
@@ -474,15 +521,17 @@ public function openDropdown(): void
                 ->body('Total transaksi harus lebih dari 0.')
                 ->danger()
                 ->send();
+
             return;
         }
 
-        if (($this->metode_pembayaran === 'TRANSFER' || ($this->metode_pembayaran === 'TUNAI & TRANSFER' && $this->bayar_transfer > 0)) && !$this->rekening_perusahaan_id) {
+        if (($this->metode_pembayaran === 'TRANSFER' || ($this->metode_pembayaran === 'TUNAI & TRANSFER' && $this->bayar_transfer > 0)) && ! $this->rekening_perusahaan_id) {
             Notification::make()
                 ->title('Rekening Belum Dipilih')
                 ->body('Silahkan pilih rekening perusahaan untuk pembayaran transfer.')
                 ->danger()
                 ->send();
+
             return;
         }
 
@@ -499,8 +548,8 @@ public function openDropdown(): void
                     ? RekeningPerusahaan::find($this->rekening_perusahaan_id)
                     : null;
 
-                $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER') 
-                    ? ($this->bayar_tunai + $this->bayar_transfer) 
+                $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+                    ? ($this->bayar_tunai + $this->bayar_transfer)
                     : ($this->bayar ?? 0);
 
                 $penjualan = Penjualan::create([
@@ -530,7 +579,7 @@ public function openDropdown(): void
 
                 foreach ($this->cart as $item) {
                     $barang = Barang::find($item['barang_id']);
-                    $stokBukuBesar = $barang ? $barang->stok_buku_besar : 0;
+                    $stokBukuBesar = $barang ? $barang->stok_matrix : 0;
 
                     if ($stokBukuBesar < $item['qty']) {
                         throw new \Exception("Stok {$item['nama_barang']} tidak mencukupi.");
@@ -555,7 +604,7 @@ public function openDropdown(): void
 
             Notification::make()
                 ->title('Transaksi Berhasil')
-                ->body("Kembalian: Rp " . number_format($kembalian))
+                ->body('Kembalian: Rp '.number_format($kembalian))
                 ->success()
                 ->send();
 

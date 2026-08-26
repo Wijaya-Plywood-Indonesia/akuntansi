@@ -46,10 +46,12 @@ class Barang extends Model
     {
         return $this->belongsTo(Satuan::class, 'id_satuan');
     }
+
     public function stok_toko()
     {
         return $this->hasOne(StokBarangToko::class, 'barang_id');
     }
+
     public function penjualanDetails()
     {
         return $this->hasMany(DetailPenjualan::class, 'barang_id');
@@ -106,7 +108,7 @@ class Barang extends Model
         $subAkun = $this->subAnakAkun;
         $kodeAkun = $subAkun?->kode_sub_anak_akun;
 
-        if (!$kodeAkun) {
+        if (! $kodeAkun) {
             return 0.0;
         }
 
@@ -137,5 +139,71 @@ class Barang extends Model
         }
 
         return $totalQty;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stok versi Matrix (murni id_barang, tanpa fallback legacy no_akun)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Accessor: $barang->stok_matrix
+     * Total qty stok barang ini, logic-nya sama persis dengan StokMatrix::mount()
+     * — murni matching via id_barang, TIDAK ada fallback ke no_akun.
+     */
+    public function getStokMatrixAttribute(): float
+    {
+        return $this->hitungStokMatrixQty();
+    }
+
+    /**
+     * Accessor: $barang->stok_matrix_m3
+     * Total m3 stok barang ini, logic-nya sama persis dengan StokMatrix::mount().
+     */
+    public function getStokMatrixM3Attribute(): float
+    {
+        return $this->hitungStokMatrixM3();
+    }
+
+    /**
+     * Hitung qty stok murni dari Jurnal Umum berdasarkan id_barang.
+     * Sama seperti StokMatrix: debit menambah, kredit mengurangi.
+     */
+    protected function hitungStokMatrixQty(): float
+    {
+        $transaksiPerMap = JurnalUmum::where('id_barang', $this->id)
+            ->select('map', DB::raw('SUM(COALESCE(banyak, 0)) as total_qty'))
+            ->groupBy('map')
+            ->get();
+
+        $totalQty = 0.0;
+        foreach ($transaksiPerMap as $trx) {
+            $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
+            $qty = (float) $trx->total_qty;
+            $totalQty += $isDebit ? $qty : -$qty;
+        }
+
+        return $totalQty;
+    }
+
+    /**
+     * Hitung m3 stok murni dari Jurnal Umum berdasarkan id_barang.
+     */
+    protected function hitungStokMatrixM3(): float
+    {
+        $transaksiPerMap = JurnalUmum::where('id_barang', $this->id)
+            ->select('map', DB::raw('SUM(COALESCE(m3, 0)) as total_m3'))
+            ->groupBy('map')
+            ->get();
+
+        $totalM3 = 0.0;
+        foreach ($transaksiPerMap as $trx) {
+            $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
+            $m3 = (float) $trx->total_m3;
+            $totalM3 += $isDebit ? $m3 : -$m3;
+        }
+
+        return $totalM3;
     }
 }
