@@ -29,8 +29,10 @@ class AkunGroupsTable
                 TextColumn::make('order')
                     ->label('Urutan')
                     ->sortable(),
+
                 TextColumn::make('total_anak_akuns')
                     ->label('Total Akun')
+                    ->getStateUsing(fn($record) => $record->total_anak_akuns)
                     ->badge()
                     ->color(fn($state) => $state > 0 ? 'warning' : 'gray'),
 

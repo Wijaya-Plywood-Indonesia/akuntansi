@@ -16,6 +16,7 @@ class JurnalPembantuItem extends Model
         'pihak_id',
         'nama_pihak',
         'nama_barang',
+        'id_barang',
         'no_dokumen',
         'no_referensi',
         'keterangan',
@@ -56,6 +57,11 @@ class JurnalPembantuItem extends Model
     ];
 
     // ── Relasi ────────────────────────────────────────────────────────
+
+    public function barang(): BelongsTo
+    {
+        return $this->belongsTo(Barang::class);
+    }
 
     public function header(): BelongsTo
     {
