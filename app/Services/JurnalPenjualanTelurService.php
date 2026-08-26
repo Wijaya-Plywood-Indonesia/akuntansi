@@ -67,7 +67,7 @@ class JurnalPenjualanTelurService
                 $totalHpp    = $itemTelur->sum(
                     fn($d) => (float) $d->qty * (float) ($d->barang->harga_beli ?? 0)
                 );
-                
+
                 // 1. Hitung peti dari telur kiloan
                 $totalKiloan = $itemTelur
                     ->filter(fn($d) => $this->isKiloan(strtolower($d->nama_barang ?? '')))
@@ -124,11 +124,12 @@ class JurnalPenjualanTelurService
                             'jenis_pihak'  => 'pelanggan',
                             'nama_pihak'   => $customer,
                             'nama_barang'  => $d->nama_barang,
+                            'id_barang'    => $d->barang_id,
                             'no_dokumen'   => $nota,
                             'no_referensi' => (string) $d->id,
                             'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                             'banyak'       => $d->qty,
-                            'harga'        => $harga, 
+                            'harga'        => $harga,
                             'created_by'   => $userId,
                             'updated_by'   => $userId,
                         ]);
@@ -165,6 +166,7 @@ class JurnalPenjualanTelurService
                             'jenis_pihak'  => 'pelanggan',
                             'nama_pihak'   => $customer,
                             'nama_barang'  => $d->nama_barang,
+                            'id_barang'    => $d->barang_id,
                             'no_dokumen'   => $nota,
                             'no_referensi' => (string) $d->id,
                             'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
@@ -208,6 +210,7 @@ class JurnalPenjualanTelurService
                             $this->buatItem($hHpp->id, [
                                 'urut'         => $urut++,
                                 'nama_barang'  => $d->nama_barang,
+                                'id_barang'    => $d->barang_id,
                                 'no_dokumen'   => $nota,
                                 'no_referensi' => (string) $d->id,
                                 'keterangan'   => 'HPP ' . $d->nama_barang,
@@ -242,6 +245,7 @@ class JurnalPenjualanTelurService
                                 $this->buatItem($hPers->id, [
                                     'urut'         => $urut++,
                                     'nama_barang'  => $d->nama_barang,
+                                    'id_barang'    => $d->barang_id,
                                     'no_dokumen'   => $nota,
                                     'no_referensi' => (string) $d->id,
                                     'keterangan'   => 'Keluar stok ' . $d->nama_barang,
@@ -286,6 +290,7 @@ class JurnalPenjualanTelurService
                     $this->buatItem($hPetiKosong->id, [
                         'urut'        => 1,
                         'nama_barang' => $brgPetiKosong?->nama_barang ?? 'Peti Kosong',
+                        'id_barang'   => $brgPetiKosong?->id,
                         'no_dokumen'  => $nota,
                         'keterangan'  => 'Masuk stok peti kosong ' . $jumlahPeti . ' pcs',
                         'banyak'      => $jumlahPeti,
@@ -312,6 +317,7 @@ class JurnalPenjualanTelurService
                     $this->buatItem($hPetiIsi->id, [
                         'urut'        => 1,
                         'nama_barang' => $brgPetiIsi?->nama_barang ?? 'Peti Isi Telur',
+                        'id_barang'   => $brgPetiIsi?->id,
                         'no_dokumen'  => $nota,
                         'keterangan'  => 'Keluar stok peti isi telur ' . $jumlahPeti . ' pcs',
                         'banyak'      => $jumlahPeti,
@@ -375,6 +381,7 @@ class JurnalPenjualanTelurService
                                 'jenis_pihak'  => 'pelanggan',
                                 'nama_pihak'   => $customer,
                                 'nama_barang'  => $d->nama_barang,
+                                'id_barang'    => $d->barang_id,
                                 'no_dokumen'   => $nota,
                                 'no_referensi' => (string) $d->id,
                                 'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
@@ -410,11 +417,12 @@ class JurnalPenjualanTelurService
                             'jenis_pihak'  => 'pelanggan',
                             'nama_pihak'   => $customer,
                             'nama_barang'  => $d->nama_barang,
+                            'id_barang'    => $d->barang_id,
                             'no_dokumen'   => $nota,
                             'no_referensi' => (string) $d->id,
                             'keterangan'   => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                             'banyak'       => $d->qty,
-                            'harga'        => $hargaBersih, 
+                            'harga'        => $hargaBersih,
                             'created_by'   => $userId,
                             'updated_by'   => $userId,
                         ]);
@@ -452,6 +460,7 @@ class JurnalPenjualanTelurService
                                 $this->buatItem($hHpp->id, [
                                     'urut'         => $urut++,
                                     'nama_barang'  => $d->nama_barang,
+                                    'id_barang'    => $d->barang_id,
                                     'no_dokumen'   => $nota,
                                     'no_referensi' => (string) $d->id,
                                     'keterangan'   => 'HPP ' . $d->nama_barang,
@@ -486,6 +495,7 @@ class JurnalPenjualanTelurService
                                     $this->buatItem($hPers->id, [
                                         'urut'         => $urut++,
                                         'nama_barang'  => $d->nama_barang,
+                                        'id_barang'    => $d->barang_id,
                                         'no_dokumen'   => $nota,
                                         'no_referensi' => (string) $d->id,
                                         'keterangan'   => 'Keluar stok ' . $d->nama_barang,
@@ -531,7 +541,7 @@ class JurnalPenjualanTelurService
                 'proporsi' => $proporsi,
                 // FIX: Gunakan proporsi dikali Grand Total Net, 
                 // mencegah nominal kas bengkak ketika uang fisik melebihi tagihan (ada kembalian)
-                'nominal'  => $proporsi * $totalNilai, 
+                'nominal'  => $proporsi * $totalNilai,
             ];
         }
 

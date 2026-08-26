@@ -99,46 +99,50 @@ class ViewPembelians extends ViewRecord
 
                             foreach ($headersAsli as $header) {
                                 $itemsAktif = $header->items()->where('status', true)->get();
-                                
-                                $totalBanyak = (float) $itemsAktif->sum('banyak');
-                                $totalM3 = (float) $itemsAktif->sum('m3');
-                                $totalNilaiHeader = (float) $header->total_nilai;
+                                $itemsPerBarang = $itemsAktif->groupBy('id_barang'); // ✅ FIX: pisah per barang, bukan digabung
 
-                                $firstItem = $itemsAktif->first();
-                                $itemHitKbk = $firstItem?->hit_kbk ?? 'b';
-                                $hitKbk = $itemHitKbk;
+                                foreach ($itemsPerBarang as $idBarang => $items) {
+                                    $idBarangFinal = $idBarang !== '' ? $idBarang : null; // ✅ FIX: normalisasi seperti sebelumnya
 
-                                $prefix = substr($header->no_akun, 0, 3);
-                                $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
-                                if ($isCashOrPayment) {
-                                    $hitKbk = 'b';
+                                    $totalBanyak = (float) $items->sum('banyak');
+                                    $totalM3 = (float) $items->sum('m3');
+                                    $totalNilaiGrup = (float) $items->sum('jumlah'); // ✅ FIX: per grup, bukan $header->total_nilai
+
+                                    $firstItem = $items->first();
+                                    $itemHitKbk = $firstItem?->hit_kbk ?? 'b';
+                                    $hitKbk = $itemHitKbk;
+
+                                    $prefix = substr($header->no_akun, 0, 3);
+                                    $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
+                                    if ($isCashOrPayment) {
+                                        $hitKbk = 'b';
+                                    }
+
+                                    $m3 = $totalM3 > 0 ? $totalM3 : null;
+                                    $banyak = $totalBanyak > 0 ? $totalBanyak : null;
+
+                                    if ($hitKbk === 'm') {
+                                        $hargaRata = $totalM3 > 0 ? ($totalNilaiGrup / $totalM3) : $totalNilaiGrup;
+                                    } else {
+                                        if (!$banyak && !$isCashOrPayment) $banyak = 1;
+                                        $hargaRata = $totalBanyak > 0 ? ($totalNilaiGrup / $totalBanyak) : $totalNilaiGrup;
+                                    }
+
+                                    \App\Models\JurnalUmum::create([
+                                        'tgl'        => now()->format('Y-m-d'),
+                                        'jurnal'     => $nomorFinal,
+                                        'no_akun'    => $header->no_akun,
+                                        'nama_akun'  => $header->nama_akun,
+                                        'nama'       => $record->supplier_name ?? $header->no_dokumen,
+                                        'keterangan' => $header->keterangan . ' (Otomatis Terposting karena Pembatalan)',
+                                        'id_barang'  => $idBarangFinal, // ✅ FIX: ditambahkan
+                                        'banyak'     => $banyak !== null ? round($banyak, 4) : null,
+                                        'm3'         => $m3 !== null ? round($m3, 4) : null,
+                                        'harga'      => round($hargaRata, 2),
+                                        'hit_kbk'    => $hitKbk,
+                                        'map'        => strtolower($header->map),
+                                    ]);
                                 }
-
-                                // ✅ FIX: Pastikan M3 dan Banyak SELALU dibawa ke Jurnal Umum, jangan di-null-kan
-                                $m3 = $totalM3 > 0 ? $totalM3 : null;
-                                $banyak = $totalBanyak > 0 ? $totalBanyak : null;
-
-                                // Penentuan pembagian harga saja yang bergantung pada hitKbk
-                                if ($hitKbk === 'm') {
-                                    $hargaRata = $totalM3 > 0 ? ($totalNilaiHeader / $totalM3) : $totalNilaiHeader;
-                                } else {
-                                    if (!$banyak && !$isCashOrPayment) $banyak = 1;
-                                    $hargaRata = $totalBanyak > 0 ? ($totalNilaiHeader / $totalBanyak) : $totalNilaiHeader;
-                                }
-
-                                \App\Models\JurnalUmum::create([
-                                    'tgl'        => now()->format('Y-m-d'),
-                                    'jurnal'     => $nomorFinal,
-                                    'no_akun'    => $header->no_akun,
-                                    'nama_akun'  => $header->nama_akun,
-                                    'nama'       => $record->supplier_name ?? $header->no_dokumen,
-                                    'keterangan' => $header->keterangan . ' (Otomatis Terposting karena Pembatalan)',
-                                    'banyak'     => $banyak !== null ? round($banyak, 4) : null,
-                                    'm3'         => $m3 !== null ? round($m3, 4) : null,
-                                    'harga'      => round($hargaRata, 2),
-                                    'hit_kbk'    => $hitKbk,
-                                    'map'        => strtolower($header->map),
-                                ]);
                             }
 
                             $infoNomor  = $nomorFinal !== $nomorAsli ? " (Nomor Jurnal disesuaikan menjadi No. {$nomorFinal} karena No. {$nomorAsli} sudah terpakai)" : "";

@@ -12,12 +12,12 @@ use Illuminate\Support\Facades\Log;
 
 class JurnalPembelianService
 {
-    const KODE_KAS_TUNAI        = '1101.1'; 
-    const KODE_BANK_TRANSFER    = '1101.7'; 
-    const KODE_PPN_MASUKAN      = '1423.0'; 
-    const KODE_HUTANG_DAGANG    = '2102-0'; 
-    const KODE_BEBAN_ONGKIR     = '5313-0'; 
-    const KODE_BEBAN_LAIN_LAIN  = '5499.0'; 
+    const KODE_KAS_TUNAI        = '1101.1';
+    const KODE_BANK_TRANSFER    = '1101.7';
+    const KODE_PPN_MASUKAN      = '1423.0';
+    const KODE_HUTANG_DAGANG    = '2102-0';
+    const KODE_BEBAN_ONGKIR     = '5313-0';
+    const KODE_BEBAN_LAIN_LAIN  = '5499.0';
 
     public function buatJurnalDariPembelian(Pembelian $pembelian, int $userId): void
     {
@@ -76,7 +76,7 @@ class JurnalPembelianService
                 $m3Detail = (float) ($detail->kubikasi ?? 0);
                 $hargaDetail = (float) $detail->harga_beli;
                 $subtotalDetail = (float) $detail->subtotal;
-                
+
                 $hitKbk = $detail->hit_kbk ?? null;
                 if (empty($hitKbk)) {
                     if ($m3Detail > 0 && abs($subtotalDetail - ($m3Detail * $hargaDetail)) < 0.01) {
@@ -92,6 +92,7 @@ class JurnalPembelianService
                     'jenis_pihak'  => 'supplier',
                     'nama_pihak'   => $supplier,
                     'nama_barang'  => $detail->nama_barang,
+                    'id_barang'    => $barang?->id,
                     'no_dokumen'   => $nota,
                     'keterangan'   => "Masuk Gudang " . (float)$detail->qty . " {$detail->satuan}",
                     'banyak'       => $detail->qty,
@@ -259,7 +260,7 @@ class JurnalPembelianService
                     'shadow_harga' => $totalUangMuka,
                     'shadow_jumlah' => $totalUangMuka,
                     'jumlah'       => $totalUangMuka,
-                    'hit_kbk'      => 'b', 
+                    'hit_kbk'      => 'b',
                     'status'       => true,
                     'created_by'   => $userId,
                 ]);
@@ -320,7 +321,7 @@ class JurnalPembelianService
             'shadow_harga' => $nominal,
             'shadow_jumlah' => $nominal,
             'jumlah'       => $nominal,
-            'hit_kbk'      => 'b', 
+            'hit_kbk'      => 'b',
             'status'       => true,
             'created_by'   => $userId,
         ]);
