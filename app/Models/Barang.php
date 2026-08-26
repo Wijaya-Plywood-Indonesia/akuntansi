@@ -110,13 +110,23 @@ class Barang extends Model
             return 0.0;
         }
 
-        $transaksis = JurnalUmum::where('no_akun', $kodeAkun)
+        // Baris jurnal yang sudah dikaitkan langsung ke barang ini (id_barang terisi)
+        $transaksisById = JurnalUmum::where('id_barang', $this->id)
+            ->select('map', DB::raw('SUM(COALESCE(banyak, 0)) as total_banyak'))
+            ->groupBy('map')
+            ->get();
+
+        // Data lama (sebelum kolom id_barang ada) yang hanya bisa dikenali dari kode akun.
+        // Sengaja dibiarkan sebagai fallback agar histori lama tidak hilang dari perhitungan,
+        // meski untuk akun yang dipakai banyak barang, bagian ini masih tergabung (belum per-barang).
+        $transaksisLegacy = JurnalUmum::where('no_akun', $kodeAkun)
+            ->whereNull('id_barang')
             ->select('map', DB::raw('SUM(COALESCE(banyak, 0)) as total_banyak'))
             ->groupBy('map')
             ->get();
 
         $totalQty = 0.0;
-        foreach ($transaksis as $trx) {
+        foreach ($transaksisById->concat($transaksisLegacy) as $trx) {
             $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
             $qty = (float) $trx->total_banyak;
             if ($isDebit) {
