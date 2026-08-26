@@ -4,8 +4,8 @@ namespace App\Filament\Pages;
 
 use App\Exports\JurnalUmumExport;
 use App\Models\Barang;
-use App\Models\SubAnakAkun;
 use App\Models\JurnalUmum as JurnalModel;
+use App\Models\SubAnakAkun;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
@@ -19,8 +19,9 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
@@ -31,77 +32,110 @@ class JurnalUmum extends Page implements HasActions, HasForms
     use InteractsWithForms;
 
     protected string $view = 'filament.pages.jurnal-umum';
+
     protected static UnitEnum|string|null $navigationGroup = 'Jurnal & Akuntansi';
+
     protected static ?string $title = 'Jurnal Umum';
 
-    public $tgl, $jurnal, $no_dokumen, $no_akun, $nama_akun, $nama, $keterangan;
+    public $tgl;
+
+    public $jurnal;
+
+    public $no_dokumen;
+
+    public $no_akun;
+
+    public $nama_akun;
+
+    public $nama;
+
+    public $keterangan;
+
     public $harga = '';
+
     public $total = '';
+
     public $banyak = '';
+
     public $mm = '';
+
     public $m3 = '';
+
     public $hit_kbk = '';
+
     public $map = 'd';
+
     public $items = [];
 
     // ── Pemilihan barang saat 1 akun dipakai oleh >1 barang ──────────
     public $id_barang = null;
+
     public array $barangOptions = [];
+
     public bool $showBarangPicker = false;
 
     public bool $wasBalanced = false;
+
     public $filterTglDariInput = '';
+
     public $filterTglSampaiInput = '';
+
     public $filterTglDari = '';
+
     public $filterTglSampai = '';
+
     public int $perPage = 50;
+
     public bool $hasMorePages = true;
+
     public bool $isLoadingMore = false;
 
     public array $selectedIds = [];
+
     public bool $selectAll = false;
 
     public function mount(): void
     {
         $draft = session()->get('jurnal_draft', []);
 
-        $this->tgl        = $draft['tgl']    ?? now()->format('Y-m-d');
-        $this->items      = $draft['items']  ?? [];
-        $this->harga      = $draft['harga']  ?? '';
-        $this->no_dokumen = $draft['nodok']  ?? '';
-        $this->nama       = $draft['nama']   ?? '';
-        $this->mm         = $draft['mm']     ?? '';
-        $this->m3         = $draft['m3']     ?? '';
-        $this->hit_kbk    = $draft['hitkbk'] ?? '';
-        $this->jurnal     = $draft['kode']   ?? $this->getNextJurnalNumber();
-        $this->total      = $draft['total']  ?? '';
-        $this->banyak     = $draft['banyak'] ?? (strtolower($this->hit_kbk) === 'b' ? 1 : '');
+        $this->tgl = $draft['tgl'] ?? now()->format('Y-m-d');
+        $this->items = $draft['items'] ?? [];
+        $this->harga = $draft['harga'] ?? '';
+        $this->no_dokumen = $draft['nodok'] ?? '';
+        $this->nama = $draft['nama'] ?? '';
+        $this->mm = $draft['mm'] ?? '';
+        $this->m3 = $draft['m3'] ?? '';
+        $this->hit_kbk = $draft['hitkbk'] ?? '';
+        $this->jurnal = $draft['kode'] ?? $this->getNextJurnalNumber();
+        $this->total = $draft['total'] ?? '';
+        $this->banyak = $draft['banyak'] ?? (strtolower($this->hit_kbk) === 'b' ? 1 : '');
 
-        $savedMap  = $draft['map'] ?? 'd';
+        $savedMap = $draft['map'] ?? 'd';
         $this->map = in_array(strtolower($savedMap), ['d', 'k']) ? strtolower($savedMap) : 'd';
     }
 
     protected function getNextJurnalNumber(): int
     {
         $last = JurnalModel::max('jurnal');
+
         return $last ? (int) $last + 1 : 1;
     }
 
     private function persistDraftState(): void
     {
         session()->put('jurnal_draft', [
-            'items'   => $this->items,
-            'kode'    => $this->jurnal,
-            'tgl'     => $this->tgl,
-            'map'     => $this->map,
-            'harga'   => $this->harga,
-            'banyak'  => $this->banyak,
-            'nodok'   => $this->no_dokumen,
-            'nama'    => $this->nama,
-            'mm'      => $this->mm,
-            'm3'      => $this->m3,
-            'hitkbk'  => $this->hit_kbk,
-            'total'   => $this->total,
+            'items' => $this->items,
+            'kode' => $this->jurnal,
+            'tgl' => $this->tgl,
+            'map' => $this->map,
+            'harga' => $this->harga,
+            'banyak' => $this->banyak,
+            'nodok' => $this->no_dokumen,
+            'nama' => $this->nama,
+            'mm' => $this->mm,
+            'm3' => $this->m3,
+            'hitkbk' => $this->hit_kbk,
+            'total' => $this->total,
         ]);
     }
 
@@ -134,12 +168,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ]),
                 ])
                 ->action(function (array $data) {
-                    $tglDari   = $data['tgl_dari']   ?? null;
+                    $tglDari = $data['tgl_dari'] ?? null;
                     $tglSampai = $data['tgl_sampai'] ?? null;
 
                     $fileName = 'jurnal-umum';
                     if ($tglDari || $tglSampai) {
-                        $fileName .= '_' . ($tglDari ?: 'awal') . '_sd_' . ($tglSampai ?: 'akhir');
+                        $fileName .= '_'.($tglDari ?: 'awal').'_sd_'.($tglSampai ?: 'akhir');
                     }
                     $fileName .= '.xlsx';
 
@@ -154,10 +188,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
     protected function getViewData(): array
     {
         $query = JurnalModel::latest('id');
-        if (!empty($this->filterTglDari))
+        if (! empty($this->filterTglDari)) {
             $query->whereDate('tgl', '>=', $this->filterTglDari);
-        if (!empty($this->filterTglSampai))
+        }
+        if (! empty($this->filterTglSampai)) {
             $query->whereDate('tgl', '<=', $this->filterTglSampai);
+        }
 
         // ── FIX: tambahkan selectRaw "total" agar kolom Debit/Kredit
         //         per baris di tabel history tidak menampilkan 0.
@@ -190,7 +226,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ->get();
 
         $this->hasMorePages = $data->count() > $this->perPage;
-        $historyJurnals     = $data->take($this->perPage);
+        $historyJurnals = $data->take($this->perPage);
 
         // ── Ambil nama barang untuk baris yang punya id_barang ──────
         $barangIds = $historyJurnals->pluck('id_barang')->filter()->unique()->values();
@@ -206,10 +242,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
         }
 
         $totalsQuery = JurnalModel::query();
-        if (!empty($this->filterTglDari))
+        if (! empty($this->filterTglDari)) {
             $totalsQuery->whereDate('tgl', '>=', $this->filterTglDari);
-        if (!empty($this->filterTglSampai))
+        }
+        if (! empty($this->filterTglSampai)) {
             $totalsQuery->whereDate('tgl', '<=', $this->filterTglSampai);
+        }
 
         $totals = $totalsQuery->selectRaw("
                 map,
@@ -224,64 +262,68 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ->groupBy('map')
             ->pluck('total', 'map');
 
-        $totalDebitDB      = (float) ($totals[strtolower('d')] ?? 0);
-        $totalKreditDB     = (float) ($totals[strtolower('k')] ?? 0);
+        $totalDebitDB = (float) ($totals[strtolower('d')] ?? 0);
+        $totalKreditDB = (float) ($totals[strtolower('k')] ?? 0);
         $isHistoryBalanced = abs($totalDebitDB - $totalKreditDB) < 0.01;
-        $selisihDB         = abs($totalDebitDB - $totalKreditDB);
+        $selisihDB = abs($totalDebitDB - $totalKreditDB);
 
         // OPTIMASI CACHE: Simpan dalam bentuk array agar tidak menyentuh limit 1MB DB Cache
         $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
         });
-        
-        $accounts = collect($accountsMap)->map(fn($nama, $no) => (object) ['no' => $no, 'nama' => $nama])->values();
+
+        $accounts = collect($accountsMap)->map(fn ($nama, $no) => (object) ['no' => $no, 'nama' => $nama])->values();
 
         return [
-            'accounts'          => $accounts,
-            'historyJurnals'    => $historyJurnals,
-            'totalDebitDB'      => $totalDebitDB,
-            'totalKreditDB'     => $totalKreditDB,
+            'accounts' => $accounts,
+            'historyJurnals' => $historyJurnals,
+            'totalDebitDB' => $totalDebitDB,
+            'totalKreditDB' => $totalKreditDB,
             'isHistoryBalanced' => $isHistoryBalanced,
-            'selisihDB'         => $selisihDB,
+            'selisihDB' => $selisihDB,
         ];
     }
 
     public function applyFilter(): void
     {
-        $this->filterTglDari   = $this->filterTglDariInput;
+        $this->filterTglDari = $this->filterTglDariInput;
         $this->filterTglSampai = $this->filterTglSampaiInput;
-        $this->perPage         = 50;
-        $this->hasMorePages    = true;
-        $this->selectedIds     = [];
-        $this->selectAll       = false;
+        $this->perPage = 50;
+        $this->hasMorePages = true;
+        $this->selectedIds = [];
+        $this->selectAll = false;
     }
 
     public function resetFilter(): void
     {
-        $this->filterTglDariInput   = '';
+        $this->filterTglDariInput = '';
         $this->filterTglSampaiInput = '';
-        $this->filterTglDari       = '';
-        $this->filterTglSampai     = '';
-        $this->perPage             = 50;
-        $this->hasMorePages        = true;
-        $this->selectedIds         = [];
-        $this->selectAll           = false;
+        $this->filterTglDari = '';
+        $this->filterTglSampai = '';
+        $this->perPage = 50;
+        $this->hasMorePages = true;
+        $this->selectedIds = [];
+        $this->selectAll = false;
     }
 
     public function loadMore(): void
     {
-        if (!$this->hasMorePages) return;
-        $this->perPage  += 50;
+        if (! $this->hasMorePages) {
+            return;
+        }
+        $this->perPage += 50;
         $this->selectAll = false;
     }
 
     protected function isDraftBalanced(): bool
     {
-        if (empty($this->items)) return false;
+        if (empty($this->items)) {
+            return false;
+        }
 
-        $data   = collect($this->items);
-        $debit  = (float) $data->filter(fn($i) => strtolower($i['map']) === 'd')->sum('total');
-        $kredit = (float) $data->filter(fn($i) => strtolower($i['map']) === 'k')->sum('total');
+        $data = collect($this->items);
+        $debit = (float) $data->filter(fn ($i) => strtolower($i['map']) === 'd')->sum('total');
+        $kredit = (float) $data->filter(fn ($i) => strtolower($i['map']) === 'k')->sum('total');
 
         return abs($debit - $kredit) < 0.01;
     }
@@ -301,10 +343,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public function syncBarangPickerForAkun($value): void
     {
         if (blank($value)) {
-            $this->nama_akun        = '';
-            $this->id_barang        = null;
-            $this->barangOptions    = [];
+            $this->nama_akun = '';
+            $this->id_barang = null;
+            $this->barangOptions = [];
             $this->showBarangPicker = false;
+
             return;
         }
 
@@ -318,26 +361,26 @@ class JurnalUmum extends Page implements HasActions, HasForms
         // ── Cek apakah akun ini dipakai oleh lebih dari 1 barang ──────
         $barangs = Barang::whereHas(
             'subAnakAkun',
-            fn($q) => $q->where('kode_sub_anak_akun', $value)
+            fn ($q) => $q->where('kode_sub_anak_akun', $value)
         )->get(['id', 'nama_barang']);
 
         if ($barangs->count() === 1) {
             // Hanya 1 barang yang pakai akun ini → langsung dipilih otomatis
-            $this->id_barang        = $barangs->first()->id;
-            $this->barangOptions    = [];
+            $this->id_barang = $barangs->first()->id;
+            $this->barangOptions = [];
             $this->showBarangPicker = false;
         } elseif ($barangs->count() > 1) {
             // Lebih dari 1 barang berbagi akun ini → wajib pilih manual
-            $this->id_barang        = null;
-            $this->barangOptions    = $barangs->map(fn($b) => [
-                'id'   => $b->id,
+            $this->id_barang = null;
+            $this->barangOptions = $barangs->map(fn ($b) => [
+                'id' => $b->id,
                 'nama' => $b->nama_barang,
             ])->values()->toArray();
             $this->showBarangPicker = true;
         } else {
             // Akun ini tidak dipakai barang manapun (mis. akun non-persediaan)
-            $this->id_barang        = null;
-            $this->barangOptions    = [];
+            $this->id_barang = null;
+            $this->barangOptions = [];
             $this->showBarangPicker = false;
         }
     }
@@ -367,76 +410,92 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function updated($propertyName): void
     {
-        if (!in_array($propertyName, $this->transientProps)) {
+        if (! in_array($propertyName, $this->transientProps)) {
             $this->persistDraftState();
         }
     }
 
     public function addItem($rawHarga = null, $rawBanyak = null, $rawM3 = null, $rawTotal = null): void
     {
-        if ($rawHarga !== null)  $this->harga = $rawHarga;
-        if ($rawBanyak !== null) $this->banyak = $rawBanyak;
-        if ($rawM3 !== null)     $this->m3 = $rawM3;
-        if ($rawTotal !== null)  $this->total = $rawTotal;
+        if ($rawHarga !== null) {
+            $this->harga = $rawHarga;
+        }
+        if ($rawBanyak !== null) {
+            $this->banyak = $rawBanyak;
+        }
+        if ($rawM3 !== null) {
+            $this->m3 = $rawM3;
+        }
+        if ($rawTotal !== null) {
+            $this->total = $rawTotal;
+        }
 
         $errors = [];
 
-        if (blank($this->no_akun))   $errors[] = 'No. Akun wajib dipilih.';
-        if (blank($this->nama_akun)) $errors[] = 'Nama Akun belum terisi.';
-        if ($this->showBarangPicker && !empty($this->barangOptions) && blank($this->id_barang))
+        if (blank($this->no_akun)) {
+            $errors[] = 'No. Akun wajib dipilih.';
+        }
+        if (blank($this->nama_akun)) {
+            $errors[] = 'Nama Akun belum terisi.';
+        }
+        if ($this->showBarangPicker && ! empty($this->barangOptions) && blank($this->id_barang)) {
             $errors[] = 'Akun ini dipakai oleh beberapa barang, pilih barangnya terlebih dahulu.';
-        if (blank($this->harga) || (float) $this->harga < 0.01)
+        }
+        if (blank($this->harga) || (float) $this->harga < 0.01) {
             $errors[] = 'Harga wajib diisi (minimal Rp 1).';
+        }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             foreach ($errors as $err) {
                 $this->dispatch('toast', type: 'error', title: 'Validasi Gagal', msg: $err);
             }
+
             return;
         }
 
-        $harga  = (float) $this->harga;
+        $harga = (float) $this->harga;
         $banyak = blank($this->banyak) ? null : (float) $this->banyak;
-        $m3     = blank($this->m3) ? null : (float) str_replace(',', '.', $this->m3);
+        $m3 = blank($this->m3) ? null : (float) str_replace(',', '.', $this->m3);
 
         $total = match ($this->hit_kbk) {
-            'b'     => ($banyak ?? 0.0) * $harga,
-            'm'     => ($m3     ?? 0.0) * $harga,
+            'b' => ($banyak ?? 0.0) * $harga,
+            'm' => ($m3 ?? 0.0) * $harga,
             default => $harga,
         };
 
         if ($total < 0.01) {
             $this->dispatch('toast', type: 'error', title: 'Validasi Gagal', msg: match ($this->hit_kbk) {
-                'b'     => 'Kuantitas harus lebih dari 0.',
-                'm'     => 'Kubikasi (M3) harus lebih dari 0.',
+                'b' => 'Kuantitas harus lebih dari 0.',
+                'm' => 'Kubikasi (M3) harus lebih dari 0.',
                 default => 'Harga harus lebih dari 0.',
             });
+
             return;
         }
 
         // ── Resolve nama barang (hanya untuk ditampilkan di draft, TIDAK diinsert ke DB) ──
         $namaBarangTerpilih = null;
-        if (!blank($this->id_barang)) {
+        if (! blank($this->id_barang)) {
             $namaBarangTerpilih = Barang::find($this->id_barang)?->nama_barang;
         }
 
         $this->items[] = [
-            'tgl'         => $this->tgl,
-            'jurnal'      => $this->jurnal,
-            'no_dokumen'  => $this->no_dokumen,
-            'no_akun'     => $this->no_akun,
-            'id_barang'   => $this->id_barang,
+            'tgl' => $this->tgl,
+            'jurnal' => $this->jurnal,
+            'no_dokumen' => $this->no_dokumen,
+            'no_akun' => $this->no_akun,
+            'id_barang' => $this->id_barang,
             'nama_barang' => $namaBarangTerpilih,
-            'nama_akun'   => $this->nama_akun,
-            'nama'        => $this->nama,
-            'mm'          => $this->mm === '' ? null : (int) $this->mm,
-            'keterangan'  => $this->keterangan,
-            'hit_kbk'     => $this->hit_kbk,
-            'banyak'      => $banyak,
-            'm3'          => $m3,
-            'harga'       => $harga,
-            'total'       => $total, 
-            'map'         => strtolower($this->map),
+            'nama_akun' => $this->nama_akun,
+            'nama' => $this->nama,
+            'mm' => $this->mm === '' ? null : (int) $this->mm,
+            'keterangan' => $this->keterangan,
+            'hit_kbk' => $this->hit_kbk,
+            'banyak' => $banyak,
+            'm3' => $m3,
+            'harga' => $harga,
+            'total' => $total,
+            'map' => strtolower($this->map),
         ];
 
         $this->reset([
@@ -462,7 +521,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function removeItem(int $index): void
     {
-        if (!isset($this->items[$index])) return;
+        if (! isset($this->items[$index])) {
+            return;
+        }
 
         array_splice($this->items, $index, 1);
         $this->dispatch('toast', type: 'error', title: 'Item Dihapus', msg: 'Item berhasil dihapus dari draft.');
@@ -471,14 +532,35 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function saveJurnal(): void
     {
-        if (empty($this->items) || !$this->isDraftBalanced()) return;
+        if (empty($this->items) || ! $this->isDraftBalanced()) {
+            return;
+        }
+
+        // ── Auto-resolve jika No. Jurnal ternyata sudah dipakai transaksi lain ──
+        if (JurnalModel::where('jurnal', $this->jurnal)->exists()) {
+            $this->jurnal = $this->getNextJurnalNumber();
+
+            foreach ($this->items as &$item) {
+                $item['jurnal'] = $this->jurnal;
+            }
+            unset($item);
+
+            $this->persistDraftState();
+
+            $this->dispatch(
+                'toast',
+                type: 'info',
+                title: 'No. Jurnal Diperbarui',
+                msg: "No. Jurnal sebelumnya sudah terpakai, otomatis diganti menjadi {$this->jurnal}."
+            );
+        }
 
         try {
             DB::transaction(function () {
                 foreach ($this->items as $item) {
                     $insertData = $item;
                     unset($insertData['total']);
-                    unset($insertData['nama_barang']); // bukan kolom DB, hanya untuk tampilan draft
+                    unset($insertData['nama_barang']);
 
                     if (array_key_exists('no_dokumen', $insertData)) {
                         $insertData['no-dokumen'] = $insertData['no_dokumen'];
@@ -487,26 +569,45 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
                     JurnalModel::create([
                         ...$insertData,
-                        'status'     => 'belum sinkron',
+                        'status' => 'belum sinkron',
                         'created_by' => Auth::user()->name,
                     ]);
                 }
             });
+        } catch (QueryException $e) {
+            // Fallback kalau ternyata masih bentrok di level DB (unique constraint / race condition)
+            if ((int) $e->getCode() === 23000) {
+                $this->jurnal = $this->getNextJurnalNumber();
+                foreach ($this->items as &$item) {
+                    $item['jurnal'] = $this->jurnal;
+                }
+                unset($item);
+                $this->persistDraftState();
+
+                $this->dispatch('toast', type: 'error', title: 'Bentrok Nomor Jurnal', msg: "No. Jurnal bentrok saat disimpan, sudah diganti ke {$this->jurnal}. Silakan klik Posting Jurnal sekali lagi.");
+
+                return;
+            }
+
+            $this->dispatch('toast', type: 'error', title: 'Error Sistem', msg: 'Gagal menyimpan jurnal: '.$e->getMessage());
+
+            return;
         } catch (\Throwable $e) {
-            $this->dispatch('toast', type: 'error', title: 'Error Sistem', msg: 'Gagal menyimpan jurnal: ' . $e->getMessage());
+            $this->dispatch('toast', type: 'error', title: 'Error Sistem', msg: 'Gagal menyimpan jurnal: '.$e->getMessage());
+
             return;
         }
 
         session()->forget('jurnal_draft');
 
-        $this->items       = [];
+        $this->items = [];
         $this->wasBalanced = false;
         $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'id_barang', 'barangOptions', 'showBarangPicker']);
-        $this->harga   = '';
-        $this->banyak  = '';
-        $this->map     = 'd';
+        $this->harga = '';
+        $this->banyak = '';
+        $this->map = 'd';
         $this->hit_kbk = '';
-        $this->total   = '';
+        $this->total = '';
         $this->perPage = 50;
         $this->hasMorePages = true;
         $this->jurnal = $this->getNextJurnalNumber();
@@ -517,21 +618,21 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public function resetForm(): void
     {
         $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'id_barang', 'barangOptions', 'showBarangPicker']);
-        $this->harga   = '';
-        $this->map     = 'd';
+        $this->harga = '';
+        $this->map = 'd';
         $this->hit_kbk = '';
-        $this->m3      = '';
-        $this->total   = '';
+        $this->m3 = '';
+        $this->total = '';
     }
 
     public function toggleSelectAll(array $ids): void
     {
         if ($this->selectAll) {
             $this->selectedIds = [];
-            $this->selectAll   = false;
+            $this->selectAll = false;
         } else {
             $this->selectedIds = $ids;
-            $this->selectAll   = true;
+            $this->selectAll = true;
         }
     }
 
@@ -540,7 +641,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         if (in_array($id, $this->selectedIds)) {
             $this->selectedIds = array_values(array_filter(
                 $this->selectedIds,
-                fn($i) => $i !== $id
+                fn ($i) => $i !== $id
             ));
         } else {
             $this->selectedIds[] = $id;
@@ -552,6 +653,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         if (empty($this->selectedIds)) {
             $this->dispatch('toast', type: 'error', title: 'Tidak ada yang dipilih', msg: 'Centang minimal 1 baris terlebih dahulu.');
+
             return;
         }
 
@@ -561,11 +663,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
             JurnalModel::whereIn('id', $this->selectedIds)->delete();
         } catch (\Throwable $e) {
             $this->dispatch('toast', type: 'error', title: 'Gagal Hapus', msg: $e->getMessage());
+
             return;
         }
 
         $this->selectedIds = [];
-        $this->selectAll   = false;
+        $this->selectAll = false;
 
         $this->dispatch('toast', type: 'success', title: 'Berhasil Dihapus', msg: "{$count} transaksi berhasil dihapus.");
         $this->dispatch('bulk-delete-done');
@@ -589,8 +692,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
                         $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
                             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
                         });
-                        return collect($accountsMap)->mapWithKeys(fn($nama, $no) => [
-                            $no => "{$no} - {$nama}"
+
+                        return collect($accountsMap)->mapWithKeys(fn ($nama, $no) => [
+                            $no => "{$no} - {$nama}",
                         ]);
                     })
                     ->live()
@@ -626,7 +730,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->prefix('Rp')
                     ->required()
                     ->columnSpanFull(),
-            ])
+            ]),
         ];
     }
 
@@ -642,14 +746,14 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ->action(function (array $data, array $arguments, Action $action): void {
                 $index = $arguments['index'];
 
-                $data['hit_kbk']    = $data['hit_kbk'] ?? '';
+                $data['hit_kbk'] = $data['hit_kbk'] ?? '';
                 $data['keterangan'] = $data['keterangan'] ?? '';
                 $data['no_dokumen'] = $data['no_dokumen'] ?? '';
-                $data['nama']       = $data['nama'] ?? '';
+                $data['nama'] = $data['nama'] ?? '';
 
-                $harga  = blank($data['harga'] ?? null) ? 0.0 : (float) $data['harga'];
+                $harga = blank($data['harga'] ?? null) ? 0.0 : (float) $data['harga'];
                 $banyak = blank($data['banyak'] ?? null) ? null : (float) $data['banyak'];
-                $m3     = blank($data['m3'] ?? null) ? null : (float) str_replace(',', '.', $data['m3']);
+                $m3 = blank($data['m3'] ?? null) ? null : (float) str_replace(',', '.', $data['m3']);
                 $hit_kbk = $data['hit_kbk'];
 
                 $total = match ($hit_kbk) {
@@ -660,16 +764,17 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
                 $errors = $this->validateJurnalData($hit_kbk, $harga, $total, $banyak, $m3);
 
-                if (!empty($errors)) {
+                if (! empty($errors)) {
                     Notification::make()->title('Validasi Gagal')->body($errors[0])->danger()->send();
                     $action->halt();
+
                     return;
                 }
 
                 $data['banyak'] = $banyak;
-                $data['m3']     = $m3;
-                $data['harga']  = $harga;
-                $data['total']  = $total;
+                $data['m3'] = $m3;
+                $data['harga'] = $harga;
+                $data['total'] = $total;
 
                 $this->items[$index] = array_merge($this->items[$index], $data);
                 $this->persistDraftState();
@@ -680,33 +785,37 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public function editHistoryAction(): Action
     {
         return Action::make('editHistory')
-            ->visible(fn() => auth()->user()?->hasRole('super_admin'))
+            ->visible(fn () => auth()->user()?->hasRole('super_admin'))
             ->modalHeading('Edit Transaksi Riwayat')
             ->modalSubmitActionLabel('Simpan Perubahan')
             ->form($this->getJurnalFormSchema())
             ->fillForm(function (array $arguments) {
                 $record = JurnalModel::find($arguments['id']);
-                if (!$record) return [];
+                if (! $record) {
+                    return [];
+                }
 
                 $data = $record->toArray();
                 $data['no_dokumen'] = $record->{'no-dokumen'} ?? $record->no_dokumen;
+
                 return $data;
             })
             ->action(function (array $data, array $arguments, Action $action): void {
                 $record = JurnalModel::find($arguments['id']);
-                if (!$record) {
+                if (! $record) {
                     Notification::make()->title('Error')->body('Data tidak ditemukan.')->danger()->send();
+
                     return;
                 }
 
-                $data['hit_kbk']    = $data['hit_kbk'] ?? '';
+                $data['hit_kbk'] = $data['hit_kbk'] ?? '';
                 $data['keterangan'] = $data['keterangan'] ?? '';
                 $data['no_dokumen'] = $data['no_dokumen'] ?? '';
-                $data['nama']       = $data['nama'] ?? '';
+                $data['nama'] = $data['nama'] ?? '';
 
-                $harga  = blank($data['harga'] ?? null) ? 0.0 : (float) $data['harga'];
+                $harga = blank($data['harga'] ?? null) ? 0.0 : (float) $data['harga'];
                 $banyak = blank($data['banyak'] ?? null) ? null : (float) $data['banyak'];
-                $m3     = blank($data['m3'] ?? null) ? null : (float) str_replace(',', '.', $data['m3']);
+                $m3 = blank($data['m3'] ?? null) ? null : (float) str_replace(',', '.', $data['m3']);
                 $hit_kbk = $data['hit_kbk'];
 
                 $total = match ($hit_kbk) {
@@ -717,15 +826,16 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
                 $errors = $this->validateJurnalData($hit_kbk, $harga, $total, $banyak, $m3);
 
-                if (!empty($errors)) {
+                if (! empty($errors)) {
                     Notification::make()->title('Validasi Gagal')->body($errors[0])->danger()->send();
                     $action->halt();
+
                     return;
                 }
 
                 $data['banyak'] = $banyak;
-                $data['m3']     = $m3;
-                $data['harga']  = $harga;
+                $data['m3'] = $m3;
+                $data['harga'] = $harga;
 
                 $updateData = $data;
                 unset($updateData['total']);
@@ -743,7 +853,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public function deleteHistoryAction(): Action
     {
         return Action::make('deleteHistory')
-            ->visible(fn() => auth()->user()?->hasRole('super_admin'))
+            ->visible(fn () => auth()->user()?->hasRole('super_admin'))
             ->requiresConfirmation()
             ->modalHeading('Hapus Transaksi')
             ->modalDescription('Yakin ingin menghapus data ini secara permanen?')
@@ -777,7 +887,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 $errors[] = 'Harga atau Total wajib diisi (minimal Rp 1).';
             }
             if (abs($total - $harga) >= 0.01) {
-                $errors[] = 'Data tidak sesuai: Karena Hit KBK kosong, Total harus sama dengan Harga (Rp ' . number_format($harga, 0, ',', '.') . '), sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                $errors[] = 'Data tidak sesuai: Karena Hit KBK kosong, Total harus sama dengan Harga (Rp '.number_format($harga, 0, ',', '.').'), sedangkan Total diisi Rp '.number_format($total, 0, ',', '.').'.';
             }
         } else {
             if ($harga < 0.01) {
@@ -790,7 +900,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 } else {
                     $expected = $banyak * $harga;
                     if (abs($total - $expected) >= 0.01) {
-                        $errors[] = 'Data tidak sesuai: Kuantitas (' . $banyak . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 0, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                        $errors[] = 'Data tidak sesuai: Kuantitas ('.$banyak.') x Harga (Rp '.number_format($harga, 0, ',', '.').') = Rp '.number_format($expected, 0, ',', '.').', sedangkan Total diisi Rp '.number_format($total, 0, ',', '.').'.';
                     }
                 }
             } elseif ($hit_kbk === 'm') {
@@ -799,7 +909,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 } else {
                     $expected = $m3 * $harga;
                     if (abs($total - $expected) >= 0.01) {
-                        $errors[] = 'Data tidak sesuai: Kubikasi (' . $m3 . ') x Harga (Rp ' . number_format($harga, 0, ',', '.') . ') = Rp ' . number_format($expected, 2, ',', '.') . ', sedangkan Total diisi Rp ' . number_format($total, 0, ',', '.') . '.';
+                        $errors[] = 'Data tidak sesuai: Kubikasi ('.$m3.') x Harga (Rp '.number_format($harga, 0, ',', '.').') = Rp '.number_format($expected, 2, ',', '.').', sedangkan Total diisi Rp '.number_format($total, 0, ',', '.').'.';
                     }
                 }
             }

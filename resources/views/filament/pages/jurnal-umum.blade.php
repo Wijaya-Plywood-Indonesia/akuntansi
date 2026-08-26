@@ -46,10 +46,14 @@
         }
 
         @keyframes blink {
-            0%, 80%, 100% {
+
+            0%,
+            80%,
+            100% {
                 opacity: 0.15;
                 transform: scale(0.8);
             }
+
             40% {
                 opacity: 1;
                 transform: scale(1.2);
@@ -81,6 +85,7 @@
             0% {
                 background-position: -600px 0;
             }
+
             100% {
                 background-position: 600px 0;
             }
@@ -104,6 +109,7 @@
                 opacity: 0;
                 transform: translateY(6px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -235,6 +241,7 @@
                 opacity: 0;
                 transform: translateX(24px) scale(0.95);
             }
+
             to {
                 opacity: 1;
                 transform: translateX(0) scale(1);
@@ -246,6 +253,7 @@
                 opacity: 1;
                 transform: translateX(0) scale(1);
             }
+
             to {
                 opacity: 0;
                 transform: translateX(24px) scale(0.95);
@@ -274,288 +282,285 @@
     </style>
 
     {{-- Form Input Utama --}}
-    <div class="w-full mx-auto no-transition"
-        x-cloak
-        x-data="{
-            tgl: @entangle('tgl'),
-            jurnal: @entangle('jurnal'),
-            no_dokumen: @entangle('no_dokumen'),
-            no_akun: @entangle('no_akun'),
-            nama_akun: @entangle('nama_akun'),
-            id_barang: @entangle('id_barang'),
-            showBarangPicker: @entangle('showBarangPicker'),
-            barangOptions: @entangle('barangOptions'),
-            nama: @entangle('nama'),
-            mm: @entangle('mm'),
-            keterangan: @entangle('keterangan'),
-            hit_kbk: @entangle('hit_kbk'),
-            banyak: @entangle('banyak'),
-            m3: @entangle('m3'),
-            harga_display: '',
-            banyak_display: '',
-            map: @entangle('map'),
-            searchTerm: '',
-            isDropdownOpen: false,
-            accounts: @js($accounts ?? []),
-            items: @entangle('items'),
-            total: @entangle('total'),
-            total_display: '',
-
-            get filteredAccounts() {
-                if (this.searchTerm === '') return this.accounts;
-                return this.accounts.filter(acc =>
-                    acc.no.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-                    acc.nama.toLowerCase().includes(this.searchTerm.toLowerCase())
-                );
-            },
-            selectAccount(acc) {
-                this.no_akun = acc.no;
-                this.nama_akun = acc.nama;
-                this.searchTerm = acc.no;
-                this.isDropdownOpen = false;
-                $wire.syncBarangPickerForAkun(acc.no);
-            },
-            get showBarangPickerSafe() {
-                return this.showBarangPicker && Array.isArray(this.barangOptions) && this.barangOptions.length > 0;
-            },
-            clearAccount() {
-                this.no_akun = '';
-                this.nama_akun = '';
-                this.searchTerm = '';
-                this.isDropdownOpen = false;
-                this.id_barang = '';
-                this.showBarangPicker = false;
-                this.barangOptions = [];
-                $wire.syncBarangPickerForAkun('');
-            },
-            formatRupiah(val) {
-                if (val === null || val === undefined || val === '') return '';
-                let str = val.toString();
-                let parts = str.split('.');
-                let intPart = parts[0].replace(/[^0-9]/g, '');
-                let decPart = parts.length > 1 ? parts[1] : '';
-                let formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                if (decPart !== '') {
-                    formatted = formatted + ',' + decPart;
-                }
-                return formatted;
-            },
-            formatTotal(val) {
-                if (val === null || val === undefined || val === '') return '0';
-                let num = parseFloat(val.toString());
-                if (isNaN(num)) return '0';
-
-                let parts = num.toFixed(2).split('.');
-                let intPart = parts[0];
-                let decPart = parts[1];
-
-                let formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-
-                if (decPart && decPart !== '00') {
-                    formatted = formatted + ',' + decPart;
-                }
-
-                return formatted;
-            },
-            formatHargaInput(inputVal) {
-                let str = inputVal.toString();
-                let hasKoma = str.includes(',');
-                let parts = str.split(',');
-
-                let intPart = parts[0].replace(/[^0-9]/g, '');
-                let intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-
-                if (hasKoma) {
-                    let decPart = (parts[1] || '').replace(/[^0-9]/g, '').substring(0, 2);
-                    return intFormatted + ',' + decPart;
-                }
-
-                return intFormatted;
-            },
-            formatBanyakInput(inputVal) {
-                let str = inputVal.toString();
-                let komaIndex = str.lastIndexOf(',');
-                let hasKoma = komaIndex !== -1;
-
-                if (hasKoma) {
-                    let intPart = str.substring(0, komaIndex).replace(/[^0-9]/g, '');
-                    let decPart = str.substring(komaIndex + 1).replace(/[^0-9]/g, '').substring(0, 4);
-                    return intPart + ',' + decPart;
-                }
-
-                return str.replace(/[^0-9]/g, '');
-            },
-            parseInputID(val) {
-                if (val === null || val === undefined || val === '') return '';
-                let str = val.toString().trim();
-                str = str.replace(/\./g, '').replace(',', '.');
-                if (isNaN(parseFloat(str))) return '';
-                return str;
-            },
-            initFlatpickr() {
-                flatpickr(this.$refs.dateInput, {
-                    dateFormat: 'Y-m-d',
-                    defaultDate: this.tgl,
-                    onChange: (selectedDates, dateStr) => { this.tgl = dateStr; }
-                });
-            },
-            get totalDebit() {
-                return this.items.reduce((acc, curr) =>
-                    curr.map.toLowerCase() === 'd' ? acc + parseFloat(curr.total) : acc, 0);
-            },
-            get totalKredit() {
-                return this.items.reduce((acc, curr) =>
-                    curr.map.toLowerCase() === 'k' ? acc + parseFloat(curr.total) : acc, 0);
-            },
-            get isBalanced() {
-                return Math.abs(this.totalDebit - this.totalKredit) < 0.01 && this.items.length > 0;
+    <div class="w-full mx-auto no-transition" x-cloak x-data="{
+        tgl: @entangle('tgl'),
+        jurnal: @entangle('jurnal'),
+        no_dokumen: @entangle('no_dokumen'),
+        no_akun: @entangle('no_akun'),
+        nama_akun: @entangle('nama_akun'),
+        id_barang: @entangle('id_barang'),
+        showBarangPicker: @entangle('showBarangPicker'),
+        barangOptions: @entangle('barangOptions'),
+        nama: @entangle('nama'),
+        mm: @entangle('mm'),
+        keterangan: @entangle('keterangan'),
+        hit_kbk: @entangle('hit_kbk'),
+        banyak: @entangle('banyak'),
+        m3: @entangle('m3'),
+        harga_display: '',
+        banyak_display: '',
+        map: @entangle('map'),
+        searchTerm: '',
+        isDropdownOpen: false,
+        accounts: @js($accounts ?? []),
+        items: @entangle('items'),
+        total: @entangle('total'),
+        total_display: '',
+    
+        get filteredAccounts() {
+            if (this.searchTerm === '') return this.accounts;
+            return this.accounts.filter(acc =>
+                acc.no.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+                acc.nama.toLowerCase().includes(this.searchTerm.toLowerCase())
+            );
+        },
+        selectAccount(acc) {
+            this.no_akun = acc.no;
+            this.nama_akun = acc.nama;
+            this.searchTerm = acc.no;
+            this.isDropdownOpen = false;
+            $wire.syncBarangPickerForAkun(acc.no);
+        },
+        get showBarangPickerSafe() {
+            return this.showBarangPicker && Array.isArray(this.barangOptions) && this.barangOptions.length > 0;
+        },
+        clearAccount() {
+            this.no_akun = '';
+            this.nama_akun = '';
+            this.searchTerm = '';
+            this.isDropdownOpen = false;
+            this.id_barang = '';
+            this.showBarangPicker = false;
+            this.barangOptions = [];
+            $wire.syncBarangPickerForAkun('');
+        },
+        formatRupiah(val) {
+            if (val === null || val === undefined || val === '') return '';
+            let str = val.toString();
+            let parts = str.split('.');
+            let intPart = parts[0].replace(/[^0-9]/g, '');
+            let decPart = parts.length > 1 ? parts[1] : '';
+            let formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            if (decPart !== '') {
+                formatted = formatted + ',' + decPart;
             }
-        }"
-        x-init="
-            initFlatpickr();
-
-            $watch('$wire.harga', value => {
-                if (document.activeElement === $refs.hargaInput) return;
-                harga_display = formatRupiah(value);
+            return formatted;
+        },
+        formatTotal(val) {
+            if (val === null || val === undefined || val === '') return '0';
+            let num = parseFloat(val.toString());
+            if (isNaN(num)) return '0';
+    
+            let parts = num.toFixed(2).split('.');
+            let intPart = parts[0];
+            let decPart = parts[1];
+    
+            let formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    
+            if (decPart && decPart !== '00') {
+                formatted = formatted + ',' + decPart;
+            }
+    
+            return formatted;
+        },
+        formatHargaInput(inputVal) {
+            let str = inputVal.toString();
+            let hasKoma = str.includes(',');
+            let parts = str.split(',');
+    
+            let intPart = parts[0].replace(/[^0-9]/g, '');
+            let intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    
+            if (hasKoma) {
+                let decPart = (parts[1] || '').replace(/[^0-9]/g, '').substring(0, 2);
+                return intFormatted + ',' + decPart;
+            }
+    
+            return intFormatted;
+        },
+        formatBanyakInput(inputVal) {
+            let str = inputVal.toString();
+            let komaIndex = str.lastIndexOf(',');
+            let hasKoma = komaIndex !== -1;
+    
+            if (hasKoma) {
+                let intPart = str.substring(0, komaIndex).replace(/[^0-9]/g, '');
+                let decPart = str.substring(komaIndex + 1).replace(/[^0-9]/g, '').substring(0, 4);
+                return intPart + ',' + decPart;
+            }
+    
+            return str.replace(/[^0-9]/g, '');
+        },
+        parseInputID(val) {
+            if (val === null || val === undefined || val === '') return '';
+            let str = val.toString().trim();
+            str = str.replace(/\./g, '').replace(',', '.');
+            if (isNaN(parseFloat(str))) return '';
+            return str;
+        },
+        initFlatpickr() {
+            flatpickr(this.$refs.dateInput, {
+                dateFormat: 'Y-m-d',
+                defaultDate: this.tgl,
+                onChange: (selectedDates, dateStr) => { this.tgl = dateStr; }
             });
-            $watch('$wire.banyak', value => {
-                if (document.activeElement === $refs.banyakInput) return;
-                if (value === '' || value === null || value === undefined) {
-                    banyak_display = '';
-                    return;
-                }
-                let str = value.toString();
-                banyak_display = str.includes('.') 
-                    ? str.replace('.', ',') 
-                    : str;
-            });
-            $watch('no_akun', value => {
-                if (!value) { searchTerm = ''; }
-                else if (searchTerm !== value) { searchTerm = value; }
-            });
-            $watch('$wire.total', value => {
-                if (document.activeElement === $refs.totalInput) return;
-                total_display = formatRupiah(value);
-            });
-
-            const saveLocal = (key, val) => {
-                localStorage.setItem('jurnal_draft_' + key, val ?? '');
-            };
-
-            const clearLocal = () => {
-                const keys = ['no_dokumen', 'no_akun', 'nama_akun', 'nama', 'mm', 'keterangan', 'hit_kbk', 'm3', 'map', 'harga_display', 'banyak_display', 'total_display'];
-                keys.forEach(key => localStorage.removeItem('jurnal_draft_' + key));
-            };
-
-            $watch('no_dokumen', value => { saveLocal('no_dokumen', value); });
-            $watch('nama', value => { saveLocal('nama', value); });
-            $watch('mm', value => { saveLocal('mm', value); });
-            $watch('keterangan', value => { saveLocal('keterangan', value); });
-            $watch('hit_kbk', value => { saveLocal('hit_kbk', value); });
-            $watch('m3', value => { saveLocal('m3', value); });
-            $watch('map', value => { saveLocal('map', value); });
-            $watch('harga_display', value => { saveLocal('harga_display', value); });
-            $watch('banyak_display', value => { saveLocal('banyak_display', value); });
-            $watch('total_display', value => { saveLocal('total_display', value); });
-
-            $nextTick(() => {
-                const localHarga = localStorage.getItem('jurnal_draft_harga_display');
-                if (localHarga !== null) {
-                    harga_display = localHarga;
-                    $wire.set('harga', parseInputID(localHarga));
-                } else {
-                    harga_display = formatRupiah($wire.harga ?? '');
-                }
-
-                const localBanyak = localStorage.getItem('jurnal_draft_banyak_display');
-                if (localBanyak !== null) {
-                    banyak_display = localBanyak;
-                    $wire.set('banyak', parseInputID(localBanyak));
-                } else {
-                    banyak_display = $wire.banyak !== '' && $wire.banyak !== null
-                        ? $wire.banyak.toString().replace('.', ',')
-                        : '';
-                }
-
-                const localTotal = localStorage.getItem('jurnal_draft_total_display');
-                if (localTotal !== null) {
-                    total_display = localTotal;
-                    $wire.set('total', parseInputID(localTotal));
-                } else {
-                    total_display = formatRupiah($wire.total ?? '');
-                }
-
-                const localHitKbk = localStorage.getItem('jurnal_draft_hit_kbk');
-                if (localHitKbk !== null) {
-                    hit_kbk = localHitKbk;
-                    $wire.set('hit_kbk', localHitKbk);
-                }
-
-                const localM3 = localStorage.getItem('jurnal_draft_m3');
-                if (localM3 !== null) {
-                    m3 = localM3;
-                    $wire.set('m3', localM3);
-                }
-
-                const localMap = localStorage.getItem('jurnal_draft_map');
-                if (localMap !== null) {
-                    map = localMap;
-                    $wire.set('map', localMap);
-                }
-
-                const localNoDokumen = localStorage.getItem('jurnal_draft_no_dokumen');
-                if (localNoDokumen !== null) {
-                    no_dokumen = localNoDokumen;
-                    $wire.set('no_dokumen', localNoDokumen);
-                }
-
-                const localNama = localStorage.getItem('jurnal_draft_nama');
-                if (localNama !== null) {
-                    nama = localNama;
-                    $wire.set('nama', localNama);
-                }
-
-                const localMm = localStorage.getItem('jurnal_draft_mm');
-                if (localMm !== null) {
-                    mm = localMm;
-                    $wire.set('mm', localMm);
-                }
-
-                const localKeterangan = localStorage.getItem('jurnal_draft_keterangan');
-                if (localKeterangan !== null) {
-                    keterangan = localKeterangan;
-                    $wire.set('keterangan', localKeterangan);
-                }
-            });
-
-            $wire.on('toast', ({ type, title, msg }) => {
-                window.showToast(type, title, msg ?? '');
-            });
-
-            $wire.on('form-reset', () => {
-                if (document.activeElement) {
-                    document.activeElement.blur();
-                }
-                clearLocal();
-                setTimeout(() => {
-                    harga_display = formatRupiah($wire.harga ?? '');
-                    banyak_display = $wire.banyak !== '' && $wire.banyak !== null
-                        ? $wire.banyak.toString().replace('.', ',')
-                        : '';
-                    total_display = formatRupiah($wire.total ?? '');
-                    hit_kbk = $wire.hit_kbk ?? '';
-                    m3 = $wire.m3 ?? '';
-                    map = $wire.map ?? 'd';
-                }, 50);
-            });
-        ">
+        },
+        get totalDebit() {
+            return this.items.reduce((acc, curr) =>
+                curr.map.toLowerCase() === 'd' ? acc + parseFloat(curr.total) : acc, 0);
+        },
+        get totalKredit() {
+            return this.items.reduce((acc, curr) =>
+                curr.map.toLowerCase() === 'k' ? acc + parseFloat(curr.total) : acc, 0);
+        },
+        get isBalanced() {
+            return Math.abs(this.totalDebit - this.totalKredit) < 0.01 && this.items.length > 0;
+        }
+    }" x-init="initFlatpickr();
+    
+    $watch('$wire.harga', value => {
+        if (document.activeElement === $refs.hargaInput) return;
+        harga_display = formatRupiah(value);
+    });
+    $watch('$wire.banyak', value => {
+        if (document.activeElement === $refs.banyakInput) return;
+        if (value === '' || value === null || value === undefined) {
+            banyak_display = '';
+            return;
+        }
+        let str = value.toString();
+        banyak_display = str.includes('.') ?
+            str.replace('.', ',') :
+            str;
+    });
+    $watch('no_akun', value => {
+        if (!value) { searchTerm = ''; } else if (searchTerm !== value) { searchTerm = value; }
+    });
+    $watch('$wire.total', value => {
+        if (document.activeElement === $refs.totalInput) return;
+        total_display = formatRupiah(value);
+    });
+    
+    const saveLocal = (key, val) => {
+        localStorage.setItem('jurnal_draft_' + key, val ?? '');
+    };
+    
+    const clearLocal = () => {
+        const keys = ['no_dokumen', 'no_akun', 'nama_akun', 'nama', 'mm', 'keterangan', 'hit_kbk', 'm3', 'map', 'harga_display', 'banyak_display', 'total_display'];
+        keys.forEach(key => localStorage.removeItem('jurnal_draft_' + key));
+    };
+    
+    $watch('no_dokumen', value => { saveLocal('no_dokumen', value); });
+    $watch('nama', value => { saveLocal('nama', value); });
+    $watch('mm', value => { saveLocal('mm', value); });
+    $watch('keterangan', value => { saveLocal('keterangan', value); });
+    $watch('hit_kbk', value => { saveLocal('hit_kbk', value); });
+    $watch('m3', value => { saveLocal('m3', value); });
+    $watch('map', value => { saveLocal('map', value); });
+    $watch('harga_display', value => { saveLocal('harga_display', value); });
+    $watch('banyak_display', value => { saveLocal('banyak_display', value); });
+    $watch('total_display', value => { saveLocal('total_display', value); });
+    
+    $nextTick(() => {
+        const localHarga = localStorage.getItem('jurnal_draft_harga_display');
+        if (localHarga !== null) {
+            harga_display = localHarga;
+            $wire.set('harga', parseInputID(localHarga));
+        } else {
+            harga_display = formatRupiah($wire.harga ?? '');
+        }
+    
+        const localBanyak = localStorage.getItem('jurnal_draft_banyak_display');
+        if (localBanyak !== null) {
+            banyak_display = localBanyak;
+            $wire.set('banyak', parseInputID(localBanyak));
+        } else {
+            banyak_display = $wire.banyak !== '' && $wire.banyak !== null ?
+                $wire.banyak.toString().replace('.', ',') :
+                '';
+        }
+    
+        const localTotal = localStorage.getItem('jurnal_draft_total_display');
+        if (localTotal !== null) {
+            total_display = localTotal;
+            $wire.set('total', parseInputID(localTotal));
+        } else {
+            total_display = formatRupiah($wire.total ?? '');
+        }
+    
+        const localHitKbk = localStorage.getItem('jurnal_draft_hit_kbk');
+        if (localHitKbk !== null) {
+            hit_kbk = localHitKbk;
+            $wire.set('hit_kbk', localHitKbk);
+        }
+    
+        const localM3 = localStorage.getItem('jurnal_draft_m3');
+        if (localM3 !== null) {
+            m3 = localM3;
+            $wire.set('m3', localM3);
+        }
+    
+        const localMap = localStorage.getItem('jurnal_draft_map');
+        if (localMap !== null) {
+            map = localMap;
+            $wire.set('map', localMap);
+        }
+    
+        const localNoDokumen = localStorage.getItem('jurnal_draft_no_dokumen');
+        if (localNoDokumen !== null) {
+            no_dokumen = localNoDokumen;
+            $wire.set('no_dokumen', localNoDokumen);
+        }
+    
+        const localNama = localStorage.getItem('jurnal_draft_nama');
+        if (localNama !== null) {
+            nama = localNama;
+            $wire.set('nama', localNama);
+        }
+    
+        const localMm = localStorage.getItem('jurnal_draft_mm');
+        if (localMm !== null) {
+            mm = localMm;
+            $wire.set('mm', localMm);
+        }
+    
+        const localKeterangan = localStorage.getItem('jurnal_draft_keterangan');
+        if (localKeterangan !== null) {
+            keterangan = localKeterangan;
+            $wire.set('keterangan', localKeterangan);
+        }
+    });
+    
+    $wire.on('toast', ({ type, title, msg }) => {
+        window.showToast(type, title, msg ?? '');
+    });
+    
+    $wire.on('form-reset', () => {
+        if (document.activeElement) {
+            document.activeElement.blur();
+        }
+        clearLocal();
+        setTimeout(() => {
+            harga_display = formatRupiah($wire.harga ?? '');
+            banyak_display = $wire.banyak !== '' && $wire.banyak !== null ?
+                $wire.banyak.toString().replace('.', ',') :
+                '';
+            total_display = formatRupiah($wire.total ?? '');
+            hit_kbk = $wire.hit_kbk ?? '';
+            m3 = $wire.m3 ?? '';
+            map = $wire.map ?? 'd';
+        }, 50);
+    });">
 
         {{-- Form Input Utama --}}
-        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden mb-6">
+        <div
+            class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden mb-6">
             <div class="bg-amber-600 dark:bg-amber-700 px-6 py-4 text-white">
-                <h2 class="text-sm font-bold tracking-tight flex items-center gap-2 uppercase tracking-widest leading-none">
+                <h2
+                    class="text-sm font-bold tracking-tight flex items-center gap-2 uppercase tracking-widest leading-none">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Masukkan detail transaksi
                 </h2>
@@ -566,73 +571,100 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tanggal Transaksi</label>
-                        <input type="text" x-ref="dateInput" readonly class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer shadow-sm">
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tanggal
+                            Transaksi</label>
+                        <input type="text" x-ref="dateInput" readonly
+                            class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer shadow-sm">
                     </div>
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No. Jurnal</label>
-                        <input type="text" x-model="jurnal" placeholder="Isi nomor jurnal..." class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No.
+                            Jurnal</label>
+                        <input type="text" x-model="jurnal" disabled readonly
+                            title="No. Jurnal digenerate otomatis oleh sistem"
+                            class="w-full px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-bold text-gray-500 dark:text-gray-400 cursor-not-allowed shadow-sm">
                     </div>
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No. Dokumen</label>
-                        <input type="text" x-model="no_dokumen" placeholder="Masukkan no. dokumen..." class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No.
+                            Dokumen</label>
+                        <input type="text" x-model="no_dokumen" placeholder="Masukkan no. dokumen..."
+                            class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                     <div class="space-y-1.5 relative" @click.away="isDropdownOpen = false">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cari Nomor Akun</label>
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cari
+                            Nomor Akun</label>
                         <div class="relative flex items-center">
-                            <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true" placeholder="Ketik no/nama..."
+                            <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true"
+                                placeholder="Ketik no/nama..."
                                 class="w-full px-3.5 py-2.5 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-900 rounded-lg font-bold text-amber-700 dark:text-amber-500 outline-none pr-10 focus:ring-1 focus:ring-amber-500 placeholder:text-sm shadow-sm">
                             <button type="button" x-show="searchTerm.length > 0 || no_akun" @click="clearAccount()"
                                 class="absolute right-3 text-gray-400 hover:text-rose-500 transition-colors">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
-                        <div x-show="isDropdownOpen" x-cloak class="absolute z-50 w-full mt-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto p-1.5 custom-scroll">
+                        <div x-show="isDropdownOpen" x-cloak
+                            class="absolute z-50 w-full mt-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto p-1.5 custom-scroll">
                             <template x-for="acc in filteredAccounts" :key="acc.no">
-                                <button type="button" @click="selectAccount(acc)" class="w-full text-left px-3.5 py-2.5 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-md flex flex-col group transition-none">
-                                    <span class="text-sm text-gray-500 dark:text-gray-300 font-medium" x-text="acc.nama"></span>
-                                    <span class="font-bold text-gray-800 dark:text-gray-200 text-sm group-hover:text-amber-700" x-text="acc.no"></span>
+                                <button type="button" @click="selectAccount(acc)"
+                                    class="w-full text-left px-3.5 py-2.5 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-md flex flex-col group transition-none">
+                                    <span class="text-sm text-gray-500 dark:text-gray-300 font-medium"
+                                        x-text="acc.nama"></span>
+                                    <span
+                                        class="font-bold text-gray-800 dark:text-gray-200 text-sm group-hover:text-amber-700"
+                                        x-text="acc.no"></span>
                                 </button>
                             </template>
                         </div>
                     </div>
 
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama Akun</label>
-                        <div class="px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center shadow-sm" x-text="nama_akun || 'Pilih akun...'"></div>
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama
+                            Akun</label>
+                        <div class="px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold text-sm min-h-[42px] flex items-center shadow-sm"
+                            x-text="nama_akun || 'Pilih akun...'"></div>
                     </div>
 
                     <div class="relative h-[68px]">
                         <div x-show="!showBarangPickerSafe"
-                             x-transition:enter="transition ease-out duration-300 delay-100"
-                             x-transition:enter-start="opacity-0 translate-y-2"
-                             x-transition:enter-end="opacity-100 translate-y-0"
-                             x-transition:leave="transition ease-in duration-200"
-                             x-transition:leave-start="opacity-100 translate-y-0"
-                             x-transition:leave-end="opacity-0 -translate-y-2"
-                             class="space-y-1.5 absolute inset-0 w-full">
-                            <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama</label>
-                            <input type="text" x-model="nama" placeholder="Masukkan nama..." class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
+                            x-transition:enter="transition ease-out duration-300 delay-100"
+                            x-transition:enter-start="opacity-0 translate-y-2"
+                            x-transition:enter-end="opacity-100 translate-y-0"
+                            x-transition:leave="transition ease-in duration-200"
+                            x-transition:leave-start="opacity-100 translate-y-0"
+                            x-transition:leave-end="opacity-0 -translate-y-2"
+                            class="space-y-1.5 absolute inset-0 w-full">
+                            <label
+                                class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama</label>
+                            <input type="text" x-model="nama" placeholder="Masukkan nama..."
+                                class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
                         </div>
 
                         <div x-show="showBarangPickerSafe" style="display: none;"
-                             x-transition:enter="transition ease-out duration-300 delay-100"
-                             x-transition:enter-start="opacity-0 translate-y-2"
-                             x-transition:enter-end="opacity-100 translate-y-0"
-                             x-transition:leave="transition ease-in duration-200"
-                             x-transition:leave-start="opacity-100 translate-y-0"
-                             x-transition:leave-end="opacity-0 -translate-y-2"
-                             class="space-y-1.5 absolute inset-0 w-full">
+                            x-transition:enter="transition ease-out duration-300 delay-100"
+                            x-transition:enter-start="opacity-0 translate-y-2"
+                            x-transition:enter-end="opacity-100 translate-y-0"
+                            x-transition:leave="transition ease-in duration-200"
+                            x-transition:leave-start="opacity-100 translate-y-0"
+                            x-transition:leave-end="opacity-0 -translate-y-2"
+                            class="space-y-1.5 absolute inset-0 w-full">
                             <div class="flex items-center gap-1 mb-1">
-                                <span class="text-[11px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wider">Pilih Barang</span>
+                                <span
+                                    class="text-[11px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wider">Pilih
+                                    Barang</span>
                                 <span class="text-rose-500 text-[11px]">*</span>
                             </div>
-                            <select x-model="id_barang" class="w-full px-3.5 py-2.5 text-sm bg-amber-50 dark:bg-gray-800 border border-amber-300 dark:border-amber-900 rounded-lg font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-sm">
+                            <select x-model="id_barang"
+                                class="w-full px-3.5 py-2.5 text-sm bg-amber-50 dark:bg-gray-800 border border-amber-300 dark:border-amber-900 rounded-lg font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-sm">
                                 <option value="">-- pilih barang --</option>
                                 <template x-for="opt in barangOptions" :key="opt.id">
                                     <option :value="opt.id" x-text="opt.nama"></option>
@@ -642,34 +674,43 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-6 transition-all duration-500 ease-in-out" :class="showBarangPickerSafe ? 'md:grid-cols-3' : 'md:grid-cols-2'">
+                <div class="grid grid-cols-1 gap-6 transition-all duration-500 ease-in-out"
+                    :class="showBarangPickerSafe ? 'md:grid-cols-3' : 'md:grid-cols-2'">
                     <div x-show="showBarangPickerSafe" style="display: none;"
-                         x-transition:enter="transition ease-out duration-500 delay-200"
-                         x-transition:enter-start="opacity-0 -translate-x-4"
-                         x-transition:enter-end="opacity-100 translate-x-0"
-                         x-transition:leave="transition ease-in duration-300"
-                         x-transition:leave-start="opacity-100 translate-x-0"
-                         x-transition:leave-end="opacity-0 -translate-x-4"
-                         class="space-y-1.5 origin-left">
+                        x-transition:enter="transition ease-out duration-500 delay-200"
+                        x-transition:enter-start="opacity-0 -translate-x-4"
+                        x-transition:enter-end="opacity-100 translate-x-0"
+                        x-transition:leave="transition ease-in duration-300"
+                        x-transition:leave-start="opacity-100 translate-x-0"
+                        x-transition:leave-end="opacity-0 -translate-x-4" class="space-y-1.5 origin-left">
                         <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Nama
                         </label>
-                        <input type="text" x-model="nama" placeholder="Masukkan nama..." class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 placeholder:text-sm shadow-sm">
+                        <input type="text" x-model="nama" placeholder="Masukkan nama..."
+                            class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 placeholder:text-sm shadow-sm">
                     </div>
 
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">MM (Tebal Plywood)</label>
-                        <input type="text" inputmode="decimal" x-model="mm" placeholder="Contoh: 18" class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">MM
+                            (Tebal Plywood)</label>
+                        <input type="text" inputmode="decimal" x-model="mm" placeholder="Contoh: 18"
+                            class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
                     </div>
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Keterangan Transaksi</label>
-                        <input type="text" x-model="keterangan" placeholder="Masukkan detail..." class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-amber-500 placeholder:text-sm shadow-sm">
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Keterangan
+                            Transaksi</label>
+                        <input type="text" x-model="keterangan" placeholder="Masukkan detail..."
+                            class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 focus:border-amber-500 placeholder:text-sm shadow-sm">
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hit KBK <span class="text-amber-500">*</span></label>
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hit
+                            KBK <span class="text-amber-500">*</span></label>
                         <select x-model="hit_kbk" @change="$wire.set('hit_kbk', hit_kbk)"
                             class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 cursor-pointer shadow-sm"
                             style="background-image:url('data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e');background-position:right 12px center;background-repeat:no-repeat;background-size:16px;padding-right:36px;-webkit-appearance:none">
@@ -679,10 +720,10 @@
                         </select>
                     </div>
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kuantitas (Banyak)</label>
-                        <input type="text" inputmode="decimal"
-                            x-ref="banyakInput"
-                            :value="banyak_display"
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kuantitas
+                            (Banyak)</label>
+                        <input type="text" inputmode="decimal" x-ref="banyakInput" :value="banyak_display"
                             @input="
                                 const el = $event.target;
                                 const cursorPos = el.selectionStart;
@@ -720,14 +761,18 @@
                                 }
                             "
                             class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
-                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             Cari Kuantitas
                         </button>
                     </div>
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kubikasi (M3)</label>
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kubikasi
+                            (M3)</label>
                         <input type="text" inputmode="decimal" x-model="m3" placeholder="0,0000"
                             @blur="
                                 if (m3 !== '') {
@@ -750,8 +795,10 @@
                                 }
                             "
                             class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
-                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             Cari Kubikasi
                         </button>
@@ -760,12 +807,12 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Harga</label>
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Harga</label>
                         <div class="relative">
-                            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
-                            <input type="text" inputmode="decimal"
-                                x-ref="hargaInput"
-                                :value="harga_display"
+                            <span
+                                class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
+                            <input type="text" inputmode="decimal" x-ref="hargaInput" :value="harga_display"
                                 @input="
                                     const el = $event.target;
                                     const cursorPos = el.selectionStart;
@@ -811,8 +858,10 @@
                                 }
                             "
                             class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
-                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             Cari Harga
                         </button>
@@ -822,10 +871,9 @@
                             Total
                         </label>
                         <div class="relative">
-                            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
-                            <input type="text" inputmode="decimal"
-                                x-ref="totalInput"
-                                :value="total_display"
+                            <span
+                                class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
+                            <input type="text" inputmode="decimal" x-ref="totalInput" :value="total_display"
                                 @input="
                                     const el = $event.target;
                                     const cursorPos = el.selectionStart;
@@ -878,22 +926,33 @@
                                 }
                             "
                             class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
-                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-500" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             Cari Total
                         </button>
                     </div>
                     <div class="space-y-3 pt-1">
-                        <label class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider block text-center">Tipe Mutasi</label>
+                        <label
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider block text-center">Tipe
+                            Mutasi</label>
                         <div class="grid grid-cols-2 gap-3">
-                            <button type="button" @click="map = 'd'" :class="map === 'd' ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'" class="py-2.5 rounded-lg border font-black text-xs tracking-widest transition-none shadow-xs">DEBIT</button>
-                            <button type="button" @click="map = 'k'" :class="map === 'k' ? 'bg-rose-600 border-rose-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'" class="py-2.5 rounded-lg border font-black text-xs tracking-widest transition-none shadow-xs">KREDIT</button>
+                            <button type="button" @click="map = 'd'"
+                                :class="map === 'd' ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' :
+                                    'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'"
+                                class="py-2.5 rounded-lg border font-black text-xs tracking-widest transition-none shadow-xs">DEBIT</button>
+                            <button type="button" @click="map = 'k'"
+                                :class="map === 'k' ? 'bg-rose-600 border-rose-600 text-white shadow-sm' :
+                                    'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400'"
+                                class="py-2.5 rounded-lg border font-black text-xs tracking-widest transition-none shadow-xs">KREDIT</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-6">
+                <div
+                    class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-6">
                     <button type="button"
                         @click="
                             if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -926,7 +985,8 @@
                         "
                         class="px-10 py-2.5 bg-amber-600 dark:bg-amber-700 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-none flex items-center gap-2 shadow-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 4v16m8-8H4" />
                         </svg>
                         Masukkan Draft
                     </button>
@@ -936,64 +996,86 @@
 
         {{-- TABLE DRAFT --}}
         <div class="space-y-4 mb-10" x-show="items.length > 0" x-cloak>
-            <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+            <div
+                class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center flex-shrink-0">
-                        <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <div
+                        class="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                     </div>
                     <div class="flex flex-col">
-                        <span class="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Draft Jurnal</span>
-                        <span class="text-sm font-bold text-gray-700 dark:text-gray-200"><span x-text="items.length"></span> Item</span>
+                        <span
+                            class="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Draft
+                            Jurnal</span>
+                        <span class="text-sm font-bold text-gray-700 dark:text-gray-200"><span
+                                x-text="items.length"></span> Item</span>
                     </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-4 xl:gap-5 border-t sm:border-t-0 sm:border-l border-gray-100 dark:border-gray-800 pt-3 sm:pt-0 sm:pl-5 w-full sm:w-auto justify-between sm:justify-end">
+                <div
+                    class="flex flex-wrap items-center gap-4 xl:gap-5 border-t sm:border-t-0 sm:border-l border-gray-100 dark:border-gray-800 pt-3 sm:pt-0 sm:pl-5 w-full sm:w-auto justify-between sm:justify-end">
                     <div class="flex items-center gap-4">
                         <div class="flex flex-col items-end">
-                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Debit</span>
-                            <span class="text-emerald-500 font-black text-sm tabular-nums" x-text="'Rp ' + formatTotal(totalDebit)"></span>
+                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total
+                                Debit</span>
+                            <span class="text-emerald-500 font-black text-sm tabular-nums"
+                                x-text="'Rp ' + formatTotal(totalDebit)"></span>
                         </div>
                         <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
                         <div class="flex flex-col items-end">
-                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Kredit</span>
-                            <span class="text-rose-500 font-black text-sm tabular-nums" x-text="'Rp ' + formatTotal(totalKredit)"></span>
+                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total
+                                Kredit</span>
+                            <span class="text-rose-500 font-black text-sm tabular-nums"
+                                x-text="'Rp ' + formatTotal(totalKredit)"></span>
                         </div>
                     </div>
 
                     <div>
                         <template x-if="isBalanced">
-                            <div class="flex items-center gap-2 px-3.5 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg whitespace-nowrap shadow-xs">
-                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                            <div
+                                class="flex items-center gap-2 px-3.5 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg whitespace-nowrap shadow-xs">
+                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                        d="M5 13l4 4L19 7" />
                                 </svg>
-                                <span class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Balanced</span>
+                                <span
+                                    class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Balanced</span>
                             </div>
                         </template>
                         <template x-if="!isBalanced">
                             <div class="flex flex-col items-end gap-1">
-                                <div class="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg whitespace-nowrap shadow-xs">
+                                <div
+                                    class="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg whitespace-nowrap shadow-xs">
                                     <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                                    <span class="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Unbalanced</span>
+                                    <span
+                                        class="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Unbalanced</span>
                                 </div>
-                                <span class="text-[9px] text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap" x-text="'Selisih: Rp ' + formatTotal(Math.abs(totalDebit - totalKredit))"></span>
+                                <span class="text-[9px] text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap"
+                                    x-text="'Selisih: Rp ' + formatTotal(Math.abs(totalDebit - totalKredit))"></span>
                             </div>
                         </template>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
+            <div
+                class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
                 <div class="grid gap-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/60 px-5 py-3"
                     style="grid-template-columns: 1fr 120px 70px 110px 130px 60px 190px">
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Akun & Keterangan</div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. Dokumen</div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Qty</div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">M3</div>
-                    <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right pr-2">Harga</div>
+                    <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right pr-2">Harga
+                    </div>
                     <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Tipe</div>
-                    <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center pr-1">Debit / Kredit</div>
+                    <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center pr-1">Debit
+                        / Kredit</div>
                 </div>
 
                 <div class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1004,7 +1086,8 @@
 
                                 <div class="min-w-0 pr-4">
                                     <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-[10px] font-black text-gray-400 tracking-wider shrink-0"
+                                        <span
+                                            class="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-[10px] font-black text-gray-400 tracking-wider shrink-0"
                                             x-text="'#' + row.jurnal"></span>
                                         <span class="font-mono font-black text-amber-600 dark:text-amber-500 text-sm"
                                             x-text="row.no_akun"></span>
@@ -1012,27 +1095,36 @@
                                             x-text="row.nama_akun"></span>
                                     </div>
                                     <div x-show="row.nama_barang" class="mt-1">
-                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-[10px] font-black text-blue-600 dark:text-blue-400 tracking-wider">
-                                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                        <span
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-[10px] font-black text-blue-600 dark:text-blue-400 tracking-wider">
+                                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                                             </svg>
                                             <span x-text="row.nama_barang"></span>
                                         </span>
                                     </div>
-                                    <div class="mt-1.5 flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
-                                        <span x-show="row.nama" x-text="row.nama" class="font-medium text-gray-500 dark:text-gray-400 shrink-0"></span>
-                                        <span x-show="row.nama && row.keterangan" class="text-gray-300 dark:text-gray-600">·</span>
-                                        <span x-show="row.keterangan" x-text="row.keterangan" class="truncate text-gray-400 dark:text-gray-500 text-xs"></span>
+                                    <div
+                                        class="mt-1.5 flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
+                                        <span x-show="row.nama" x-text="row.nama"
+                                            class="font-medium text-gray-500 dark:text-gray-400 shrink-0"></span>
+                                        <span x-show="row.nama && row.keterangan"
+                                            class="text-gray-300 dark:text-gray-600">·</span>
+                                        <span x-show="row.keterangan" x-text="row.keterangan"
+                                            class="truncate text-gray-400 dark:text-gray-500 text-xs"></span>
                                     </div>
                                     <div x-show="row.mm" class="mt-1">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-[10px] font-black text-amber-600 dark:text-amber-400 tracking-wider">
+                                        <span
+                                            class="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-[10px] font-black text-amber-600 dark:text-amber-400 tracking-wider">
                                             <span x-text="row.mm + ' mm'"></span>
                                         </span>
                                     </div>
                                 </div>
 
                                 <div class="flex items-start pt-0.5 shrink-0">
-                                    <span class="text-xs font-bold text-gray-400 dark:text-gray-500 tabular-nums" x-text="row.no_dokumen || '-'"></span>
+                                    <span class="text-xs font-bold text-gray-400 dark:text-gray-500 tabular-nums"
+                                        x-text="row.no_dokumen || '-'"></span>
                                 </div>
 
                                 <div class="text-right shrink-0">
@@ -1048,11 +1140,15 @@
                                 </div>
 
                                 <div class="text-right pr-2 shrink-0">
-                                    <span class="text-sm font-bold text-gray-500 dark:text-gray-400 tabular-nums" x-text="formatTotal(row.harga)"></span>
+                                    <span class="text-sm font-bold text-gray-500 dark:text-gray-400 tabular-nums"
+                                        x-text="formatTotal(row.harga)"></span>
                                 </div>
 
                                 <div class="flex justify-center shrink-0">
-                                    <span :class="row.map.toLowerCase() === 'd' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400'"
+                                    <span
+                                        :class="row.map.toLowerCase() === 'd' ?
+                                            'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                            'bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400'"
                                         class="inline-flex items-center justify-center w-7 h-7 rounded-md text-[11px] font-black uppercase shadow-xs"
                                         x-text="row.map.toLowerCase() === 'd' ? 'D' : 'K'">
                                     </span>
@@ -1064,15 +1160,21 @@
                                         x-text="'Rp ' + formatTotal(row.total)">
                                     </div>
                                     <button type="button" @click="$wire.mountAction('editDraft', { index: i })"
-                                        class="p-1.5 text-amber-600/80 hover:text-amber-600 dark:text-amber-500/80 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-md transition-colors shrink-0" title="Edit Item">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        class="p-1.5 text-amber-600/80 hover:text-amber-600 dark:text-amber-500/80 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-md transition-colors shrink-0"
+                                        title="Edit Item">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                         </svg>
                                     </button>
                                     <button type="button" @click="$wire.removeItem(i)"
-                                        class="p-1.5 text-rose-600/80 hover:text-rose-600 dark:text-rose-500/80 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-md transition-colors shrink-0" title="Hapus Item">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                        class="p-1.5 text-rose-600/80 hover:text-rose-600 dark:text-rose-500/80 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-md transition-colors shrink-0"
+                                        title="Hapus Item">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                                d="M6 18L18 6M6 6l12 12" />
                                         </svg>
                                     </button>
                                 </div>
@@ -1081,9 +1183,11 @@
                     </template>
                 </div>
 
-                <div class="p-4 bg-gray-50/50 dark:bg-gray-800/40 border-t border-gray-200 dark:border-gray-800 flex justify-end">
+                <div
+                    class="p-4 bg-gray-50/50 dark:bg-gray-800/40 border-t border-gray-200 dark:border-gray-800 flex justify-end">
                     <button type="button" wire:click="saveJurnal" :disabled="!isBalanced"
-                        :class="isBalanced ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-sm cursor-pointer' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-transparent shadow-none'"
+                        :class="isBalanced ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-sm cursor-pointer' :
+                            'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-transparent shadow-none'"
                         class="px-8 py-2.5 rounded-lg font-black text-[10px] uppercase tracking-[.2em] transition-none">
                         Posting Jurnal
                     </button>
@@ -1092,122 +1196,128 @@
         </div>
 
         {{-- TABLE HISTORY JURNAL UMUM + BULK DELETE --}}
-        <div class="space-y-4"
-            x-data="{
-                isFiltering: false,
-                fpDari: null,
-                fpSampai: null,
-                filterDari:    @entangle('filterTglDariInput'),
-                filterSampai: @entangle('filterTglSampaiInput'),
-                activeFilterDari:    @entangle('filterTglDari'),
-                activeFilterSampai: @entangle('filterTglSampai'),
-                hasMorePages: @entangle('hasMorePages'),
-                selectedIds:    @entangle('selectedIds'),
-                selectAll:      @entangle('selectAll'),
-                showConfirm:    false,
-
-                get visibleIds() {
-                    return Array.from(document.querySelectorAll('[data-row-id]'))
-                        .map(el => parseInt(el.dataset.rowId));
-                },
-                toggleSelectAll() {
-                    if (this.selectAll) {
-                        this.$wire.toggleSelectAll([]);
-                    } else {
-                        this.$wire.toggleSelectAll(this.visibleIds);
-                    }
-                },
-                toggleRow(id) {
-                    this.$wire.toggleSelected(id);
-                },
-                isSelected(id) {
-                    return this.selectedIds.includes(id);
-                },
-                confirmBulkDelete() {
-                    if (this.selectedIds.length === 0) return;
-                    this.showConfirm = true;
-                },
-                cancelBulkDelete() {
-                    this.showConfirm = false;
-                },
-                doBulkDelete() {
-                    this.showConfirm = false;
-                    this.$wire.bulkDelete();
-                },
-                get hasActiveFilter() {
-                    return this.activeFilterDari !== '' || this.activeFilterSampai !== '';
-                },
-                formatDateDisplay(val) {
-                    if (!val) return '';
-                    const [y, m, d] = val.split('-');
-                    return d + '-' + m + '-' + y;
-                },
-                async applyFilter() {
-                    this.isFiltering = true;
-                    await this.$wire.applyFilter();
-                    this.isFiltering = false;
-                },
-                async resetFilter() {
-                    this.isFiltering = true;
-                    if (this.fpDari)   this.fpDari.clear();
-                    if (this.fpSampai) this.fpSampai.clear();
-                    this.filterDari    = '';
-                    this.filterSampai = '';
-                    await this.$wire.resetFilter();
-                    this.isFiltering = false;
-                },
-                initFilterDatepickers() {
-                    this.fpDari = flatpickr(this.$refs.filterDariInput, {
-                        dateFormat: 'Y-m-d',
-                        onChange: (selectedDates, dateStr) => { this.filterDari = dateStr; }
-                    });
-                    this.fpSampai = flatpickr(this.$refs.filterSampaiInput, {
-                        dateFormat: 'Y-m-d',
-                        onChange: (selectedDates, dateStr) => { this.filterSampai = dateStr; }
-                    });
-                },
-                initInfiniteScroll() {
-                    const sentinel   = this.$refs.scrollSentinel;
-                    const scrollRoot = this.$refs.tableScrollBody;
-                    if (!sentinel || !scrollRoot) return;
-
-                    const observer = new IntersectionObserver((entries) => {
-                        entries.forEach(entry => {
-                            if (entry.isIntersecting && this.hasMorePages && !this.isFiltering) {
-                                this.$wire.loadMore();
-                            }
-                        });
-                    }, { root: scrollRoot, rootMargin: '100px' });
-
-                    observer.observe(sentinel);
+        <div class="space-y-4" x-data="{
+            isFiltering: false,
+            fpDari: null,
+            fpSampai: null,
+            filterDari: @entangle('filterTglDariInput'),
+            filterSampai: @entangle('filterTglSampaiInput'),
+            activeFilterDari: @entangle('filterTglDari'),
+            activeFilterSampai: @entangle('filterTglSampai'),
+            hasMorePages: @entangle('hasMorePages'),
+            selectedIds: @entangle('selectedIds'),
+            selectAll: @entangle('selectAll'),
+            showConfirm: false,
+        
+            get visibleIds() {
+                return Array.from(document.querySelectorAll('[data-row-id]'))
+                    .map(el => parseInt(el.dataset.rowId));
+            },
+            toggleSelectAll() {
+                if (this.selectAll) {
+                    this.$wire.toggleSelectAll([]);
+                } else {
+                    this.$wire.toggleSelectAll(this.visibleIds);
                 }
-            }"
-            x-init="
-                initFilterDatepickers();
-                initInfiniteScroll();
-                $wire.on('bulk-delete-done', () => { showConfirm = false; });
-            ">
+            },
+            toggleRow(id) {
+                this.$wire.toggleSelected(id);
+            },
+            isSelected(id) {
+                return this.selectedIds.includes(id);
+            },
+            confirmBulkDelete() {
+                if (this.selectedIds.length === 0) return;
+                this.showConfirm = true;
+            },
+            cancelBulkDelete() {
+                this.showConfirm = false;
+            },
+            doBulkDelete() {
+                this.showConfirm = false;
+                this.$wire.bulkDelete();
+            },
+            get hasActiveFilter() {
+                return this.activeFilterDari !== '' || this.activeFilterSampai !== '';
+            },
+            formatDateDisplay(val) {
+                if (!val) return '';
+                const [y, m, d] = val.split('-');
+                return d + '-' + m + '-' + y;
+            },
+            async applyFilter() {
+                this.isFiltering = true;
+                await this.$wire.applyFilter();
+                this.isFiltering = false;
+            },
+            async resetFilter() {
+                this.isFiltering = true;
+                if (this.fpDari) this.fpDari.clear();
+                if (this.fpSampai) this.fpSampai.clear();
+                this.filterDari = '';
+                this.filterSampai = '';
+                await this.$wire.resetFilter();
+                this.isFiltering = false;
+            },
+            initFilterDatepickers() {
+                this.fpDari = flatpickr(this.$refs.filterDariInput, {
+                    dateFormat: 'Y-m-d',
+                    onChange: (selectedDates, dateStr) => { this.filterDari = dateStr; }
+                });
+                this.fpSampai = flatpickr(this.$refs.filterSampaiInput, {
+                    dateFormat: 'Y-m-d',
+                    onChange: (selectedDates, dateStr) => { this.filterSampai = dateStr; }
+                });
+            },
+            initInfiniteScroll() {
+                const sentinel = this.$refs.scrollSentinel;
+                const scrollRoot = this.$refs.tableScrollBody;
+                if (!sentinel || !scrollRoot) return;
+        
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting && this.hasMorePages && !this.isFiltering) {
+                            this.$wire.loadMore();
+                        }
+                    });
+                }, { root: scrollRoot, rootMargin: '100px' });
+        
+                observer.observe(sentinel);
+            }
+        }" x-init="initFilterDatepickers();
+        initInfiniteScroll();
+        $wire.on('bulk-delete-done', () => { showConfirm = false; });">
 
             {{-- MODAL KONFIRMASI BULK DELETE --}}
-            <div x-show="showConfirm" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-8 max-w-sm w-full mx-4">
+            <div x-show="showConfirm" x-cloak
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div
+                    class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-8 max-w-sm w-full mx-4">
                     <div class="flex items-center gap-3 mb-4">
-                        <div class="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <div
+                            class="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                         </div>
                         <div>
-                            <h3 class="font-black text-sm text-gray-800 dark:text-gray-100 uppercase tracking-wider">Hapus Transaksi?</h3>
+                            <h3 class="font-black text-sm text-gray-800 dark:text-gray-100 uppercase tracking-wider">
+                                Hapus Transaksi?</h3>
                             <p class="text-xs text-gray-400 mt-0.5">Tindakan ini tidak dapat dibatalkan.</p>
                         </div>
                     </div>
                     <p class="text-sm text-gray-600 dark:text-gray-300 mb-6">
-                        Anda akan menghapus <span class="font-black text-red-500" x-text="selectedIds.length"></span> transaksi secara permanen dari database.
+                        Anda akan menghapus <span class="font-black text-red-500" x-text="selectedIds.length"></span>
+                        transaksi secara permanen dari database.
                     </p>
                     <div class="flex gap-3 justify-end">
-                        <button @click="cancelBulkDelete()" class="px-5 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 transition-none shadow-xs">Batal</button>
-                        <button @click="doBulkDelete()" class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-black text-[10px] uppercase tracking-widest transition-none flex items-center gap-2 shadow-sm" wire:loading.attr="disabled" wire:target="bulkDelete">
+                        <button @click="cancelBulkDelete()"
+                            class="px-5 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-gray-50 transition-none shadow-xs">Batal</button>
+                        <button @click="doBulkDelete()"
+                            class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-black text-[10px] uppercase tracking-widest transition-none flex items-center gap-2 shadow-sm"
+                            wire:loading.attr="disabled" wire:target="bulkDelete">
                             <span wire:loading wire:target="bulkDelete" class="flex gap-1">
                                 <span class="loading-dot" style="background:#fff"></span>
                                 <span class="loading-dot" style="background:#fff"></span>
@@ -1224,94 +1334,129 @@
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <h2 class="text-sm font-black uppercase tracking-widest text-gray-500">Jurnal Umum</h2>
                     </div>
-                    <div x-show="hasActiveFilter" x-cloak class="filter-badge px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xs">
+                    <div x-show="hasActiveFilter" x-cloak
+                        class="filter-badge px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xs">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 4h18M7 8h10M11 12h2" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                d="M3 4h18M7 8h10M11 12h2" />
                         </svg>
-                        <span x-text="'Filter: ' + (activeFilterDari ? formatDateDisplay(activeFilterDari) : '...') + ' → ' + (activeFilterSampai ? formatDateDisplay(activeFilterSampai) : '...')"></span>
+                        <span
+                            x-text="'Filter: ' + (activeFilterDari ? formatDateDisplay(activeFilterDari) : '...') + ' → ' + (activeFilterSampai ? formatDateDisplay(activeFilterSampai) : '...')"></span>
                     </div>
                 </div>
 
-                <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 w-full">
+                <div
+                    class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 w-full">
                     <div class="flex flex-wrap items-center gap-3">
                         <div class="flex items-center gap-2 mr-1">
-                            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
-                            <span class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Filter:</span>
+                            <span
+                                class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Filter:</span>
                         </div>
 
                         <div class="flex items-center gap-2">
-                            <input type="text" x-ref="filterDariInput" readonly placeholder="Dari Tanggal..." class="px-3.5 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-200 cursor-pointer w-32 outline-none focus:border-amber-400 shadow-xs">
+                            <input type="text" x-ref="filterDariInput" readonly placeholder="Dari Tanggal..."
+                                class="px-3.5 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-200 cursor-pointer w-32 outline-none focus:border-amber-400 shadow-xs">
                             <span class="text-gray-300 dark:text-gray-600 font-black">→</span>
-                            <input type="text" x-ref="filterSampaiInput" readonly placeholder="Sampai Tanggal..." class="px-3.5 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-200 cursor-pointer w-32 outline-none focus:border-amber-400 shadow-xs">
+                            <input type="text" x-ref="filterSampaiInput" readonly placeholder="Sampai Tanggal..."
+                                class="px-3.5 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-200 cursor-pointer w-32 outline-none focus:border-amber-400 shadow-xs">
                         </div>
 
                         <div class="flex items-center gap-2">
-                            <button type="button" @click="applyFilter()" :disabled="isFiltering" class="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-black text-[10px] uppercase tracking-widest transition-none shadow-sm disabled:opacity-60 disabled:cursor-wait">
+                            <button type="button" @click="applyFilter()" :disabled="isFiltering"
+                                class="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-black text-[10px] uppercase tracking-widest transition-none shadow-sm disabled:opacity-60 disabled:cursor-wait">
                                 <span x-show="isFiltering" class="flex items-center gap-1">
-                                    <span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>
+                                    <span class="loading-dot"></span><span class="loading-dot"></span><span
+                                        class="loading-dot"></span>
                                 </span>
                                 <span x-show="!isFiltering" class="flex items-center gap-1.5">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
                                     Apply
                                 </span>
                             </button>
-                            <button type="button" @click="resetFilter()" x-show="hasActiveFilter || filterDari || filterSampai" :disabled="isFiltering" class="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-rose-500 hover:border-rose-300 rounded-lg font-black text-[10px] uppercase tracking-widest transition-none disabled:opacity-60 shadow-xs">
+                            <button type="button" @click="resetFilter()"
+                                x-show="hasActiveFilter || filterDari || filterSampai" :disabled="isFiltering"
+                                class="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-rose-500 hover:border-rose-300 rounded-lg font-black text-[10px] uppercase tracking-widest transition-none disabled:opacity-60 shadow-xs">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                        d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                                 Reset
                             </button>
                         </div>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-4 xl:gap-5 border-t xl:border-t-0 xl:border-l border-gray-100 dark:border-gray-800 pt-3 xl:pt-0 xl:pl-5 w-full xl:w-auto justify-between xl:justify-end">
+                    <div
+                        class="flex flex-wrap items-center gap-4 xl:gap-5 border-t xl:border-t-0 xl:border-l border-gray-100 dark:border-gray-800 pt-3 xl:pt-0 xl:pl-5 w-full xl:w-auto justify-between xl:justify-end">
                         <div class="flex items-center gap-4">
                             <div class="flex flex-col items-end">
-                                <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Debit</span>
-                                <span class="text-emerald-500 font-black text-sm tabular-nums">Rp {{ number_format($totalDebitDB, 0, ',', '.') }}</span>
+                                <span
+                                    class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total
+                                    Debit</span>
+                                <span class="text-emerald-500 font-black text-sm tabular-nums">Rp
+                                    {{ number_format($totalDebitDB, 0, ',', '.') }}</span>
                             </div>
                             <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
                             <div class="flex flex-col items-end">
-                                <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Kredit</span>
-                                <span class="text-rose-500 font-black text-sm tabular-nums">Rp {{ number_format($totalKreditDB, 0, ',', '.') }}</span>
+                                <span
+                                    class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total
+                                    Kredit</span>
+                                <span class="text-rose-500 font-black text-sm tabular-nums">Rp
+                                    {{ number_format($totalKreditDB, 0, ',', '.') }}</span>
                             </div>
                         </div>
 
                         <div>
-                            @if($isHistoryBalanced)
-                            <div class="flex items-center gap-2 px-3.5 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg whitespace-nowrap shadow-xs">
-                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Balanced</span>
-                            </div>
-                            @else
-                            <div class="flex flex-col items-end gap-1">
-                                <div class="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg whitespace-nowrap shadow-xs">
-                                    <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                                    <span class="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Unbalanced</span>
+                            @if ($isHistoryBalanced)
+                                <div
+                                    class="flex items-center gap-2 px-3.5 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg whitespace-nowrap shadow-xs">
+                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span
+                                        class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Balanced</span>
                                 </div>
-                                <span class="text-[9px] text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap">Selisih: Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
-                            </div>
+                            @else
+                                <div class="flex flex-col items-end gap-1">
+                                    <div
+                                        class="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg whitespace-nowrap shadow-xs">
+                                        <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                        <span
+                                            class="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Unbalanced</span>
+                                    </div>
+                                    <span
+                                        class="text-[9px] text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap">Selisih:
+                                        Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
+                                </div>
                             @endif
                         </div>
                     </div>
                 </div>
 
                 {{-- BULK ACTION BAR --}}
-                <div x-show="selectedIds.length > 0" x-cloak class="bulk-bar bg-rose-600 dark:bg-rose-700 rounded-xl px-5 py-3 flex items-center justify-between shadow-lg">
+                <div x-show="selectedIds.length > 0" x-cloak
+                    class="bulk-bar bg-rose-600 dark:bg-rose-700 rounded-xl px-5 py-3 flex items-center justify-between shadow-lg">
                     <div class="flex items-center gap-3">
                         <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-                            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M5 13l4 4L19 7" />
                             </svg>
                         </div>
                         <span class="text-white font-black text-[11px] uppercase tracking-widest">
@@ -1319,10 +1464,14 @@
                         </span>
                     </div>
                     <div class="flex items-center gap-3">
-                        <button @click="selectedIds = []; selectAll = false; $wire.set('selectedIds', []); $wire.set('selectAll', false);" class="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest transition-none border border-white/20 shadow-xs">Batalkan</button>
-                        <button @click="confirmBulkDelete()" class="px-5 py-1.5 bg-white text-rose-600 hover:bg-rose-50 rounded-lg font-black text-[10px] uppercase tracking-widest transition-none flex items-center gap-2 shadow-sm">
+                        <button
+                            @click="selectedIds = []; selectAll = false; $wire.set('selectedIds', []); $wire.set('selectAll', false);"
+                            class="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest transition-none border border-white/20 shadow-xs">Batalkan</button>
+                        <button @click="confirmBulkDelete()"
+                            class="px-5 py-1.5 bg-white text-rose-600 hover:bg-rose-50 rounded-lg font-black text-[10px] uppercase tracking-widest transition-none flex items-center gap-2 shadow-sm">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                             Hapus yang Dipilih
                         </button>
@@ -1331,13 +1480,18 @@
             </div>
 
             {{-- Tabel History --}}
-            <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden custom-scroll">
+            <div
+                class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden custom-scroll">
                 <div class="table-body-scroll" x-ref="tableScrollBody">
-                    <table class="w-full text-left text-sm border-collapse" style="table-layout: auto; min-width: max-content;">
-                        <thead class="bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
-                            <tr class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest whitespace-nowrap">
+                    <table class="w-full text-left text-sm border-collapse"
+                        style="table-layout: auto; min-width: max-content;">
+                        <thead
+                            class="bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
+                            <tr
+                                class="text-[10px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest whitespace-nowrap">
                                 <th class="px-4 py-4">
-                                    <input type="checkbox" class="row-checkbox" :checked="selectAll" @change="toggleSelectAll()" title="Pilih semua">
+                                    <input type="checkbox" class="row-checkbox" :checked="selectAll"
+                                        @change="toggleSelectAll()" title="Pilih semua">
                                 </th>
                                 <th class="px-4 py-4">Nama Akun</th>
                                 <th class="px-4 py-4">Barang</th>
@@ -1352,8 +1506,10 @@
                                 <th class="px-4 py-4 text-right">Kuantitas</th>
                                 <th class="px-4 py-4 text-right">M3</th>
                                 <th class="px-4 py-4 text-right">Harga</th>
-                                <th class="px-4 py-4 text-right text-green-500 bg-green-50/10 font-black">Debit (Rp)</th>
-                                <th class="px-4 py-4 text-right text-rose-500 bg-rose-50/10 font-black">Kredit (Rp)</th>
+                                <th class="px-4 py-4 text-right text-green-500 bg-green-50/10 font-black">Debit (Rp)
+                                </th>
+                                <th class="px-4 py-4 text-right text-rose-500 bg-rose-50/10 font-black">Kredit (Rp)
+                                </th>
                                 <th class="px-4 py-4 text-center">Aksi</th>
                             </tr>
                         </thead>
@@ -1363,155 +1519,242 @@
                                 <template x-for="n in 8" :key="n">
                                     <tr class="skeleton-row">
                                         <td class="px-4 py-5"></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-24 bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-28 bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-12 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-36 bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-6 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-10 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-10 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-12 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-16 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                        <td class="px-4 py-5"><div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-24 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-28 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-12 mx-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-36 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-6 mx-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-10 mx-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-10 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-12 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-16 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
+                                        <td class="px-4 py-5">
+                                            <div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700"></div>
+                                        </td>
                                         <td class="px-4 py-5"></td>
                                     </tr>
                                 </template>
                             </template>
 
                             @forelse($historyJurnals as $index => $hj)
-                            @php
-                            $totalRow = $hj->total;
-                            @endphp
+                                @php
+                                    $totalRow = $hj->total;
+                                @endphp
 
-                            <tr data-row-id="{{ $hj->id }}"
-                                :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein"
-                                style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
+                                <tr data-row-id="{{ $hj->id }}"
+                                    :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
+                                    class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein"
+                                    style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
-                                <td class="px-4 py-4 text-center">
-                                    <input type="checkbox" class="row-checkbox" :checked="isSelected({{ $hj->id }})" @change="toggleRow({{ $hj->id }})">
-                                </td>
+                                    <td class="px-4 py-4 text-center">
+                                        <input type="checkbox" class="row-checkbox"
+                                            :checked="isSelected({{ $hj->id }})"
+                                            @change="toggleRow({{ $hj->id }})">
+                                    </td>
 
-                                <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 whitespace-nowrap">{{ $hj->nama_akun }}</td>
-                                <td class="px-4 py-4 whitespace-nowrap">
-                                    @if($hj->nama_barang)
-                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-[10px] font-black text-blue-600 dark:text-blue-400 tracking-wider">
-                                        {{ $hj->nama_barang }}
-                                    </span>
-                                    @else
-                                    <span class="text-gray-300 dark:text-gray-600">-</span>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-4 text-gray-500 font-medium whitespace-nowrap">{{ $hj->tgl->format('d-m-Y') }}</td>
-                                <td class="px-4 py-4 text-center text-gray-400 font-medium">{{ $hj->jurnal }}</td>
-                                <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{{ $hj->no_akun }}</td>
-                                <td class="px-4 py-4 text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">{{ $hj->no_dokumen ?? '-' }}</td>
-                                <td class="px-4 py-4 text-center font-bold text-gray-500">{{ $hj->mm ?? '-' }}</td>
-                                <td class="px-4 py-4 text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">{{ $hj->nama ?? '-' }}</td>
-                                <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400 break-words whitespace-normal max-w-[300px]">{{ $hj->keterangan }}</td>
-                                <td class="px-4 py-4 text-center text-gray-400 font-bold lowercase tracking-wider">{{ $hj->hit_kbk ?? '-' }}</td>
-                                <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                    {{ ($hj->banyak !== null && $hj->banyak !== '') ? ($hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.')) : '-' }}
-                                </td>
-                                <td class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                    {{ (float)$hj->m3 > 0 ? rtrim(rtrim(number_format((float)$hj->m3, 6, ',', '.'), '0'), ',') : '-' }}
-                                </td>
-                                <td class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">
-                                    {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
-                                </td>
+                                    <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 whitespace-nowrap">
+                                        {{ $hj->nama_akun }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        @if ($hj->nama_barang)
+                                            <span
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-[10px] font-black text-blue-600 dark:text-blue-400 tracking-wider">
+                                                {{ $hj->nama_barang }}
+                                            </span>
+                                        @else
+                                            <span class="text-gray-300 dark:text-gray-600">-</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-4 py-4 text-gray-500 font-medium whitespace-nowrap">
+                                        {{ $hj->tgl->format('d-m-Y') }}</td>
+                                    <td class="px-4 py-4 text-center text-gray-400 font-medium">{{ $hj->jurnal }}
+                                    </td>
+                                    <td
+                                        class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">
+                                        {{ $hj->no_akun }}</td>
+                                    <td
+                                        class="px-4 py-4 text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
+                                        {{ $hj->no_dokumen ?? '-' }}</td>
+                                    <td class="px-4 py-4 text-center font-bold text-gray-500">{{ $hj->mm ?? '-' }}
+                                    </td>
+                                    <td
+                                        class="px-4 py-4 text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
+                                        {{ $hj->nama ?? '-' }}</td>
+                                    <td
+                                        class="px-4 py-4 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400 break-words whitespace-normal max-w-[300px]">
+                                        {{ $hj->keterangan }}</td>
+                                    <td class="px-4 py-4 text-center text-gray-400 font-bold lowercase tracking-wider">
+                                        {{ $hj->hit_kbk ?? '-' }}</td>
+                                    <td
+                                        class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                        {{ $hj->banyak !== null && $hj->banyak !== '' ? ($hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.')) : '-' }}
+                                    </td>
+                                    <td
+                                        class="px-4 py-4 text-right font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                        {{ (float) $hj->m3 > 0 ? rtrim(rtrim(number_format((float) $hj->m3, 6, ',', '.'), '0'), ',') : '-' }}
+                                    </td>
+                                    <td
+                                        class="px-4 py-4 text-right text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">
+                                        {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
+                                    </td>
 
-                                <td class="px-4 py-4 text-right font-bold text-emerald-500 bg-emerald-50/5 whitespace-nowrap">
-                                    @if(in_array(strtolower($hj->map), ['d', 'debit']))
-                                    {{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
-                                    @else
-                                    0
-                                    @endif
-                                </td>
+                                    <td
+                                        class="px-4 py-4 text-right font-bold text-emerald-500 bg-emerald-50/5 whitespace-nowrap">
+                                        @if (in_array(strtolower($hj->map), ['d', 'debit']))
+                                            {{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
+                                        @else
+                                            0
+                                        @endif
+                                    </td>
 
-                                <td class="px-4 py-4 text-right font-bold text-rose-500 bg-rose-50/5 whitespace-nowrap">
-                                    @if(in_array(strtolower($hj->map), ['k', 'kredit']))
-                                    {{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
-                                    @else
-                                    0
-                                    @endif
-                                </td>
+                                    <td
+                                        class="px-4 py-4 text-right font-bold text-rose-500 bg-rose-50/5 whitespace-nowrap">
+                                        @if (in_array(strtolower($hj->map), ['k', 'kredit']))
+                                            {{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
+                                        @else
+                                            0
+                                        @endif
+                                    </td>
 
-                                <td class="px-4 py-4 text-center">
-                                    @if(auth()->user()?->hasRole('super_admin'))
-                                    <div class="flex items-center justify-center gap-1">
-                                        <button type="button" wire:click="mountAction('editHistory', { id: {{ $hj->id }} })" class="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-md transition-colors" title="Edit">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                        </button>
-                                        <button type="button" wire:click="mountAction('deleteHistory', { id: {{ $hj->id }} })" class="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-md transition-colors" title="Hapus">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    @else
-                                    -
-                                    @endif
-                                </td>
-                            </tr>
+                                    <td class="px-4 py-4 text-center">
+                                        @if (auth()->user()?->hasRole('super_admin'))
+                                            <div class="flex items-center justify-center gap-1">
+                                                <button type="button"
+                                                    wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
+                                                    class="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-md transition-colors"
+                                                    title="Edit">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                        viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                                <button type="button"
+                                                    wire:click="mountAction('deleteHistory', { id: {{ $hj->id }} })"
+                                                    class="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-md transition-colors"
+                                                    title="Hapus">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                        viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        @else
+                                            -
+                                        @endif
+                                    </td>
+                                </tr>
                             @empty
-                            <tr>
-                                <td colspan="17" class="px-6 py-16 text-center">
-                                    <div class="flex flex-col items-center gap-3 text-gray-400">
-                                        <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <span class="text-xs italic font-medium">
-                                            {{ ($filterTglDari || $filterTglSampai) ? 'Tidak ada data untuk rentang tanggal yang dipilih.' : 'Belum ada riwayat transaksi yang diposting.' }}
-                                        </span>
-                                    </div>
-                                </td>
-                            </tr>
+                                <tr>
+                                    <td colspan="17" class="px-6 py-16 text-center">
+                                        <div class="flex flex-col items-center gap-3 text-gray-400">
+                                            <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    stroke-width="1.5"
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            <span class="text-xs italic font-medium">
+                                                {{ $filterTglDari || $filterTglSampai ? 'Tidak ada data untuk rentang tanggal yang dipilih.' : 'Belum ada riwayat transaksi yang diposting.' }}
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
                             @endforelse
                         </tbody>
 
-                        <tfoot class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
+                        <tfoot
+                            class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                             <tr>
-                                <td colspan="14" class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total Akumulasi</td>
-                                <td class="px-4 py-5 text-right text-emerald-500 bg-emerald-50/10 text-base font-black whitespace-nowrap">
+                                <td colspan="14"
+                                    class="px-4 py-5 text-right text-gray-400 tracking-widest uppercase">Total
+                                    Akumulasi</td>
+                                <td
+                                    class="px-4 py-5 text-right text-emerald-500 bg-emerald-50/10 text-base font-black whitespace-nowrap">
                                     {{ number_format($totalDebitDB, 0, ',', '.') }}
                                 </td>
-                                <td class="px-4 py-5 text-right text-rose-500 bg-rose-50/10 text-base font-black whitespace-nowrap">
+                                <td
+                                    class="px-4 py-5 text-right text-rose-500 bg-rose-50/10 text-base font-black whitespace-nowrap">
                                     {{ number_format($totalKreditDB, 0, ',', '.') }}
                                 </td>
                                 <td></td>
                             </tr>
                             <tr class="border-t border-gray-200 dark:border-gray-700">
                                 <td colspan="17" class="px-4 py-3">
-                                    @if($isHistoryBalanced)
-                                    <div class="flex items-center justify-end gap-2">
-                                        <div class="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg shadow-xs">
-                                            <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                            <span class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Jurnal Balanced</span>
-                                            <span class="text-[10px] text-green-500 font-medium normal-case tracking-normal">— Debit = Kredit</span>
+                                    @if ($isHistoryBalanced)
+                                        <div class="flex items-center justify-end gap-2">
+                                            <div
+                                                class="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg shadow-xs">
+                                                <svg class="w-3.5 h-3.5 text-green-500" fill="none"
+                                                    stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <span
+                                                    class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-[0.2em]">Jurnal
+                                                    Balanced</span>
+                                                <span
+                                                    class="text-[10px] text-green-500 font-medium normal-case tracking-normal">—
+                                                    Debit = Kredit</span>
+                                            </div>
                                         </div>
-                                    </div>
                                     @else
-                                    <div class="flex items-center justify-end gap-3">
-                                        <div class="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg shadow-xs">
-                                            <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                                            <span class="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Jurnal Unbalanced</span>
+                                        <div class="flex items-center justify-end gap-3">
+                                            <div
+                                                class="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg shadow-xs">
+                                                <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                                <span
+                                                    class="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Jurnal
+                                                    Unbalanced</span>
+                                            </div>
+                                            <div
+                                                class="flex items-center gap-1.5 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg shadow-xs">
+                                                <svg class="w-3 h-3 text-amber-500" fill="none"
+                                                    stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span
+                                                    class="text-[10px] text-amber-600 dark:text-amber-400 font-bold normal-case tracking-normal whitespace-nowrap">Selisih:
+                                                    Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
+                                            </div>
                                         </div>
-                                        <div class="flex items-center gap-1.5 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg shadow-xs">
-                                            <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold normal-case tracking-normal whitespace-nowrap">Selisih: Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
-                                        </div>
-                                    </div>
                                     @endif
                                 </td>
                             </tr>
@@ -1523,30 +1766,44 @@
                     <div wire:loading wire:target="loadMore"
                         style="position: sticky; bottom: 0; left: 0; right: 0; z-index: 20; pointer-events: none;"
                         class="flex items-center justify-center py-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-t border-amber-100 dark:border-amber-900/40">
-                        <div class="flex items-center gap-3 px-5 py-2.5 bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded-full shadow-md">
-                            <svg class="w-4 h-4 text-amber-500 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4" stroke-dashoffset="10" opacity="0.25" />
-                                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+                        <div
+                            class="flex items-center gap-3 px-5 py-2.5 bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded-full shadow-md">
+                            <svg class="w-4 h-4 text-amber-500 animate-spin flex-shrink-0" viewBox="0 0 24 24"
+                                fill="none">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"
+                                    stroke-dasharray="31.4" stroke-dashoffset="10" opacity="0.25" />
+                                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3"
+                                    stroke-linecap="round" />
                             </svg>
-                            <span class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-[0.2em]">Memuat data jurnal</span>
+                            <span
+                                class="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-[0.2em]">Memuat
+                                data jurnal</span>
                             <span class="text-[10px] font-black text-amber-600 dark:text-amber-400">+50 baris</span>
                         </div>
                     </div>
 
-                    @if(!$hasMorePages && $historyJurnals->count() > 0)
-                    <div style="position: sticky; bottom: 0; left: 0; right: 0;"
-                        class="flex items-center justify-center gap-3 py-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-t border-gray-100 dark:border-gray-800">
-                        <div class="flex-1 max-w-[60px] h-px bg-gradient-to-r from-transparent to-gray-200 dark:to-gray-700"></div>
-                        <div class="flex items-center gap-2 text-gray-300 dark:text-gray-600">
-                            <div class="w-4 h-4 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center justify-center">
-                                <svg class="w-2.5 h-2.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <polyline stroke-linecap="round" stroke-linejoin="round" stroke-width="3" points="20 6 9 17 4 12" />
-                                </svg>
+                    @if (!$hasMorePages && $historyJurnals->count() > 0)
+                        <div style="position: sticky; bottom: 0; left: 0; right: 0;"
+                            class="flex items-center justify-center gap-3 py-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-t border-gray-100 dark:border-gray-800">
+                            <div
+                                class="flex-1 max-w-[60px] h-px bg-gradient-to-r from-transparent to-gray-200 dark:to-gray-700">
                             </div>
-                            <span class="text-[10px] font-black uppercase tracking-[0.3em]">Semua data sudah dimuat</span>
+                            <div class="flex items-center gap-2 text-gray-300 dark:text-gray-600">
+                                <div
+                                    class="w-4 h-4 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center justify-center">
+                                    <svg class="w-2.5 h-2.5 text-green-400" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <polyline stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                                            points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <span class="text-[10px] font-black uppercase tracking-[0.3em]">Semua data sudah
+                                    dimuat</span>
+                            </div>
+                            <div
+                                class="flex-1 max-w-[60px] h-px bg-gradient-to-l from-transparent to-gray-200 dark:to-gray-700">
+                            </div>
                         </div>
-                        <div class="flex-1 max-w-[60px] h-px bg-gradient-to-l from-transparent to-gray-200 dark:to-gray-700"></div>
-                    </div>
                     @endif
                 </div>
             </div>
