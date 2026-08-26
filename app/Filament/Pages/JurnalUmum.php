@@ -18,6 +18,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
@@ -351,34 +352,26 @@ class JurnalUmum extends Page implements HasActions, HasForms
             return;
         }
 
-        // OPTIMASI CACHE: Array ringan
         $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
         });
 
         $this->nama_akun = $accountsMap[$value] ?? '';
 
-        // ── Cek apakah akun ini dipakai oleh lebih dari 1 barang ──────
         $barangs = Barang::whereHas(
             'subAnakAkun',
             fn ($q) => $q->where('kode_sub_anak_akun', $value)
         )->get(['id', 'nama_barang']);
 
-        if ($barangs->count() === 1) {
-            // Hanya 1 barang yang pakai akun ini → langsung dipilih otomatis
-            $this->id_barang = $barangs->first()->id;
-            $this->barangOptions = [];
-            $this->showBarangPicker = false;
-        } elseif ($barangs->count() > 1) {
-            // Lebih dari 1 barang berbagi akun ini → wajib pilih manual
-            $this->id_barang = null;
+        if ($barangs->isNotEmpty()) {
+            // Dinamis: selama akun ini punya barang terkait (1 atau lebih), tampilkan picker
+            $this->id_barang = $barangs->count() === 1 ? $barangs->first()->id : null;
             $this->barangOptions = $barangs->map(fn ($b) => [
                 'id' => $b->id,
                 'nama' => $b->nama_barang,
             ])->values()->toArray();
             $this->showBarangPicker = true;
         } else {
-            // Akun ini tidak dipakai barang manapun (mis. akun non-persediaan)
             $this->id_barang = null;
             $this->barangOptions = [];
             $this->showBarangPicker = false;
@@ -688,7 +681,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->required()
                     ->searchable()
                     ->options(function () {
-                        // OPTIMASI CACHE: Array ringan
                         $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
                             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
                         });
@@ -703,8 +695,42 @@ class JurnalUmum extends Page implements HasActions, HasForms
                             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
                         });
                         $set('nama_akun', $accountsMap[$state] ?? '');
+                        $set('id_barang', null); // reset pilihan barang saat akun ganti
                     }),
                 TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
+
+                // ── FIELD BARU: Nama Barang, muncul hanya jika akun punya barang terkait ──
+                Select::make('id_barang')
+                    ->label('Nama Barang')
+                    ->searchable()
+                    ->options(function (Get $get) {
+                        $noAkun = $get('no_akun');
+                        if (blank($noAkun)) {
+                            return [];
+                        }
+
+                        return Barang::whereHas(
+                            'subAnakAkun',
+                            fn ($q) => $q->where('kode_sub_anak_akun', $noAkun)
+                        )->pluck('nama_barang', 'id');
+                    })
+                    ->visible(function (Get $get) {
+                        $noAkun = $get('no_akun');
+                        if (blank($noAkun)) {
+                            return false;
+                        }
+
+                        // Dinamis: field muncul jika akun ini punya barang terkait, apapun kodenya
+                        return Barang::whereHas(
+                            'subAnakAkun',
+                            fn ($q) => $q->where('kode_sub_anak_akun', $noAkun)
+                        )->exists();
+                    })
+                    ->required(fn (Get $get) => Barang::whereHas(
+                        'subAnakAkun',
+                        fn ($q) => $q->where('kode_sub_anak_akun', $get('no_akun'))
+                    )->exists())
+                    ->live(),
 
                 TextInput::make('mm')->label('MM (Tebal Plywood)')->numeric(),
                 TextInput::make('keterangan')->label('Keterangan'),
@@ -797,6 +823,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
                 $data = $record->toArray();
                 $data['no_dokumen'] = $record->{'no-dokumen'} ?? $record->no_dokumen;
+                $data['id_barang'] = $record->id_barang;
 
                 return $data;
             })

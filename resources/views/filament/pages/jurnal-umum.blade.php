@@ -681,7 +681,7 @@
                             class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No.
                             Jurnal</label>
                         <input type="text" x-model="jurnal" disabled readonly
-                            title="No. Jurnal digenerate otomatis oleh sistem"
+                            title="No. Jurnal digenerate otomatis oleh sistem dan akan diperbarui jika terjadi konflik nomor"
                             class="w-full px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-bold text-gray-500 dark:text-gray-400 cursor-not-allowed shadow-sm">
                     </div>
                     <div class="space-y-1.5">
