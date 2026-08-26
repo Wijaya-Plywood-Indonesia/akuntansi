@@ -11,15 +11,20 @@ use UnitEnum;
 class StokMatrix extends Page
 {
     protected string $view = 'filament.pages.stok-matrix';
+
     protected static string|UnitEnum|null $navigationGroup = 'Stock Barang';
+
     public static ?string $navigationLabel = 'Matrix Barang';
 
     protected $barangs;
+
     protected $stok;
+
     protected int $pairs = 5;
 
     public function mount(): void
     {
+        // Ambil semua barang yang punya kode_sub_anak_akun valid
         $this->barangs = Barang::with(['subAnakAkun', 'satuan', 'kategori'])
             ->whereHas('subAnakAkun', function ($query) {
                 $query->whereNotNull('kode_sub_anak_akun')
@@ -28,31 +33,28 @@ class StokMatrix extends Page
             ->orderBy('nama_barang')
             ->get();
 
-        $kodeAkuns = $this->barangs->map(function ($barang) {
-            return $barang->subAnakAkun?->kode_sub_anak_akun;
-        })->filter()->unique()->toArray();
+        $barangIds = $this->barangs->pluck('id')->toArray();
 
+        // Ambil transaksi jurnal umum yang punya id_barang valid (otomatis exclude yang NULL)
         $transaksisGrouped = JurnalUmum::select(
-                'no_akun',
-                'map',
-                DB::raw('SUM(COALESCE(banyak, 0)) as total_qty'),
-                DB::raw('SUM(COALESCE(m3, 0)) as total_m3')
-            )
-            ->whereIn('no_akun', $kodeAkuns)
-            ->groupBy('no_akun', 'map')
+            'id_barang',
+            'map',
+            DB::raw('SUM(COALESCE(banyak, 0)) as total_qty'),
+            DB::raw('SUM(COALESCE(m3, 0)) as total_m3')
+        )
+            ->whereIn('id_barang', $barangIds)
+            ->groupBy('id_barang', 'map')
             ->get()
-            ->groupBy('no_akun');
+            ->groupBy('id_barang');
 
         $matrixTemporaryStok = [];
 
         foreach ($this->barangs as $barang) {
-            $subAkun = $barang->subAnakAkun;
-            $kodeAkun = $subAkun?->kode_sub_anak_akun;
-
             $totalQty = 0.0;
             $totalM3 = 0.0;
-            if ($kodeAkun && isset($transaksisGrouped[$kodeAkun])) {
-                foreach ($transaksisGrouped[$kodeAkun] as $trx) {
+
+            if (isset($transaksisGrouped[$barang->id])) {
+                foreach ($transaksisGrouped[$barang->id] as $trx) {
                     $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
                     $qty = (float) $trx->total_qty;
                     $m3 = (float) $trx->total_m3;
@@ -69,7 +71,7 @@ class StokMatrix extends Page
 
             $matrixTemporaryStok[$barang->id] = (object) [
                 'stok' => $totalQty,
-                'm3'   => $totalM3,
+                'm3' => $totalM3,
             ];
         }
 
@@ -99,16 +101,15 @@ class StokMatrix extends Page
         $chunks = $this->barangs->chunk($this->pairs);
 
         return [
-            'barangs'              => $this->barangs,
-            'stok'                 => $this->stok,
-            'pairs'                => $this->pairs,
-            'chunks'               => $chunks,
-            'totalBarang'          => $totalBarang,
-            'totalStokAktifCount'  => $totalStokAktifCount,
+            'barangs' => $this->barangs,
+            'stok' => $this->stok,
+            'pairs' => $this->pairs,
+            'chunks' => $chunks,
+            'totalBarang' => $totalBarang,
+            'totalStokAktifCount' => $totalStokAktifCount,
             'totalStokKosongCount' => $totalStokKosongCount,
-            'totalAkumulasiStok'   => $totalAkumulasiStok,
-            'totalAkumulasiM3'     => $totalAkumulasiM3,
+            'totalAkumulasiStok' => $totalAkumulasiStok,
+            'totalAkumulasiM3' => $totalAkumulasiM3,
         ];
     }
 }
-
