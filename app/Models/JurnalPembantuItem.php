@@ -16,7 +16,7 @@ class JurnalPembantuItem extends Model
         'pihak_id',
         'nama_pihak',
         'nama_barang',
-        'barang_id',
+        'id_barang',
         'no_dokumen',
         'no_referensi',
         'keterangan',

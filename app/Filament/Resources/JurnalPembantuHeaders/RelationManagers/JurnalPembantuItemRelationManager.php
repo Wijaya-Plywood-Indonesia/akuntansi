@@ -166,5 +166,4 @@ class JurnalPembantuItemRelationManager extends RelationManager
                 ]),
             ]);
     }
-
 }

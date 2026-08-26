@@ -272,9 +272,11 @@ class JurnalPembantuHeadersTable
                                 }
 
                                 foreach ($headers as $header) {
-                                    $itemsPerBarang = $header->items->groupBy('barang_id');
+                                    $itemsPerBarang = $header->items->groupBy('id_barang'); // ✅ FIX: nama kolom benar
 
-                                    foreach ($itemsPerBarang as $barangId => $items) {
+                                    foreach ($itemsPerBarang as $idBarang => $items) {
+                                        $idBarangFinal = $idBarang !== '' ? $idBarang : null; // ✅ FIX: normalisasi
+
                                         $totalBanyak = (float) $items->sum('banyak');
                                         $totalM3 = (float) $items->sum('m3');
                                         $totalNilaiGrup = (float) $items->sum('jumlah');
@@ -333,7 +335,7 @@ class JurnalPembantuHeadersTable
                                             'no-dokumen' => $noDokumenGlobal,
                                             'nama' => $namaGlobal,
                                             'keterangan' => $header->keterangan,
-                                            'barang_id' => $barangId,
+                                            'id_barang' => $idBarangFinal,
 
                                             // Variabel final untuk stok dikirimkan
                                             'banyak' => $banyakFinal !== null ? round($banyakFinal, 4) : null,

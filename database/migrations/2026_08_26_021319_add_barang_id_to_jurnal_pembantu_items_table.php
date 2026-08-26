@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('jurnal_pembantu_items', function (Blueprint $table) {
-            $table->foreignId('barang_id')
+            $table->foreignId('id_barang')
                 ->nullable()
                 ->after('nama_barang')
                 ->constrained('barangs')
@@ -26,8 +26,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('jurnal_pembantu_items', function (Blueprint $table) {
-            $table->dropForeign(['barang_id']);
-            $table->dropColumn('barang_id');
+            $table->dropForeign(['id_barang']);
+            $table->dropColumn('id_barang');
         });
     }
 };

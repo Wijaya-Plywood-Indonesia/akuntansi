@@ -41,10 +41,10 @@ class JurnalBalikService
                         'keterangan'          => 'BALIK: ' . $headerAsli->keterangan,
                         'no_dokumen'          => $headerAsli->no_dokumen,
                         'catatan_internal'    => 'Jurnal balik atas pembatalan validasi nota ' . $headerAsli->no_dokumen,
-                        
+
                         // ✅ FIX 1: Copy langsung total nilai dari aslinya, jangan diset 0
-                        'total_nilai'         => $headerAsli->total_nilai, 
-                        
+                        'total_nilai'         => $headerAsli->total_nilai,
+
                         'status'              => JurnalPembantuHeader::STATUS_DRAFT,
                         'adalah_jurnal_balik' => true,
                         'membalik_id'         => $headerAsli->id,
@@ -59,20 +59,21 @@ class JurnalBalikService
                             'jenis_pihak'               => $itemAsli->jenis_pihak,
                             'nama_pihak'                => $itemAsli->nama_pihak,
                             'nama_barang'               => $itemAsli->nama_barang,
+                            'id_barang'                 => $itemAsli->id_barang,
                             'no_dokumen'                => $itemAsli->no_dokumen,
                             'no_referensi'              => $itemAsli->no_referensi,
                             'keterangan'                => 'BALIK: ' . $itemAsli->keterangan,
                             'banyak'                    => $itemAsli->banyak,
-                            'm3'                        => $itemAsli->m3, 
+                            'm3'                        => $itemAsli->m3,
                             'harga'                     => $itemAsli->harga,
                             'jumlah'                    => $itemAsli->jumlah,
-                            
+
                             // ✅ FIX 2: Sertakan shadow_harga dan shadow_jumlah agar Observer tidak "buta"
                             'shadow_harga'              => $itemAsli->shadow_harga ?? $itemAsli->harga,
                             'shadow_jumlah'             => $itemAsli->shadow_jumlah ?? $itemAsli->jumlah,
-                            
-                            'hit_kbk'                   => $itemAsli->hit_kbk, 
-                            
+
+                            'hit_kbk'                   => $itemAsli->hit_kbk,
+
                             'status'                    => true,
                             'created_by'                => $userId,
                             'updated_by'                => $userId,
