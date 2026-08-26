@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Penjualans\Pages;
 use App\Filament\Resources\Penjualans\PenjualanResource;
 use App\Models\Barang;
 use App\Models\DetailPenjualan;
-use App\Models\IdentitasToko;
 use App\Models\Pembeli;
 use App\Models\Penjualan;
 use App\Models\RekeningPerusahaan;
@@ -96,33 +95,37 @@ class PosPenjualan extends Page
             $this->toko_id = $tokoUser->id_toko;
             $this->kodeToko = $tokoUser->toko->kode_toko;
             $this->namaToko = $tokoUser->toko->nama_toko;
-            $this->no_nota = $this->generateNoNota();
+        } else {
+            // Beri tahu kasir kalau dia belum terhubung ke toko manapun,
+            // supaya jelas kenapa transaksi nanti bisa gagal (toko_id null).
+            Notification::make()
+                ->title('Toko Tidak Ditemukan')
+                ->body('Akun Anda belum terhubung ke toko manapun. Silakan hubungi admin.')
+                ->warning()
+                ->send();
         }
+
+        // FIX: no_nota HARUS selalu di-generate, terlepas dari apakah
+        // $tokoUser ditemukan atau tidak. Sebelumnya baris ini ada di
+        // dalam blok if($tokoUser) sehingga kalau user tidak punya toko,
+        // $no_nota tetap null dan field nota di form terlihat kosong.
+        $this->no_nota = $this->generateNoNota();
 
         $this->tanggal = now()->format('Y-m-d\TH:i');
     }
 
+    /**
+     * Generate nomor nota default dengan format:
+     * INA-ddmmyyyy + timestamp mikro (8 digit terakhir)
+     * Contoh: INA-260820261732050123
+     */
     public function generateNoNota()
     {
-        if (! $this->toko_id) {
-            return 'XXX-000001';
-        }
+        do {
+            $noNota = 'INA-'.now()->format('dmY').substr((string) (microtime(true) * 10000), -8);
+        } while (Penjualan::where('no_nota', $noNota)->exists());
 
-        $toko = IdentitasToko::find($this->toko_id);
-        $prefix = ($toko?->kode_toko ?? 'XXX').'-';
-
-        $last = Penjualan::where('no_nota', 'LIKE', $prefix.'%')
-            ->orderBy('id', 'DESC')
-            ->first();
-
-        if (! $last) {
-            return $prefix.'000001';
-        }
-
-        $lastNumber = (int) str_replace($prefix, '', $last->no_nota);
-        $newNumber = $lastNumber + 1;
-
-        return $prefix.str_pad($newNumber, 6, '0', STR_PAD_LEFT);
+        return $noNota;
     }
 
     public function updatedTokoId()

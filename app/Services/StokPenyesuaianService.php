@@ -3,12 +3,9 @@
 namespace App\Services;
 
 use App\Models\Barang;
-use App\Models\Penjualan;
 use App\Models\ReturnPenjualan;
-use App\Models\ReturnPenjualanDetail;
 use App\Models\StokBarangToko;
 use App\Models\StokLog;
-use App\Services\StokLogs\StokLogService;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -23,14 +20,14 @@ class StokPenyesuaianService
         int $userId,
         ?string $catatan
     ): void {
-        DB::transaction(function () use ($barangId, $tokoId, $stokFisik, $userId, $catatan) {
+        DB::transaction(function () use ($barangId, $tokoId, $stokFisik, $userId) {
 
             $stok = StokBarangToko::where('barang_id', $barangId)
                 ->where('toko_id', $tokoId)
                 ->lockForUpdate()
                 ->first();
 
-            if (!$stok) {
+            if (! $stok) {
                 $stok = StokBarangToko::create([
                     'barang_id' => $barangId,
                     'toko_id' => $tokoId,
@@ -62,66 +59,75 @@ class StokPenyesuaianService
     }
 
     public function lunas(int $id_penjualan): void
-{
-    DB::transaction(function () use ($id_penjualan) {
+    {
+        DB::transaction(function () use ($id_penjualan) {
 
-        $details = DB::table('penjualan_details')
-            ->where('penjualan_id', $id_penjualan)
-            ->select(['barang_id', 'qty', 'nama_barang'])
-            ->get();
+            $details = DB::table('penjualan_details')
+                ->where('penjualan_id', $id_penjualan)
+                ->select(['barang_id', 'qty', 'nama_barang'])
+                ->get();
 
-        foreach ($details as $detail) {
-            $barang = \App\Models\Barang::find($detail->barang_id);
-            $stokBukuBesar = $barang ? $barang->stok_buku_besar : 0;
+            foreach ($details as $detail) {
+                $barang = Barang::find($detail->barang_id);
 
-            if ($stokBukuBesar - (float) $detail->qty < 0) {
-                throw ValidationException::withMessages([
-                    'stok' => "Stok {$detail->nama_barang} tidak mencukupi"
-                ]);
+                // FIX: Validasi stok sekarang pakai $barang->stok_matrix
+                // (accessor getStokMatrixAttribute -> hitungStokMatrixQty), yaitu
+                // sumber yang SAMA persis dengan yang dipakai StokMatrix::mount().
+                // Sebelumnya pakai stok_buku_besar yang masih punya fallback ke
+                // baris jurnal legacy (id_barang kosong, hanya cocok lewat no_akun),
+                // sehingga bisa gabung dengan barang lain yang berbagi akun yang
+                // sama dan menghasilkan angka stok yang beda dengan tampilan Matrix.
+                $stokMatrix = $barang ? $barang->stok_matrix : 0;
+
+                if ($stokMatrix - (float) $detail->qty < 0) {
+                    throw ValidationException::withMessages([
+                        'stok' => "Stok {$detail->nama_barang} tidak mencukupi",
+                    ]);
+                }
             }
-        }
 
-        Notification::make()
-            ->title('Transaksi Lunas')
-            ->success()
-            ->send();
-    });
-}
+            Notification::make()
+                ->title('Transaksi Lunas')
+                ->success()
+                ->send();
+        });
+    }
 
     public function batalLunas(int $id_penjualan): void
-{
-    DB::transaction(function () use ($id_penjualan) {
-        // Stok sudah dikelola via JurnalUmum, tidak perlu manipulasi stok di sini
+    {
+        DB::transaction(function () {
+            // Stok sudah dikelola via JurnalUmum, tidak perlu manipulasi stok di sini
 
-        Notification::make()
-            ->title('Transaksi dibatalkan')
-            ->success()
-            ->send();
-    });
-}
+            Notification::make()
+                ->title('Transaksi dibatalkan')
+                ->success()
+                ->send();
+        });
+    }
+
     public function selesai(int $id_return): void
-{
-    DB::transaction(function () use ($id_return) {
-        $return = ReturnPenjualan::with('details_return')->findOrFail($id_return);
+    {
+        DB::transaction(function () use ($id_return) {
+            $return = ReturnPenjualan::with('details_return')->findOrFail($id_return);
 
-        Notification::make()
-            ->title('Return Selesai/Diterima')
-            ->success()
-            ->send();
-    });
-}
+            Notification::make()
+                ->title('Return Selesai/Diterima')
+                ->success()
+                ->send();
+        });
+    }
 
     public function validasi_batal_dari_selesai(int $id_return): void
-{
-    DB::transaction(function () use ($id_return) {
-        $return = ReturnPenjualan::with('details_return')->findOrFail($id_return);
+    {
+        DB::transaction(function () use ($id_return) {
+            $return = ReturnPenjualan::with('details_return')->findOrFail($id_return);
 
-        Notification::make()
-            ->title('Return dibatalkan')
-            ->success()
-            ->send();
-    });
-}
+            Notification::make()
+                ->title('Return dibatalkan')
+                ->success()
+                ->send();
+        });
+    }
 
     public static function queryBarangByToko(int $tokoId, int $penjualanId): Builder
     {
@@ -137,16 +143,17 @@ class StokPenyesuaianService
 
     public static function calculate_subtotal(
         float|int|null $hargaJual,
-        int|null $qty,
+        ?int $qty,
         float|int|null $potongan = 0
     ): float {
         $subtotal = ((float) $hargaJual * (int) $qty) - (float) $potongan;
+
         return max($subtotal, 0);
     }
 
     public static function validateSubtotal(
         float|int|null $hargaJual,
-        int|null $qty,
+        ?int $qty,
         float|int|null $potongan = 0
     ): void {
         if (self::calculate_subtotal($hargaJual, $qty, $potongan) <= 0) {
