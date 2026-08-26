@@ -68,7 +68,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public $items = [];
 
-    // ── Pemilihan barang saat 1 akun dipakai oleh >1 barang ──────────
+    // ── Pemilihan barang saat akun punya barang terkait ──────────
     public $id_barang = null;
 
     public array $barangOptions = [];
@@ -364,8 +364,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
         )->get(['id', 'nama_barang']);
 
         if ($barangs->isNotEmpty()) {
-            // Dinamis: selama akun ini punya barang terkait (1 atau lebih), tampilkan picker
-            $this->id_barang = $barangs->count() === 1 ? $barangs->first()->id : null;
+            // Dinamis: selama akun ini punya barang terkait (1 atau lebih), tampilkan picker.
+            // Sengaja TIDAK auto-pilih meski hanya ada 1 opsi — user tetap harus
+            // memilih secara sadar, konsisten dengan kasus >1 barang.
+            $this->id_barang = null;
             $this->barangOptions = $barangs->map(fn ($b) => [
                 'id' => $b->id,
                 'nama' => $b->nama_barang,
@@ -432,7 +434,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             $errors[] = 'Nama Akun belum terisi.';
         }
         if ($this->showBarangPicker && ! empty($this->barangOptions) && blank($this->id_barang)) {
-            $errors[] = 'Akun ini dipakai oleh beberapa barang, pilih barangnya terlebih dahulu.';
+            $errors[] = 'Akun ini terkait barang, pilih barangnya terlebih dahulu.';
         }
         if (blank($this->harga) || (float) $this->harga < 0.01) {
             $errors[] = 'Harga wajib diisi (minimal Rp 1).';
@@ -699,7 +701,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     }),
                 TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
 
-                // ── FIELD BARU: Nama Barang, muncul hanya jika akun punya barang terkait ──
+                // ── FIELD: Nama Barang, muncul jika akun punya barang terkait (selalu wajib dipilih manual) ──
                 Select::make('id_barang')
                     ->label('Nama Barang')
                     ->searchable()
@@ -720,7 +722,6 @@ class JurnalUmum extends Page implements HasActions, HasForms
                             return false;
                         }
 
-                        // Dinamis: field muncul jika akun ini punya barang terkait, apapun kodenya
                         return Barang::whereHas(
                             'subAnakAkun',
                             fn ($q) => $q->where('kode_sub_anak_akun', $noAkun)
