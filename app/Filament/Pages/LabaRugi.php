@@ -17,7 +17,7 @@ class LabaRugi extends Page
     use HasPageShield;
 
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
-    protected static ?string $title = 'Laba Rugi Telur';
+    protected static ?string $title = 'Laba Rugi';
     protected static ?string $navigationLabel = 'Laba Rugi ';
     protected string $view = 'filament.pages.laba-rugi';
 
@@ -40,8 +40,14 @@ class LabaRugi extends Page
         $this->generateLaporan();
     }
 
-    public function updatedPeriodeAwal(): void  { $this->generateLaporan(); }
-    public function updatedPeriodeAkhir(): void { $this->generateLaporan(); }
+    public function updatedPeriodeAwal(): void
+    {
+        $this->generateLaporan();
+    }
+    public function updatedPeriodeAkhir(): void
+    {
+        $this->generateLaporan();
+    }
     public function updatedTampilkanSaldoNol(): void {}
 
     // ── FUNGSI RESET FILTER SAAT TOMBOL DIKLIK ──
@@ -49,7 +55,7 @@ class LabaRugi extends Page
     {
         $this->jenisFilter = $jenis;
         $now = now();
-        
+
         if ($jenis === 'hari') {
             $this->periodeAwal  = $now->startOfMonth()->format('Y-m-d');
             $this->periodeAkhir = $now->format('Y-m-d');
@@ -57,7 +63,7 @@ class LabaRugi extends Page
             $this->periodeAwal  = $now->format('Y-m');
             $this->periodeAkhir = $now->format('Y-m');
         }
-        
+
         // Render ulang laporan setiap ganti filter
         $this->generateLaporan();
     }
@@ -70,7 +76,7 @@ class LabaRugi extends Page
             if ($this->jenisFilter === 'hari') {
                 $awal  = Carbon::createFromFormat('Y-m-d', $this->periodeAwal)->startOfDay();
                 $akhir = Carbon::createFromFormat('Y-m-d', $this->periodeAkhir)->startOfDay();
-                
+
                 if ($awal->gt($akhir)) return [];
 
                 // Maksimal 31 hari
@@ -90,7 +96,6 @@ class LabaRugi extends Page
                     ];
                     $current->addDay();
                 }
-
             } else {
                 $awal  = Carbon::createFromFormat('Y-m', $this->periodeAwal)->startOfMonth();
                 $akhir = Carbon::createFromFormat('Y-m', $this->periodeAkhir)->startOfMonth();
@@ -158,8 +163,8 @@ class LabaRugi extends Page
 
         return Excel::download(
             new LabaRugiExport(
-                laporanData:       $this->laporanData,
-                bulanList:         $this->bulanList,
+                laporanData: $this->laporanData,
+                bulanList: $this->bulanList,
                 ringkasanPerBulan: $this->ringkasanPerBulan,
                 tampilkanSaldoNol: $this->tampilkanSaldoNol,
             ),
@@ -284,10 +289,10 @@ class LabaRugi extends Page
             foreach ($jurnals as $jurnal) {
                 $kode  = $jurnal->no_akun;
                 $nilai = match (strtolower($jurnal->hit_kbk ?? '')) {
-        'b'     => (float) ($jurnal->banyak ?? 0) * (float) ($jurnal->harga ?? 0),
-        'm'     => (float) ($jurnal->m3 ?? 0)     * (float) ($jurnal->harga ?? 0),
-        default => (float) ($jurnal->harga ?? 0),
-    };
+                    'b'     => (float) ($jurnal->banyak ?? 0) * (float) ($jurnal->harga ?? 0),
+                    'm'     => (float) ($jurnal->m3 ?? 0)     * (float) ($jurnal->harga ?? 0),
+                    default => (float) ($jurnal->harga ?? 0),
+                };
 
                 $saldoNormal = strtolower($saldoNormalMap[$kode] ?? 'debit');
                 $isDebit     = strtolower($jurnal->map) === 'd';

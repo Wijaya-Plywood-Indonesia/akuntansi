@@ -68,8 +68,8 @@ class JurnalPembantuHeadersTable
                     ->color(
                         fn($state) =>
                         strtolower($state) === 'd'
-                        ? 'info'
-                        : 'warning'
+                            ? 'info'
+                            : 'warning'
                     )
                     ->formatStateUsing(
                         fn($state) => strtoupper($state)
@@ -272,74 +272,80 @@ class JurnalPembantuHeadersTable
                                 }
 
                                 foreach ($headers as $header) {
-                                    $items = $header->items;
-                                    $totalBanyak = (float) $items->sum('banyak');
-                                    $totalM3 = (float) $items->sum('m3');
-                                    $totalNilaiHeader = (float) $header->total_nilai;
-            
-                                    $firstItem = $items->first();
-                                    $itemHitKbk = $firstItem?->hit_kbk;
+                                    $itemsPerBarang = $header->items->groupBy('barang_id');
 
-                                    $hitKbk = '';
-                                    $prefix = substr($header->no_akun, 0, 3);
-                                    $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
+                                    foreach ($itemsPerBarang as $barangId => $items) {
+                                        $totalBanyak = (float) $items->sum('banyak');
+                                        $totalM3 = (float) $items->sum('m3');
+                                        $totalNilaiGrup = (float) $items->sum('jumlah');
 
-                                    if (!$isCashOrPayment) {
-                                        $hitKbk = 'b';
+                                        $firstItem = $items->first();
+                                        $itemHitKbk = $firstItem?->hit_kbk;
 
-                                        if ($firstItem) {
-                                            $b = (float) $firstItem->banyak;
-                                            $m = (float) $firstItem->m3;
-                                            $h = (float) $firstItem->harga;
-                                            $j = (float) $firstItem->jumlah;
+                                        $hitKbk = '';
+                                        $prefix = substr($header->no_akun, 0, 3);
+                                        $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
 
-                                            if ($m > 0 && abs($j - ($m * $h)) < 0.01) {
-                                                $hitKbk = 'm';
-                                            } elseif ($b > 0 && abs($j - ($b * $h)) < 0.01) {
-                                                $hitKbk = 'b';
+                                        if (!$isCashOrPayment) {
+                                            $hitKbk = 'b';
+
+                                            if ($firstItem) {
+                                                $b = (float) $firstItem->banyak;
+                                                $m = (float) $firstItem->m3;
+                                                $h = (float) $firstItem->harga;
+                                                $j = (float) $firstItem->jumlah;
+
+                                                if ($m > 0 && abs($j - ($m * $h)) < 0.01) {
+                                                    $hitKbk = 'm';
+                                                } elseif ($b > 0 && abs($j - ($b * $h)) < 0.01) {
+                                                    $hitKbk = 'b';
+                                                }
                                             }
                                         }
+
+                                        if ($itemHitKbk === 'k') {
+                                            $hitKbk = 'm';
+                                        } elseif ($itemHitKbk === 'b') {
+                                            $hitKbk = 'b';
+                                        }
+
+                                        // Konsisten selalu mengirim nilai M3 dan Banyak apa adanya
+                                        $m3Final = $totalM3 > 0 ? $totalM3 : null;
+                                        $banyakFinal = $totalBanyak > 0 ? $totalBanyak : null;
+
+                                        // ✅ FIX: pakai $totalNilaiGrup (per barang), bukan $totalNilaiHeader (tidak pernah ada)
+                                        if ($hitKbk === 'm') {
+                                            $hargaFinal = $totalM3 > 0 ? ($totalNilaiGrup / $totalM3) : $totalNilaiGrup;
+                                        } elseif ($hitKbk === 'b') {
+                                            if (!$banyakFinal && !$isCashOrPayment) $banyakFinal = 1;
+                                            $hargaFinal = $totalBanyak > 0 ? ($totalNilaiGrup / $totalBanyak) : $totalNilaiGrup;
+                                        } else {
+                                            $hargaFinal = $totalNilaiGrup;
+                                        }
+
+                                        JurnalUmum::create([
+                                            'tgl' => $header->tgl_transaksi
+                                                ? $header->tgl_transaksi->format('Y-m-d')
+                                                : now()->format('Y-m-d'),
+                                            'jurnal' => $nomorFinal,
+                                            'no_akun' => $header->no_akun,
+                                            'nama_akun' => $header->nama_akun,
+                                            'no-dokumen' => $noDokumenGlobal,
+                                            'nama' => $namaGlobal,
+                                            'keterangan' => $header->keterangan,
+                                            'barang_id' => $barangId,
+
+                                            // Variabel final untuk stok dikirimkan
+                                            'banyak' => $banyakFinal !== null ? round($banyakFinal, 4) : null,
+                                            'm3' => $m3Final !== null ? round($m3Final, 4) : null,
+
+                                            'harga' => round($hargaFinal, 2),
+                                            'hit_kbk' => $hitKbk,
+                                            'map' => strtolower($header->map),
+                                        ]);
                                     }
 
-                                    if ($itemHitKbk === 'k') {
-                                        $hitKbk = 'm';
-                                    } elseif ($itemHitKbk === 'b') {
-                                        $hitKbk = 'b';
-                                    }
-
-                                    // ✅ FIX: Konsisten selalu mengirim nilai M3 dan Banyak apa adanya
-                                    $m3Final = $totalM3 > 0 ? $totalM3 : null;
-                                    $banyakFinal = $totalBanyak > 0 ? $totalBanyak : null;
-
-                                    if ($hitKbk === 'm') {
-                                        $hargaFinal = $totalM3 > 0 ? ($totalNilaiHeader / $totalM3) : $totalNilaiHeader;
-                                    } elseif ($hitKbk === 'b') {
-                                        if (!$banyakFinal && !$isCashOrPayment) $banyakFinal = 1;
-                                        $hargaFinal = $totalBanyak > 0 ? ($totalNilaiHeader / $totalBanyak) : $totalNilaiHeader;
-                                    } else {
-                                        $hargaFinal = $totalNilaiHeader;
-                                    }
-
-                                    JurnalUmum::create([
-                                        'tgl' => $header->tgl_transaksi
-                                            ? $header->tgl_transaksi->format('Y-m-d')
-                                            : now()->format('Y-m-d'),
-                                        'jurnal' => $nomorFinal,
-                                        'no_akun' => $header->no_akun,
-                                        'nama_akun' => $header->nama_akun,
-                                        'no-dokumen' => $noDokumenGlobal, 
-                                        'nama' => $namaGlobal,
-                                        'keterangan' => $header->keterangan,
-                                        
-                                        // Variabel final untuk stok dikirimkan
-                                        'banyak' => $banyakFinal !== null ? round($banyakFinal, 4) : null,
-                                        'm3' => $m3Final !== null ? round($m3Final, 4) : null,
-                                        
-                                        'harga' => round($hargaFinal, 2),
-                                        'hit_kbk' => $hitKbk,
-                                        'map' => strtolower($header->map),
-                                    ]);
-
+                                    // ✅ FIX: dipindah keluar dari inner loop, cukup sekali per header
                                     $header->update([
                                         'status' => JurnalPembantuHeader::STATUS_DIPOSTING,
                                         'diposting_oleh' => Auth::id() ?? 1,
@@ -353,7 +359,6 @@ class JurnalPembantuHeadersTable
                                 ->title('Berhasil Diposting')
                                 ->body('Jurnal berhasil diposting.')
                                 ->send();
-
                         } catch (Throwable $e) {
                             report($e);
                             Notification::make()
@@ -445,12 +450,12 @@ class JurnalPembantuHeadersTable
                                             'no_referensi' => $item->no_referensi,
                                             'keterangan' => $item->keterangan,
                                             'banyak' => $item->banyak,
-                                            'm3' => $item->m3, 
+                                            'm3' => $item->m3,
                                             'harga' => $item->harga,
                                             'jumlah' => $item->jumlah,
-                                            'shadow_harga' => $item->shadow_harga ?? $item->harga, 
-                                            'shadow_jumlah' => $item->shadow_jumlah ?? $item->jumlah, 
-                                            'hit_kbk' => $item->hit_kbk, 
+                                            'shadow_harga' => $item->shadow_harga ?? $item->harga,
+                                            'shadow_jumlah' => $item->shadow_jumlah ?? $item->jumlah,
+                                            'hit_kbk' => $item->hit_kbk,
                                             'status' => true,
                                             'created_by' => Auth::id() ?? 1,
                                         ]);
@@ -467,7 +472,6 @@ class JurnalPembantuHeadersTable
                                 ->title('Berhasil')
                                 ->body('Jurnal balik berhasil dibuat.')
                                 ->send();
-
                         } catch (Throwable $e) {
                             report($e);
                             Notification::make()
