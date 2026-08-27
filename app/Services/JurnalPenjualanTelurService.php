@@ -62,7 +62,7 @@ class JurnalPenjualanTelurService
     private function kunciGrupAkun(string $kodeAkun, $d): string
     {
         if ($this->haruSplitPerBarang($kodeAkun)) {
-            return $kodeAkun.'::'.($d->barang_id ?? $d->nama_barang);
+            return $kodeAkun . '::' . ($d->barang_id ?? $d->nama_barang);
         }
 
         return $kodeAkun;
@@ -163,19 +163,19 @@ class JurnalPenjualanTelurService
 
                 $totalTelur = $itemTelur->sum('subtotal');
                 $totalHpp = $itemTelur->sum(
-                    fn ($d) => (float) $d->qty * (float) ($d->barang->harga_beli ?? 0)
+                    fn($d) => (float) $d->qty * (float) ($d->barang->harga_beli ?? 0)
                 );
 
                 // 1. Hitung peti dari telur kiloan
                 $totalKiloan = $itemTelur
-                    ->filter(fn ($d) => $this->isKiloan(strtolower($d->nama_barang ?? '')))
+                    ->filter(fn($d) => $this->isKiloan(strtolower($d->nama_barang ?? '')))
                     ->sum('qty');
                 $petiDariKiloan = ($totalKiloan > 0 && $totalKiloan % self::KG_PER_PETI === 0)
                     ? (int) ($totalKiloan / self::KG_PER_PETI) : 0;
 
                 // 2. Hitung peti dari telur petian
                 $petiDariPetian = $itemTelur
-                    ->filter(fn ($d) => str_contains(strtolower($d->nama_barang ?? ''), 'petian'))
+                    ->filter(fn($d) => str_contains(strtolower($d->nama_barang ?? ''), 'petian'))
                     ->sum('qty');
 
                 // 3. Gabungkan total peti
@@ -206,10 +206,13 @@ class JurnalPenjualanTelurService
                     $sudahTersimpan = 0.0;
 
                     foreach ($list as $i => $d) {
+                        $jumlahEksplisit = null;
+
                         if ($i === $lastIndex) {
-                            $harga = $d->qty > 0
-                                ? round(($kas['nominal'] - $sudahTersimpan) / (float) $d->qty, 4)
-                                : 0;
+
+                            $sisa = round($kas['nominal'] - $sudahTersimpan, 4);
+                            $jumlahEksplisit = $sisa;
+                            $harga = $d->qty > 0 ? round($sisa / (float) $d->qty, 4) : 0;
                         } else {
                             // Hitung harga bersih dengan proporsi potongan diskon
                             $hargaBersihDetail = $d->qty > 0 ? (float) $d->subtotal / (float) $d->qty : 0;
@@ -217,7 +220,7 @@ class JurnalPenjualanTelurService
                             $sudahTersimpan += round((float) $d->qty * $harga, 4);
                         }
 
-                        $this->buatItem($hKas->id, [
+                        $this->buatItem($hKas->id, array_filter([
                             'urut' => $urut++,
                             'jenis_pihak' => 'pelanggan',
                             'nama_pihak' => $customer,
@@ -225,12 +228,13 @@ class JurnalPenjualanTelurService
                             // id_barang TIDAK diisi untuk baris Kas (bukan pergerakan barang).
                             'no_dokumen' => $nota,
                             'no_referensi' => (string) $d->id,
-                            'keterangan' => $d->nama_barang.' '.$d->qty.' '.($d->satuan ?? ''),
+                            'keterangan' => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                             'banyak' => $d->qty,
                             'harga' => $harga,
+                            'jumlah' => $jumlahEksplisit, // null di-strip oleh array_filter, biar buatItem() hitung sendiri utk item non-terakhir
                             'created_by' => $userId,
                             'updated_by' => $userId,
-                        ]);
+                        ], fn($v) => $v !== null));
                     }
                 }
 
@@ -238,7 +242,7 @@ class JurnalPenjualanTelurService
                 // Merge biasa berdasarkan kode akun, KECUALI akun tersebut masuk
                 // daftar KODE_AKUN_SPLIT_PER_BARANG (140, 506, dst) -> tetap dipisah per barang.
                 $perPend = $itemTelur->groupBy(
-                    fn ($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[0], $d)
+                    fn($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[0], $d)
                 );
 
                 foreach ($perPend as $groupKey => $details) {
@@ -272,7 +276,7 @@ class JurnalPenjualanTelurService
                             'id_barang' => $d->barang_id,
                             'no_dokumen' => $nota,
                             'no_referensi' => (string) $d->id,
-                            'keterangan' => $d->nama_barang.' '.$d->qty.' '.($d->satuan ?? ''),
+                            'keterangan' => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                             'banyak' => $d->qty,
                             'harga' => $hargaBersih, // Tidak pakai $d->harga_jual mentah
                             'created_by' => $userId,
@@ -286,12 +290,12 @@ class JurnalPenjualanTelurService
                     // Merge biasa berdasarkan kode akun, KECUALI masuk daftar
                     // KODE_AKUN_SPLIT_PER_BARANG (140, 506, dst) -> tetap dipisah per barang.
                     $perHpp = $itemTelur->groupBy(
-                        fn ($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[1], $d)
+                        fn($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[1], $d)
                     );
 
                     foreach ($perHpp as $groupKeyHpp => $detailsHpp) {
                         $adaHpp = $detailsHpp->filter(
-                            fn ($d) => (float) ($d->barang->harga_beli ?? 0) > 0
+                            fn($d) => (float) ($d->barang->harga_beli ?? 0) > 0
                         );
                         if ($adaHpp->isEmpty()) {
                             continue;
@@ -322,7 +326,7 @@ class JurnalPenjualanTelurService
                                 'id_barang' => $d->barang_id,
                                 'no_dokumen' => $nota,
                                 'no_referensi' => (string) $d->id,
-                                'keterangan' => 'HPP '.$d->nama_barang,
+                                'keterangan' => 'HPP ' . $d->nama_barang,
                                 'banyak' => $d->qty,
                                 'harga' => $d->barang->harga_beli,
                                 'created_by' => $userId,
@@ -333,7 +337,7 @@ class JurnalPenjualanTelurService
                         // Split per barang otomatis kalau akun persediaan masuk daftar
                         // KODE_AKUN_SPLIT_PER_BARANG (140, dst).
                         $perPers = $adaHpp->groupBy(
-                            fn ($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[2], $d)
+                            fn($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[2], $d)
                         );
 
                         foreach ($perPers as $groupKeyPers => $detailsPers) {
@@ -361,7 +365,7 @@ class JurnalPenjualanTelurService
                                     'id_barang' => $d->barang_id,
                                     'no_dokumen' => $nota,
                                     'no_referensi' => (string) $d->id,
-                                    'keterangan' => 'Keluar stok '.$d->nama_barang,
+                                    'keterangan' => 'Keluar stok ' . $d->nama_barang,
                                     'banyak' => $d->qty,
                                     'harga' => $d->barang->harga_beli,
                                     'created_by' => $userId,
@@ -405,7 +409,7 @@ class JurnalPenjualanTelurService
                         'nama_barang' => $brgPetiKosong?->nama_barang ?? 'Peti Kosong',
                         'id_barang' => $brgPetiKosong?->id,
                         'no_dokumen' => $nota,
-                        'keterangan' => 'Masuk stok peti kosong '.$jumlahPeti.' pcs',
+                        'keterangan' => 'Masuk stok peti kosong ' . $jumlahPeti . ' pcs',
                         'banyak' => $jumlahPeti,
                         'harga' => $hargaPetiKosong,
                         'created_by' => $userId,
@@ -432,7 +436,7 @@ class JurnalPenjualanTelurService
                         'nama_barang' => $brgPetiIsi?->nama_barang ?? 'Peti Isi Telur',
                         'id_barang' => $brgPetiIsi?->id,
                         'no_dokumen' => $nota,
-                        'keterangan' => 'Keluar stok peti isi telur '.$jumlahPeti.' pcs',
+                        'keterangan' => 'Keluar stok peti isi telur ' . $jumlahPeti . ' pcs',
                         'banyak' => $jumlahPeti,
                         'harga' => $hargaPetiIsi,
                         'created_by' => $userId,
@@ -458,7 +462,7 @@ class JurnalPenjualanTelurService
                 // Merge biasa berdasarkan kode akun, KECUALI masuk daftar
                 // KODE_AKUN_SPLIT_PER_BARANG (140, 506, dst) -> tetap dipisah per barang.
                 $perJenisLain = $itemLain->groupBy(
-                    fn ($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[0], $d)
+                    fn($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[0], $d)
                 );
 
                 foreach ($perJenisLain as $groupKeyLain => $details) {
@@ -511,7 +515,7 @@ class JurnalPenjualanTelurService
                                 // penjelasan pada blok Kas bagian Telur di atas).
                                 'no_dokumen' => $nota,
                                 'no_referensi' => (string) $d->id,
-                                'keterangan' => $d->nama_barang.' '.$d->qty.' '.($d->satuan ?? ''),
+                                'keterangan' => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                                 'banyak' => $d->qty,
                                 'harga' => $harga,
                                 'created_by' => $userId,
@@ -547,7 +551,7 @@ class JurnalPenjualanTelurService
                             'id_barang' => $d->barang_id,
                             'no_dokumen' => $nota,
                             'no_referensi' => (string) $d->id,
-                            'keterangan' => $d->nama_barang.' '.$d->qty.' '.($d->satuan ?? ''),
+                            'keterangan' => $d->nama_barang . ' ' . $d->qty . ' ' . ($d->satuan ?? ''),
                             'banyak' => $d->qty,
                             'harga' => $hargaBersih,
                             'created_by' => $userId,
@@ -557,14 +561,14 @@ class JurnalPenjualanTelurService
 
                     // D: HPP & K: Persediaan
                     $adaHpp = $details->filter(
-                        fn ($d) => (float) ($d->barang->harga_beli ?? 0) > 0
+                        fn($d) => (float) ($d->barang->harga_beli ?? 0) > 0
                     );
 
                     if ($adaHpp->isNotEmpty()) {
                         // Merge biasa berdasarkan kode akun, KECUALI masuk daftar
                         // KODE_AKUN_SPLIT_PER_BARANG (140, 506, dst) -> tetap dipisah per barang.
                         $perHppLain = $adaHpp->groupBy(
-                            fn ($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[1], $d)
+                            fn($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[1], $d)
                         );
 
                         foreach ($perHppLain as $groupKeyHppLain => $detailsHpp) {
@@ -592,7 +596,7 @@ class JurnalPenjualanTelurService
                                     'id_barang' => $d->barang_id,
                                     'no_dokumen' => $nota,
                                     'no_referensi' => (string) $d->id,
-                                    'keterangan' => 'HPP '.$d->nama_barang,
+                                    'keterangan' => 'HPP ' . $d->nama_barang,
                                     'banyak' => $d->qty,
                                     'harga' => $d->barang->harga_beli,
                                     'created_by' => $userId,
@@ -603,7 +607,7 @@ class JurnalPenjualanTelurService
                             // Split per barang otomatis kalau akun persediaan masuk daftar
                             // KODE_AKUN_SPLIT_PER_BARANG (140, dst).
                             $perPersLain = $detailsHpp->groupBy(
-                                fn ($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[2], $d)
+                                fn($d) => $this->kunciGrupAkun($this->kodePerJenis($d->barang)[2], $d)
                             );
 
                             foreach ($perPersLain as $groupKeyPersLain => $detailsPers) {
@@ -631,7 +635,7 @@ class JurnalPenjualanTelurService
                                         'id_barang' => $d->barang_id,
                                         'no_dokumen' => $nota,
                                         'no_referensi' => (string) $d->id,
-                                        'keterangan' => 'Keluar stok '.$d->nama_barang,
+                                        'keterangan' => 'Keluar stok ' . $d->nama_barang,
                                         'banyak' => $d->qty,
                                         'harga' => $d->barang->harga_beli,
                                         'created_by' => $userId,
@@ -727,7 +731,7 @@ class JurnalPenjualanTelurService
 
         return $this->akunCache[$kode] = [
             'kode' => $kode,
-            'nama' => '⚠ Akun tidak ditemukan: '.$kode,
+            'nama' => '⚠ Akun tidak ditemukan: ' . $kode,
         ];
     }
 
@@ -763,9 +767,9 @@ class JurnalPenjualanTelurService
 
     private function ket(string $prefix, string $nota, ?string $customer = null): string
     {
-        $k = $prefix.' | No.Nota: '.$nota;
+        $k = $prefix . ' | No.Nota: ' . $nota;
         if ($customer) {
-            $k .= ' | '.$customer;
+            $k .= ' | ' . $customer;
         }
 
         return $k;
@@ -792,7 +796,7 @@ class JurnalPenjualanTelurService
             $label = $namaUnik->first() ?? '';
         }
 
-        $prefixLengkap = $label !== '' ? $prefix.' '.$label : $prefix;
+        $prefixLengkap = $label !== '' ? $prefix . ' ' . $label : $prefix;
 
         return $this->ket($prefixLengkap, $nota, $customer);
     }
