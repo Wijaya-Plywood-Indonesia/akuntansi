@@ -159,7 +159,7 @@ class JurnalPembantuHeader extends Model
                     'k'      => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
                     'm'      => (float)$item->harga * (float)($item->m3 ?? 0),
                     'b'      => (float)$item->harga * (float)($item->banyak ?? 0),
-                    null, '' => (float)$item->harga,   // langsung ambil harga jika kosong
+                    null, '' => $item->banyak > 0 ? (float)$item->harga * (float)$item->banyak : (float)$item->harga,
                     default  => (float)$item->harga * (float)($item->banyak ?? 0),
                 };
             });
