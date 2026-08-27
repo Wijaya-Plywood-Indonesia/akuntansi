@@ -279,7 +279,15 @@ class JurnalPembantuHeadersTable
 
                                         $totalBanyak = (float) $items->sum('banyak');
                                         $totalM3 = (float) $items->sum('m3');
-                                        $totalNilaiGrup = (float) $items->sum('jumlah');
+                                        $totalNilaiGrup = (float) $items->sum(function ($item) {
+                                            return match ($item->hit_kbk) {
+                                                'k'      => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
+                                                'm'      => (float)$item->harga * (float)($item->m3 ?? 0),
+                                                'b'      => (float)$item->harga * (float)($item->banyak ?? 0),
+                                                null, '' => $item->banyak > 0 ? (float)$item->harga * (float)$item->banyak : (float)$item->harga,
+                                                default  => (float)$item->harga * (float)($item->banyak ?? 0),
+                                            };
+                                        });
 
                                         $firstItem = $items->first();
                                         $itemHitKbk = $firstItem?->hit_kbk;
