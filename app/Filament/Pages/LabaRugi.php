@@ -481,6 +481,10 @@ class LabaRugi extends Page
     // ─── TAMBAHKAN KODE INI DI BAGIAN PALING BAWAH CLASS ───
     public function formatRupiah(float $nilai): string
     {
-        return 'Rp ' . number_format(abs($nilai), 0, ',', '.');
+        if ($nilai < 0) {
+            return '(Rp ' . number_format(abs($nilai), 0, ',', '.') . ')';
+        }
+
+        return 'Rp ' . number_format($nilai, 0, ',', '.');
     }
 }
