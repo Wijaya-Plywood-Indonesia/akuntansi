@@ -246,7 +246,7 @@ class LabaRugi extends Page
             }
 
             $penjualanBersih = $r['pendapatan'] - $r['retur_potongan'];
-            $totalHPP        = $r['hpp'] + $r['beban_produksi'];
+            $totalHPP        = abs($r['hpp']) + abs($r['beban_produksi']);
             $labaKotor       = $penjualanBersih - $totalHPP;
             $labaUsaha       = $labaKotor - $r['beban_usaha'];
             $labaSblPajak    = $labaUsaha + $r['pendapatan_lain'] - $r['beban_lain'];
@@ -481,10 +481,6 @@ class LabaRugi extends Page
     // ─── TAMBAHKAN KODE INI DI BAGIAN PALING BAWAH CLASS ───
     public function formatRupiah(float $nilai): string
     {
-        if ($nilai < 0) {
-            return '(Rp ' . number_format(abs($nilai), 0, ',', '.') . ')';
-        }
-
-        return 'Rp ' . number_format($nilai, 0, ',', '.');
+        return 'Rp ' . number_format(abs($nilai), 0, ',', '.');
     }
 }

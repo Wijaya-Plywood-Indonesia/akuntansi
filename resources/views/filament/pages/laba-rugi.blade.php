@@ -280,6 +280,7 @@
                     ])
                     @endif
                     @if($idx === $lastHppIdx)
+                    {{-- Subtotal Total HPP & Biaya Produksi --}}
                     @include('filament.pages.partials.laba-rugi-subtotal', [
                     'label' => 'Total HPP & Biaya Produksi',
                     'key' => 'total_hpp',
@@ -287,8 +288,10 @@
                     'rumus' => 'HPP + Biaya Produksi',
                     'buls' => $buls, 'r' => $r, 'pKey' => $pKey,
                     ])
+
+                    {{-- UBAH BAGIAN INI: Ganti 'Laba Kotor' menjadi 'Laba (Rugi) Berjalan' --}}
                     @include('filament.pages.partials.laba-rugi-subtotal', [
-                    'label' => 'Laba Kotor',
+                    'label' => 'Laba (Rugi) Berjalan',
                     'key' => 'laba_kotor',
                     'style' => 'laba_kotor',
                     'rumus' => 'Penjualan Bersih − Total HPP',
