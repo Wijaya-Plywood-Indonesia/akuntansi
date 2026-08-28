@@ -177,11 +177,15 @@ jobs:
             unzip -oq "$ZIP_PATH" -d .
             echo "✅ Unzip selesai tanpa error"
 
+            # database.sqlite hanya placeholder (tidak menyimpan data penting) — cukup pastikan filenya ada
+            mkdir -p database
+            touch database/database.sqlite
+
             # Pastikan struktur folder storage & cache lengkap, dan permission benar SEBELUM artisan dipanggil
             mkdir -p storage/framework/{sessions,views,cache/data}
             mkdir -p storage/logs
             mkdir -p bootstrap/cache
-            chmod -R 775 storage bootstrap/cache
+            chmod -R 775 storage bootstrap/cache database
 
             php artisan optimize:clear
 
@@ -282,11 +286,15 @@ jobs:
             unzip -oq "$ZIP_PATH" -d .
             echo "✅ Unzip selesai tanpa error"
 
+            # database.sqlite hanya placeholder (tidak menyimpan data penting) — cukup pastikan filenya ada
+            mkdir -p database
+            touch database/database.sqlite
+
             # Pastikan struktur folder storage & cache lengkap, dan permission benar SEBELUM artisan dipanggil
             mkdir -p storage/framework/{sessions,views,cache/data}
             mkdir -p storage/logs
             mkdir -p bootstrap/cache
-            chmod -R 775 storage bootstrap/cache
+            chmod -R 775 storage bootstrap/cache database
 
             php artisan optimize:clear
 
