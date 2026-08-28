@@ -15,6 +15,7 @@ class BukuKitabAkun extends Model
         'nama_akun',
         'posisi',
         'keterangan',
+        'variabel_nilai',
     ];
 
     public function bukuKitab()

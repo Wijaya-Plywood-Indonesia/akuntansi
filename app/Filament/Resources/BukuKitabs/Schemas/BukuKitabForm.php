@@ -114,6 +114,16 @@ class BukuKitabForm
                                 ->required()
                                 ->columnSpan(2),
 
+                            Select::make('variabel_nilai')
+                                ->label('Variabel Nilai')
+                                ->helperText('Nilai baris ini diambil dari mana. Daftar ini dikelola programmer — hubungi tim IT kalau butuh jenis nilai baru.')
+                                ->options(fn() => \App\Support\KatalogVariabelKitab::options())
+                                ->searchable()
+                                ->native(false)
+                                ->required()
+                                ->prefixIcon('heroicon-o-variable')
+                                ->columnSpan(3),
+
                             Hidden::make('nama_akun')
                                 ->dehydrated(),
 
@@ -135,7 +145,7 @@ class BukuKitabForm
                         ->collapsible()
                         ->collapsed()
                         ->itemLabel(fn(array $state): ?string =>
-                            trim(($state['no_akun'] ?? '-') . ' — ' . (self::cariNamaAkun($state['no_akun'] ?? null) ?? '') . ' (' . strtoupper($state['posisi'] ?? '-') . ')')
+                            trim(($state['no_akun'] ?? '-') . ' — ' . (self::cariNamaAkun($state['no_akun'] ?? null) ?? '') . ' (' . strtoupper($state['posisi'] ?? '-') . ')' . (($state['variabel_nilai'] ?? null) ? ' · ' . (\App\Support\KatalogVariabelKitab::OPSI[$state['variabel_nilai']] ?? $state['variabel_nilai']) : ''))
                         )
                         ->defaultItems(1)
                         ->addActionLabel('+ Tambah Baris Akun'),
