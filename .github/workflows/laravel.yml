@@ -167,15 +167,33 @@ jobs:
           script: |
             set -euo pipefail
             TARGET="/home/${{ secrets.SSH_USERNAME }}/prarelease-akuntansi.wijayaplywoods.com"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_prarelease-akuntansi.wijayaplywoods.com"
             ZIP_PATH="/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
+
             cd "$TARGET"
+            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — situs kembali online tapi state mungkin tidak konsisten, cek manual!"; fi' EXIT
+            [ -f "artisan" ] && php artisan down || true
 
-            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
+            # 1. Unzip ke STAGING terpisah dulu — TARGET belum disentuh, jadi kalau unzip gagal, TARGET tetap utuh
+            rm -rf "$STAGING" && mkdir -p "$STAGING"
+            unzip -oq "$ZIP_PATH" -d "$STAGING"
+            echo "✅ Unzip ke staging selesai tanpa error"
 
-            php artisan down || true
-            find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
-            unzip -oq "$ZIP_PATH" -d .
-            echo "✅ Unzip selesai tanpa error"
+            # 2. Baru setelah unzip sukses, bersihkan TARGET (kecuali storage, .env, dan .github)
+            find . -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec rm -rf {} +
+
+            # 3. Salin isi STAGING ke TARGET
+            find "$STAGING" -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec cp -r {} "$TARGET/" \;
 
             # database.sqlite hanya placeholder (tidak menyimpan data penting) — cukup pastikan filenya ada
             mkdir -p database
@@ -198,8 +216,9 @@ jobs:
             php artisan migrate --force
             php artisan shield:generate --all --panel=admin --no-interaction
 
+            rm -rf "$STAGING"
             rm -f "$ZIP_PATH"
-            echo "🚀 Deployment Prarelease Akuntansi Sukses!"
+            echo "🚀 [prarelease-akuntansi.wijayaplywoods.com] Deployment Sukses! [${{ github.sha }}]"
 
   # ──────────────────────────────────────────────
   # JOB 3: DEPLOY PRODUCTION
@@ -273,18 +292,34 @@ jobs:
             set -euo pipefail
 
             TARGET_DIR="/home/${{ secrets.SSH_USERNAME }}/akuntansi.wijayaplywoods.com"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_akuntansi.wijayaplywoods.com"
             ZIP_PATH="/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
+
             cd "$TARGET_DIR"
-
             # 🛡️ Safety net: apapun hasil script ini, situs WAJIB balik online di akhir.
-            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
+            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — situs kembali online tapi state mungkin tidak konsisten, cek manual!"; fi' EXIT
+            [ -f "artisan" ] && php artisan down || true
 
-            php artisan down || true
+            # 1. Unzip ke STAGING terpisah dulu — TARGET_DIR belum disentuh, jadi kalau unzip gagal, TARGET_DIR tetap utuh
+            rm -rf "$STAGING" && mkdir -p "$STAGING"
+            unzip -oq "$ZIP_PATH" -d "$STAGING"
+            echo "✅ Unzip ke staging selesai tanpa error"
 
-            find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
+            # 2. Baru setelah unzip sukses, bersihkan TARGET_DIR (kecuali storage, .env, dan .github)
+            find . -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec rm -rf {} +
 
-            unzip -oq "$ZIP_PATH" -d .
-            echo "✅ Unzip selesai tanpa error"
+            # 3. Salin isi STAGING ke TARGET_DIR
+            find "$STAGING" -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec cp -r {} "$TARGET_DIR/" \;
 
             # database.sqlite hanya placeholder (tidak menyimpan data penting) — cukup pastikan filenya ada
             mkdir -p database
@@ -311,5 +346,6 @@ jobs:
 
             php artisan shield:generate --all --panel=admin --no-interaction
 
+            rm -rf "$STAGING"
             rm -f "$ZIP_PATH"
-            echo "🚀 Deployment Akuntansi Sukses!"
+            echo "🚀 [akuntansi.wijayaplywoods.com] Deployment Sukses! [${{ github.ref_name }}]"
