@@ -127,40 +127,40 @@ jobs:
     env:
       ZIP_NAME: deploy-prarelease-akuntansi.zip
       TARGET_DOMAIN: prarelease-akuntansi.wijayaplywoods.com
-
+ 
     steps:
       - uses: actions/checkout@v4
-
+ 
       - name: Setup PHP & Node
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
-
+ 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
+ 
       - name: Install Composer Dependencies (Prod, no scripts yet)
         run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
-
+ 
       - name: Build Frontend
         run: |
           npm ci
           npm run build
-
+ 
       - name: Regenerate autoload & run discovery
         env:
           BROADCAST_CONNECTION: log
         run: |
           composer dump-autoload --optimize --no-dev
           php artisan package:discover --ansi
-
+ 
       - name: Create Deployment Package
         run: |
           set -euo pipefail
           BUILD_DIR=./build_deploy
           rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
-
+ 
           rsync -a --delete \
             --exclude '.git/' \
             --exclude '.github/' \
@@ -170,10 +170,10 @@ jobs:
             --exclude 'storage/' \
             --exclude 'build_deploy/' \
             ./ "$BUILD_DIR/"
-
+ 
           (cd "$BUILD_DIR" && zip -r "../${{ env.ZIP_NAME }}" . -q)
           echo "📦 ZIP size: $(du -sh "${{ env.ZIP_NAME }}")"
-
+ 
       - name: Upload to Server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -183,7 +183,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "${{ env.ZIP_NAME }}"
           target: "/home/${{ secrets.SSH_USERNAME }}"
-
+ 
       - name: Execute Server Commands
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -193,64 +193,75 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
-
+ 
             DOMAIN="prarelease-akuntansi.wijayaplywoods.com"
             TARGET="/home/${{ secrets.SSH_USERNAME }}/$DOMAIN"
             STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
-
+ 
             if [ ! -d "$TARGET" ]; then
               echo "❌ Folder $TARGET tidak ditemukan di server. Buat dulu foldernya (dan .env-nya) sebelum deploy pertama kali."
               exit 1
             fi
-
+ 
             cd "$TARGET"
-
+ 
             # 🛡️ Safety net: apapun hasil script ini, situs WAJIB balik online di akhir.
             trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
-
+ 
             [ -f "artisan" ] && php artisan down || true
-
+ 
             # Unzip ke folder staging dulu, jangan langsung timpa folder asli
             rm -rf "$STAGING" && mkdir -p "$STAGING"
             unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
             echo "✅ Unzip ke staging selesai tanpa error"
-
+ 
+            # 🗄️ database.sqlite di-gitignore, jadi tidak pernah ikut ke dalam ZIP.
+            # Selamatkan file sqlite yang sudah ada di server (atau buat baru kalau belum ada)
+            # supaya tidak ikut terhapus saat folder lama diganti.
+            mkdir -p "$STAGING/database"
+            if [ -f "$TARGET/database/database.sqlite" ]; then
+              cp "$TARGET/database/database.sqlite" "$STAGING/database/database.sqlite"
+              echo "✅ database.sqlite lama berhasil diselamatkan"
+            else
+              touch "$STAGING/database/database.sqlite"
+              echo "ℹ️ database.sqlite belum ada sebelumnya, membuat file baru (kosong)"
+            fi
+ 
             # Baru setelah yakin isi staging lengkap, timpa folder lama
             find . -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
               ! -name '.env' \
               -exec rm -rf {} +
-
+ 
             find "$STAGING" -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
               ! -name '.env' \
               -exec cp -r {} "$TARGET/" \;
-
+ 
             php artisan optimize:clear
-
+ 
             cd "$TARGET/public"
             if [ ! -e "storage" ]; then
               ln -s "$TARGET/storage/app/public" storage
             fi
             cd "$TARGET"
-
+ 
             php artisan filament:assets
-
+ 
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-
+ 
             php artisan migrate --force
-
+ 
             php artisan shield:generate --all --panel=admin --no-interaction
-
+ 
             chmod -R 775 storage bootstrap/cache
-
+ 
             rm -rf "$STAGING"
             rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
-
+ 
             echo "🚀 [prarelease-akuntansi] Deployment Sukses! [${{ github.sha }}]"
-
   # ──────────────────────────────────────────────
   # JOB 3: DEPLOY PRODUCTION — tidak ada perubahan logika,
   # cuma ditambah opsi trigger manual via workflow_dispatch
