@@ -110,6 +110,9 @@ jobs:
           fi
           echo "✅ Semua migration sudah berjalan."
 
+  # ──────────────────────────────────────────────
+  # JOB 2: DEPLOY PRARELEASE
+  # ──────────────────────────────────────────────
   deploy-prarelease:
     name: "Deploy to prarelease-akuntansi.wijayaplywoods.com"
     needs: laravel-tests
@@ -122,16 +125,19 @@ jobs:
       cancel-in-progress: false
     env:
       ZIP_NAME: deploy-prarelease.zip
-      TARGET_DIR: /home/${{ secrets.SSH_USERNAME }}/prarelease-akuntansi.wijayaplywoods.com
     steps:
       - uses: actions/checkout@v4
+
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
+
       - run: composer install --no-dev --optimize-autoloader --no-interaction
+
       - run: |
           npm ci
           npm run build
+
       - name: Create ZIP
         run: |
           set -euo pipefail
@@ -142,6 +148,7 @@ jobs:
             --exclude 'tests/' --exclude '.env' --exclude 'storage/' \
             ./ "$BUILD_DIR/"
           (cd "$BUILD_DIR" && zip -r "../$ZIP_NAME" . -q)
+
       - uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -150,6 +157,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "${{ env.ZIP_NAME }}"
           target: "/home/${{ secrets.SSH_USERNAME }}"
+
       - uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -159,41 +167,52 @@ jobs:
           script: |
             set -euo pipefail
             TARGET="/home/${{ secrets.SSH_USERNAME }}/prarelease-akuntansi.wijayaplywoods.com"
+            ZIP_PATH="/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
             cd "$TARGET"
+
             trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
-            
+
             php artisan down || true
             find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
-            unzip -oq ../deploy.zip -d .
+            unzip -oq "$ZIP_PATH" -d .
             echo "✅ Unzip selesai tanpa error"
-            
-            # tambahkan blok ini, pindahkan ke sini:
+
+            # Pastikan struktur folder storage & cache lengkap, dan permission benar SEBELUM artisan dipanggil
             mkdir -p storage/framework/{sessions,views,cache/data}
             mkdir -p storage/logs
             mkdir -p bootstrap/cache
             chmod -R 775 storage bootstrap/cache
-            
+
             php artisan optimize:clear
-            
-            (cd "$TARGET_DIR/public" && [ -e "storage" ] || ln -s "$TARGET_DIR/storage/app/public" storage)
-            
+
+            (cd "$TARGET/public" && [ -e "storage" ] || ln -s "$TARGET/storage/app/public" storage)
+
             php artisan filament:assets
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
             php artisan shield:generate --all --panel=admin --no-interaction
-            
-            rm -f ../deploy.zip
-            echo "🚀 Deployment Akuntansi Sukses!"
 
+            rm -f "$ZIP_PATH"
+            echo "🚀 Deployment Prarelease Akuntansi Sukses!"
+
+  # ──────────────────────────────────────────────
+  # JOB 3: DEPLOY PRODUCTION
+  # ──────────────────────────────────────────────
   deploy-production:
     name: Deploy to akuntansi.wijayaplywoods.com
     needs: laravel-tests
-    # HANYA jalan jika kamu membuat TAG (misal v1.0)
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: |
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'production')
     runs-on: ubuntu-latest
     environment: production # Aktifkan Manual Approval di Settings > Environments
+    concurrency:
+      group: deploy-production-akuntansi
+      cancel-in-progress: false
+    env:
+      ZIP_NAME: deploy.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -215,7 +234,7 @@ jobs:
         run: |
           set -euo pipefail
           BUILD_DIR=./build_deploy
-          mkdir -p "$BUILD_DIR"
+          rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
 
           # rsync memilah file, abaikan storage dan .env agar data aman
           rsync -a --delete \
@@ -226,8 +245,8 @@ jobs:
             --exclude '.env' \
             --exclude 'storage/' \
             ./ "$BUILD_DIR/"
-            
-          (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
+
+          (cd "$BUILD_DIR" && zip -r "../$ZIP_NAME" . -q)
 
       - name: Upload to Server
         uses: appleboy/scp-action@v0.1.7
@@ -236,7 +255,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "deploy.zip"
+          source: "${{ env.ZIP_NAME }}"
           target: "/home/${{ secrets.SSH_USERNAME }}"
 
       - name: Execute Server Commands
@@ -250,6 +269,7 @@ jobs:
             set -euo pipefail
 
             TARGET_DIR="/home/${{ secrets.SSH_USERNAME }}/akuntansi.wijayaplywoods.com"
+            ZIP_PATH="/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
             cd "$TARGET_DIR"
 
             # 🛡️ Safety net: apapun hasil script ini, situs WAJIB balik online di akhir.
@@ -259,8 +279,14 @@ jobs:
 
             find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
 
-            unzip -oq ../deploy.zip -d .
+            unzip -oq "$ZIP_PATH" -d .
             echo "✅ Unzip selesai tanpa error"
+
+            # Pastikan struktur folder storage & cache lengkap, dan permission benar SEBELUM artisan dipanggil
+            mkdir -p storage/framework/{sessions,views,cache/data}
+            mkdir -p storage/logs
+            mkdir -p bootstrap/cache
+            chmod -R 775 storage bootstrap/cache
 
             php artisan optimize:clear
 
@@ -277,7 +303,5 @@ jobs:
 
             php artisan shield:generate --all --panel=admin --no-interaction
 
-            chmod -R 775 storage bootstrap/cache
-
-            rm -f ../deploy.zip
+            rm -f "$ZIP_PATH"
             echo "🚀 Deployment Akuntansi Sukses!"
