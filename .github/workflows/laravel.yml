@@ -95,6 +95,101 @@ jobs:
           fi
           echo "✅ Semua migration sudah berjalan."
 
+  deploy-prarelease:
+    name: Deploy to prarelease-akuntansi.wijayaplywoods.com
+    needs: laravel-tests
+    # HANYA jalan jika push ke branch develop
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP & Node
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+
+      - name: Install Composer Prod
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
+      - name: Build Frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Create Deployment Package
+        run: |
+          set -euo pipefail
+          BUILD_DIR=./build_deploy
+          mkdir -p "$BUILD_DIR"
+
+          rsync -a --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'node_modules/' \
+            --exclude 'tests/' \
+            --exclude '.env' \
+            --exclude 'storage/' \
+            ./ "$BUILD_DIR/"
+
+          (cd "$BUILD_DIR" && zip -r ../deploy-prarelease.zip . -q)
+
+      - name: Upload to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy-prarelease.zip"
+          target: "/home/${{ secrets.SSH_USERNAME }}"
+
+      - name: Execute Server Commands
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+
+            TARGET_DIR="/home/${{ secrets.SSH_USERNAME }}/prarelease-akuntansi.wijayaplywoods.com"
+            cd "$TARGET_DIR"
+
+            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
+
+            php artisan down || true
+
+            find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
+
+            unzip -oq ../deploy-prarelease.zip -d .
+            echo "✅ Unzip selesai tanpa error"
+
+            php artisan optimize:clear
+
+            cd "$TARGET_DIR/public"
+            if [ ! -e "storage" ]; then
+              ln -s "$TARGET_DIR/storage/app/public" storage
+            fi
+            cd "$TARGET_DIR"
+
+            php artisan filament:assets
+
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            php artisan migrate --force
+
+            php artisan shield:generate --all --panel=admin --no-interaction
+
+            chmod -R 775 storage bootstrap/cache
+
+            rm -f ../deploy-prarelease.zip
+            echo "🚀 Deployment Prarelease Akuntansi Sukses!"
+
   deploy-production:
     name: Deploy to akuntansi.wijayaplywoods.com
     needs: laravel-tests
