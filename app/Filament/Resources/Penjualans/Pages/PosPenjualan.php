@@ -39,7 +39,8 @@ class PosPenjualan extends Page
     /* ================= TOTAL & PPN ================= */
     public int $subtotal = 0;
 
-    public float $ppn_persen = 0;
+    // PENTING: dibuat nullable agar tidak error saat input dikosongkan lewat wire:model.live
+    public ?float $ppn_persen = 0;
 
     public int $ppn_nominal = 0;
 
@@ -236,7 +237,11 @@ class PosPenjualan extends Page
     protected function calculateTotal(): void
     {
         $this->subtotal = max(0, collect($this->cart)->sum(fn ($i) => $i['subtotal'] ?? 0));
-        $this->ppn_nominal = (int) round($this->subtotal * ((float) $this->ppn_persen) / 100);
+
+        // Guard null agar tidak error saat ppn_persen kosong/null
+        $ppnPersen = (float) ($this->ppn_persen ?? 0);
+
+        $this->ppn_nominal = (int) round($this->subtotal * $ppnPersen / 100);
         $this->total = max(0, $this->subtotal + $this->ppn_nominal);
     }
 
@@ -246,7 +251,8 @@ class PosPenjualan extends Page
      */
     public function updatedPpnPersen(): void
     {
-        $ppn = (float) $this->ppn_persen;
+        // Jika user mengosongkan input, ppn_persen bisa jadi null/"" -> default ke 0
+        $ppn = (float) ($this->ppn_persen ?? 0);
         $ppn = max(0, min(100, $ppn));
         $this->ppn_persen = $ppn;
 
@@ -507,6 +513,9 @@ class PosPenjualan extends Page
 
             return;
         }
+
+        // Pastikan ppn_persen tidak null sebelum disimpan
+        $this->ppn_persen = (float) ($this->ppn_persen ?? 0);
 
         $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
             ? ($this->bayar_tunai + $this->bayar_transfer)
