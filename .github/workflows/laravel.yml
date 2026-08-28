@@ -164,31 +164,28 @@ jobs:
             
             php artisan down || true
             find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
-            unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d .
-
-            # 🛠️ 1. Pastikan seluruh struktur folder storage & cache lengkap
+            unzip -oq ../deploy.zip -d .
+            echo "✅ Unzip selesai tanpa error"
+            
+            # tambahkan blok ini, pindahkan ke sini:
             mkdir -p storage/framework/{sessions,views,cache/data}
             mkdir -p storage/logs
             mkdir -p bootstrap/cache
-
-            # 🛠️ 2. Set permission SEBELUM menjalankan artisan command
             chmod -R 775 storage bootstrap/cache
-
+            
             php artisan optimize:clear
             
-            cd "$TARGET/public"
-            [ -e "storage" ] || ln -s "$TARGET/storage/app/public" storage
-            cd "$TARGET"
-
+            (cd "$TARGET_DIR/public" && [ -e "storage" ] || ln -s "$TARGET_DIR/storage/app/public" storage)
+            
             php artisan filament:assets
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
             php artisan shield:generate --all --panel=admin --no-interaction
-
-            rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
-            echo "🚀 Deployment Prarelease Akuntansi Sukses!"
+            
+            rm -f ../deploy.zip
+            echo "🚀 Deployment Akuntansi Sukses!"
 
   deploy-production:
     name: Deploy to akuntansi.wijayaplywoods.com
