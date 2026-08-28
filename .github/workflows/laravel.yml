@@ -255,11 +255,7 @@ jobs:
             php artisan optimize:clear
 
             # Symlink — pakai TARGET_DIR, konsisten dgn deklarasi di atas
-            cd "$TARGET_DIR/public"
-            if [ ! -e "storage" ]; then
-              ln -s "$TARGET_DIR/storage/app/public" storage
-            fi
-            cd "$TARGET_DIR"
+            (cd "$TARGET_DIR/public" && [ -e "storage" ] || ln -s "$TARGET_DIR/storage/app/public" storage)
 
             php artisan filament:assets
 
