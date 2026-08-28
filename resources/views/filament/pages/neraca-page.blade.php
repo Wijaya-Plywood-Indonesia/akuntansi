@@ -5,8 +5,8 @@
     ══════════════════════════════════════════════════════════ --}}
     <div class="flex items-center justify-between mb-2">
         <div>
-            <p class="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-widest">INA TELUR</p>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Neraca Telur</h1>
+            {{-- <p class="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-widest">INA TELUR</p> --}}
+            {{-- <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Akuntansi</h1> --}}
         </div>
 
         @if($this->periodeValid() && $this->jumlahPeriode() > 0)
