@@ -164,6 +164,7 @@ jobs:
             php artisan down || true
             find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
             unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d .
+            chmod -R 775 storage bootstrap/cache
             php artisan optimize:clear
             cd "$TARGET/public"
             [ -e "storage" ] || ln -s "$TARGET/storage/app/public" storage
