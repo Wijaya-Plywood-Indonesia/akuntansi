@@ -281,17 +281,17 @@ class JurnalPembelianService
                     'map'                => 'k',
                     'keterangan'         => "Hutang Pembayaran Nota: {$nota} | {$supplier}",
                     'no_dokumen'         => $nota,
-                    'total_nilai'        => $sisaHutang,
+                    'total_nilai'        => $grandTotal, // Entire Grand Total
                     'status'             => JurnalPembantuHeader::STATUS_DRAFT,
                     'dibuat_oleh'        => $userId,
                 ]);
 
+                // Breakdown item detail hutang dagang
                 $urutKredit = 1;
                 $totalSub   = $pembelian->detailPembelians->sum('subtotal');
-                $sisaBarangHutang = max(0, $totalSub - $totalUangMuka);
 
-                if ($sisaBarangHutang > 0) {
-                    $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Sisa Nilai Pokok Barang", $sisaBarangHutang, $userId);
+                if ($totalSub > 0) {
+                    $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Nilai Pokok Barang", $totalSub, $userId);
                 }
                 if ($ppnNominal > 0) {
                     $this->buatItemDetail($headerHutang->id, $urutKredit++, $supplier, $nota, "Alokasi Pajak Pertambahan Nilai (PPN)", $ppnNominal, $userId);

@@ -246,7 +246,7 @@ class LabaRugi extends Page
             }
 
             $penjualanBersih = $r['pendapatan'] - $r['retur_potongan'];
-            $totalHPP        = $r['hpp'] + $r['beban_produksi'];
+            $totalHPP        = abs($r['hpp']) + abs($r['beban_produksi']);
             $labaKotor       = $penjualanBersih - $totalHPP;
             $labaUsaha       = $labaKotor - $r['beban_usaha'];
             $labaSblPajak    = $labaUsaha + $r['pendapatan_lain'] - $r['beban_lain'];
