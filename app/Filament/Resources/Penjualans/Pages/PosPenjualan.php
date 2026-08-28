@@ -36,6 +36,13 @@ class PosPenjualan extends Page
 
     public int $is_member = 0;
 
+    /* ================= TOTAL & PPN ================= */
+    public int $subtotal = 0;
+
+    public float $ppn_persen = 0;
+
+    public int $ppn_nominal = 0;
+
     public int $total = 0;
 
     /* ================= CUSTOMER ================= */
@@ -96,8 +103,6 @@ class PosPenjualan extends Page
             $this->kodeToko = $tokoUser->toko->kode_toko;
             $this->namaToko = $tokoUser->toko->nama_toko;
         } else {
-            // Beri tahu kasir kalau dia belum terhubung ke toko manapun,
-            // supaya jelas kenapa transaksi nanti bisa gagal (toko_id null).
             Notification::make()
                 ->title('Toko Tidak Ditemukan')
                 ->body('Akun Anda belum terhubung ke toko manapun. Silakan hubungi admin.')
@@ -105,20 +110,11 @@ class PosPenjualan extends Page
                 ->send();
         }
 
-        // FIX: no_nota HARUS selalu di-generate, terlepas dari apakah
-        // $tokoUser ditemukan atau tidak. Sebelumnya baris ini ada di
-        // dalam blok if($tokoUser) sehingga kalau user tidak punya toko,
-        // $no_nota tetap null dan field nota di form terlihat kosong.
         $this->no_nota = $this->generateNoNota();
 
         $this->tanggal = now()->format('Y-m-d\TH:i');
     }
 
-    /**
-     * Generate nomor nota default dengan format:
-     * INA-ddmmyyyy + timestamp mikro (8 digit terakhir)
-     * Contoh: INA-260820261732050123
-     */
     public function generateNoNota()
     {
         do {
@@ -144,7 +140,6 @@ class PosPenjualan extends Page
             return;
         }
 
-        // GLOBAL: tidak difilter stok, supaya barang stok 0 tetap muncul untuk crosscheck
         $this->searchResults = Barang::with('satuan')
             ->where(function ($query) {
                 $query->where('barangs.nama_barang', 'like', "%{$this->search}%")
@@ -165,7 +160,6 @@ class PosPenjualan extends Page
         $this->showDropdown = true;
 
         if (strlen(trim($this->search)) < 1) {
-            // DEFAULT LIST: hanya barang yang ada stoknya
             $this->searchResults = Barang::with('satuan')
                 ->orderBy('nama_barang', 'asc')
                 ->get()
@@ -221,7 +215,7 @@ class PosPenjualan extends Page
                 'qty' => 1,
                 'harga_awal' => (int) $barang->harga_jual,
                 'harga_jual' => (int) $barang->harga_jual,
-                'potongan' => $this->is_member ? 0 : 0, // diskon member dinonaktifkan (sebelumnya 5000)
+                'potongan' => $this->is_member ? 0 : 0,
                 'member_discount_active' => $this->is_member ? true : false,
                 'total_potongan' => $this->is_member ? 0 : 0,
                 'subtotal' => 0,
@@ -235,9 +229,28 @@ class PosPenjualan extends Page
         $this->showDropdown = false;
     }
 
+    /**
+     * Hitung ulang subtotal keranjang, nominal PPN, dan grand total.
+     * PPN dihitung dari subtotal SETELAH potongan per-item.
+     */
     protected function calculateTotal(): void
     {
-        $this->total = max(0, collect($this->cart)->sum(fn ($i) => $i['subtotal'] ?? 0));
+        $this->subtotal = max(0, collect($this->cart)->sum(fn ($i) => $i['subtotal'] ?? 0));
+        $this->ppn_nominal = (int) round($this->subtotal * ((float) $this->ppn_persen) / 100);
+        $this->total = max(0, $this->subtotal + $this->ppn_nominal);
+    }
+
+    /**
+     * Dipanggil otomatis oleh Livewire saat input ppn_persen berubah
+     * (wire:model.live="ppn_persen" di view).
+     */
+    public function updatedPpnPersen(): void
+    {
+        $ppn = (float) $this->ppn_persen;
+        $ppn = max(0, min(100, $ppn));
+        $this->ppn_persen = $ppn;
+
+        $this->calculateTotal();
     }
 
     /* ================= CART ================= */
@@ -353,7 +366,6 @@ class PosPenjualan extends Page
             return;
         }
 
-        // Exact match for auto-fill
         $pembeli = Pembeli::where('nik', $this->kode_member)->first();
         if ($pembeli) {
             $this->selectCustomer($pembeli->id);
@@ -363,7 +375,6 @@ class PosPenjualan extends Page
             return;
         }
 
-        // Fuzzy search for recommendations
         $this->customerResults = Pembeli::query()
             ->where('nama', 'like', "%{$this->kode_member}%")
             ->orWhere('telepon', 'like', "%{$this->kode_member}%")
@@ -379,7 +390,7 @@ class PosPenjualan extends Page
         $this->nama_customer = $pembeli->nama;
         $this->alamat = $pembeli->alamat;
         $this->telepon = $pembeli->telepon;
-        $this->kode_member = $pembeli->nik ?? ''; // Set kode_member to NIK when selected
+        $this->kode_member = $pembeli->nik ?? '';
         $this->customerResults = [];
         $this->searchCustomer = '';
     }
@@ -395,7 +406,6 @@ class PosPenjualan extends Page
             $this->selectedBank = null;
         }
 
-        // Reset split values when changing method
         if ($this->metode_pembayaran !== 'TUNAI & TRANSFER') {
             $this->bayar_tunai = 0;
             $this->bayar_transfer = 0;
@@ -440,26 +450,21 @@ class PosPenjualan extends Page
     {
         $this->is_member = (int) $value;
 
-        // Reset customer info on any toggle to prevent mixed/dirty state
         $this->reset(['searchCustomer', 'customerResults', 'pembeli_id', 'nama_customer', 'alamat', 'telepon', 'kode_member']);
 
-        // Apply/Remove retroactive discount for items already in cart
         foreach ($this->cart as $id => $item) {
             if ($this->is_member) {
-                // ONLY add if not already active
                 if (! isset($this->cart[$id]['member_discount_active']) || ! $this->cart[$id]['member_discount_active']) {
-                    $this->cart[$id]['potongan'] += 0; // diskon member + 0 (sebelumnya + 5000)
+                    $this->cart[$id]['potongan'] += 0;
                     $this->cart[$id]['member_discount_active'] = true;
                 }
             } else {
-                // ONLY subtract if active
                 if (isset($this->cart[$id]['member_discount_active']) && $this->cart[$id]['member_discount_active']) {
-                    $this->cart[$id]['potongan'] = max(0, $this->cart[$id]['potongan'] - 0); // diskon member - 0 (sebelumnya - 5000)
+                    $this->cart[$id]['potongan'] = max(0, $this->cart[$id]['potongan'] - 0);
                     $this->cart[$id]['member_discount_active'] = false;
                 }
             }
 
-            // Sync total_potongan and subtotal
             $this->cart[$id]['total_potongan'] = $this->cart[$id]['potongan'] * $this->cart[$id]['qty'];
             $this->updateSubtotal($id);
         }
@@ -477,7 +482,6 @@ class PosPenjualan extends Page
     /* ================= SIMPAN ================= */
     public function simpanPenjualan(): void
     {
-
         if (empty($this->no_nota)) {
             Notification::make()
                 ->title('No Nota Kosong')
@@ -559,7 +563,6 @@ class PosPenjualan extends Page
                     'no_nota' => $this->no_nota,
                     'tanggal' => $this->tanggal,
                     'pembeli_id' => $pembeli->id,
-                    'rekening_perusahaan_id' => $rekening?->id,
                     'nama_customer' => $this->nama_customer,
                     'alamat' => $this->alamat,
                     'is_member' => (bool) $this->is_member,
@@ -571,6 +574,9 @@ class PosPenjualan extends Page
                     'kendaraan' => $this->metode_pengiriman === 'DIKIRIM' ? $this->kendaraan : null,
                     'plat_kendaraan' => $this->metode_pengiriman === 'DIKIRIM' ? $this->plat_kendaraan : null,
                     'nama_sopir' => $this->metode_pengiriman === 'DIKIRIM' ? $this->nama_sopir : null,
+                    'sub_total' => $this->subtotal,
+                    'ppn_persen' => $this->ppn_persen,
+                    'ppn_nominal' => $this->ppn_nominal,
                     'total' => $this->total,
                     'bayar' => $totalBayar,
                     'bayar_tunai' => ($this->metode_pembayaran === 'TUNAI & TRANSFER') ? $this->bayar_tunai : ($this->metode_pembayaran === 'TUNAI' ? $this->bayar : 0),
@@ -622,7 +628,12 @@ class PosPenjualan extends Page
 
     public function resetPos(): void
     {
-        $this->reset(['cart', 'bayar', 'bayar_tunai', 'bayar_transfer', 'metode_pembayaran', 'rekening_perusahaan_id', 'rekeningPerusahaan', 'nama_customer', 'alamat', 'telepon', 'pembeli_id', 'keterangan_nota', 'keterangan_pembayaran', 'kode_member', 'selectedBank', 'total']);
+        $this->reset([
+            'cart', 'bayar', 'bayar_tunai', 'bayar_transfer', 'metode_pembayaran',
+            'rekening_perusahaan_id', 'rekeningPerusahaan', 'nama_customer', 'alamat',
+            'telepon', 'pembeli_id', 'keterangan_nota', 'keterangan_pembayaran',
+            'kode_member', 'selectedBank', 'total', 'subtotal', 'ppn_persen', 'ppn_nominal',
+        ]);
         $this->no_nota = $this->generateNoNota();
     }
 
@@ -654,8 +665,8 @@ class PosPenjualan extends Page
         $this->kendaraan = $state['kendaraan'] ?? null;
         $this->plat_kendaraan = $state['plat_kendaraan'] ?? null;
         $this->nama_sopir = $state['nama_sopir'] ?? null;
+        $this->ppn_persen = (float) ($state['ppn_persen'] ?? 0);
 
-        // If transferring/payment split, populate company bank accounts
         if ($this->metode_pembayaran === 'TRANSFER' || $this->metode_pembayaran === 'TUNAI & TRANSFER') {
             $this->rekeningPerusahaan = RekeningPerusahaan::all();
             if ($this->rekening_perusahaan_id) {

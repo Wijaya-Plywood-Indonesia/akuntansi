@@ -412,6 +412,8 @@
                 <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-lg flex flex-col overflow-hidden"
                     x-data="{
                         total: @entangle('total'),
+                        subtotal: @entangle('subtotal'),
+                        ppnNominal: @entangle('ppn_nominal'),
                         bayar: @entangle('bayar'),
                         bayar_tunai: @entangle('bayar_tunai'),
                         bayar_transfer: @entangle('bayar_transfer'),
@@ -448,6 +450,32 @@
                         </div>
                         <div class="absolute -right-6 -bottom-6 opacity-10 dark:opacity-5"><x-heroicon-s-banknotes
                                 class="w-24 h-24" /></div>
+                    </div>
+
+                    {{-- RINCIAN SUBTOTAL & PPN --}}
+                    <div class="px-4 lg:px-5 pt-4 pb-3 space-y-2 border-b border-gray-100 dark:border-gray-800">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Subtotal
+                                Barang</span>
+                            <span
+                                class="font-black text-sm text-gray-900 dark:text-white">Rp{{ number_format($this->subtotal) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">PPN
+                                ({{ rtrim(rtrim(number_format($ppn_persen, 2), '0'), '.') ?: '0' }}%)</span>
+                            <span
+                                class="font-black text-sm text-gray-900 dark:text-white">Rp{{ number_format($this->ppn_nominal) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Pajak PPN
+                                (+)</span>
+                            <div class="relative flex items-center">
+                                <input type="text" inputmode="numeric" wire:model.live="ppn_persen"
+                                    class="w-24 pl-2.5 pr-7 py-1 text-right font-black text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none" />
+                                <span
+                                    class="absolute right-2.5 text-[10px] font-bold text-gray-400 pointer-events-none">%</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="p-4 lg:p-5 space-y-4">
@@ -760,7 +788,8 @@
                             metode_pengiriman: @this.metode_pengiriman,
                             kendaraan: @this.kendaraan,
                             plat_kendaraan: @this.plat_kendaraan,
-                            nama_sopir: @this.nama_sopir
+                            nama_sopir: @this.nama_sopir,
+                            ppn_persen: @this.ppn_persen
                         };
                         localStorage.setItem('pos_state', JSON.stringify(state));
                     }
