@@ -161,20 +161,32 @@ jobs:
             TARGET="/home/${{ secrets.SSH_USERNAME }}/prarelease-akuntansi.wijayaplywoods.com"
             cd "$TARGET"
             trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
+            
             php artisan down || true
             find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
             unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d .
+
+            # 🛠️ 1. Pastikan seluruh struktur folder storage & cache lengkap
+            mkdir -p storage/framework/{sessions,views,cache/data}
+            mkdir -p storage/logs
+            mkdir -p bootstrap/cache
+
+            # 🛠️ 2. Set permission SEBELUM menjalankan artisan command
             chmod -R 775 storage bootstrap/cache
+
             php artisan optimize:clear
+            
             cd "$TARGET/public"
             [ -e "storage" ] || ln -s "$TARGET/storage/app/public" storage
             cd "$TARGET"
+
             php artisan filament:assets
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
             php artisan shield:generate --all --panel=admin --no-interaction
+
             rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
             echo "🚀 Deployment Prarelease Akuntansi Sukses!"
 
