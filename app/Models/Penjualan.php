@@ -18,6 +18,9 @@ class Penjualan extends Model
         'no_rekening',
         'kendaraan',
         'nama_sopir',
+        'sub_total',
+        'ppn_persen',
+        'ppn_nominal',
         'total',
         'bayar',
         'kembalian',
@@ -34,6 +37,9 @@ class Penjualan extends Model
 
     protected $casts = [
         'tanggal' => 'datetime',
+        'sub_total' => 'decimal:2',
+        'ppn_persen' => 'decimal:2',
+        'ppn_nominal' => 'decimal:2',
         'total' => 'decimal:2',
         'bayar' => 'decimal:2',
         'bayar_tunai' => 'decimal:2',
@@ -69,6 +75,7 @@ class Penjualan extends Model
     {
         return $this->belongsTo(User::class, 'validated_by');
     }
+
     public function rekeningPerusahaan()
     {
         return $this->belongsTo(
@@ -77,17 +84,14 @@ class Penjualan extends Model
             'no_rekening'    // kolom di rekening_perusahaan
         );
     }
+
     public function toko()
     {
         return $this->belongsTo(IdentitasToko::class, 'toko_id');
     }
 
-    // Tambahkan di dalam class Penjualan
     public function returns()
     {
-        // Sesuaikan 'penjualan_id' dengan foreign key di tabel penjualan_return Anda
         return $this->hasMany(ReturnPenjualan::class, 'no_nota', 'no_nota');
     }
-
-// Di dalam class ReturnPenjualan
-    }
+}
