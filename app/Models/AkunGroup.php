@@ -120,34 +120,18 @@ class AkunGroup extends Model
     }
 
     /**
-     * Total akun yang terdaftar di grup ini, mencakup Anak Akun MAUPUN
-     * Sub Anak Akun (dua relasi many-to-many terpisah — grup bisa berisi
-     * campuran keduanya, lihat AnakAkunsRelationManager & SubAnakAkunsRelationManager).
+     * Total akun yang terdaftar di grup ini, mencakup Anak Akun.
      *
      * Untuk grup yang punya children (bukan leaf), dihitung rekursif dari
-     * seluruh children-nya, di kedalaman berapa pun — bukan cuma 1 level
-     * seperti sebelumnya, dan sekarang subAnakAkuns anak-anaknya juga
-     * ikut terhitung.
+     * seluruh children-nya, di kedalaman berapa pun.
      */
     public function getTotalAnakAkunsAttribute(): int
     {
         if (! $this->hasChildren()) {
-            return $this->anakAkuns()->count() + $this->subAnakAkuns()->count();
+            return $this->anakAkuns()->count();
         }
 
         return $this->children
             ->sum(fn(self $child) => $child->total_anak_akuns);
-    }
-
-    public function subAnakAkuns()
-    {
-        return $this->belongsToMany(
-            SubAnakAkun::class,
-            'akun_group_sub_anak_akun',
-            'akun_group_id',
-            'sub_anak_akun_id'
-        )
-            ->withPivot('id')
-            ->withTimestamps();
     }
 }

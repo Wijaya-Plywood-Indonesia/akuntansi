@@ -59,6 +59,16 @@ class AnakAkun extends Model
         return $this->hasMany(SubAnakAkun::class, 'id_anak_akun');
     }
 
+    public function akunGroups()
+    {
+        return $this->belongsToMany(
+            AkunGroup::class,
+            'akun_group_anak_akun',
+            'anak_akun_id',
+            'akun_group_id'
+        )->withTimestamps();
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
