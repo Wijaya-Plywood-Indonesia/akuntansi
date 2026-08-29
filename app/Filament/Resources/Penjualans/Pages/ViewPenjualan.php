@@ -8,6 +8,7 @@ use App\Models\JurnalUmum;
 use App\Models\Penjualan;
 use App\Services\JurnalBalikService;
 use App\Services\JurnalPenjualanTelurService;
+use App\Services\JurnalPenjualanTriplekService;
 use App\Services\Penjualans\SyncPenjualanService;
 use App\Services\StokPenyesuaianService;
 use Filament\Actions\Action;
@@ -51,6 +52,10 @@ class ViewPenjualan extends ViewRecord
                     Select::make('status_transaksi')
                         ->label('Status Transaksi')
                         ->options([
+                            // Modul ini khusus triplek & turunannya (telur
+                            // punya web sendiri) — pengiriman selalu besok,
+                            // jadi validasi normalnya lewat PIUTANG dulu.
+                            'PIUTANG' => 'PIUTANG',
                             'LUNAS' => 'LUNAS',
                             'COD' => 'COD',
                             'PENDING' => 'PENDING',
@@ -98,19 +103,37 @@ class ViewPenjualan extends ViewRecord
 
                     // FIX: Bungkus proses dalam try-catch agar:
                     // 1. Error dari StokPenyesuaianService / JurnalPenjualanTelurService
-                    //    (mis. stok tidak cukup, akun tidak ditemukan, dsb) tertangkap rapi.
+                    //    / JurnalPenjualanTriplekService (mis. stok tidak cukup, akun
+                    //    tidak ditemukan, template Buku Kitab belum lengkap, dsb)
+                    //    tertangkap rapi.
                     // 2. DB::transaction otomatis rollback saat exception dilempar,
                     //    jadi tidak ada perubahan data yang nyangkut setengah jalan.
                     // 3. User mendapat notifikasi error yang jelas, bukan silent fail
                     //    atau white screen.
                     try {
                         DB::transaction(function () use ($record, $statusBaru, $validatorId) {
-                            if ($statusBaru === 'LUNAS') {
-                                // Penyesuaian stok
+                            if ($statusBaru === 'PIUTANG') {
+                                // ── ALUR BARU: Pengakuan Piutang via Buku Kitab ──
+                                // Web ini khusus triplek & turunannya (ampurlur,
+                                // lem, dll) — semua transaksi wajib lewat
+                                // pengakuan Piutang dulu (pengiriman besok),
+                                // baru dilunasi belakangan (alur pelunasan
+                                // menyusul, belum ada di tahap ini).
+                                //
+                                // Penyesuaian stok tetap jalan di sini karena
+                                // barang sudah keluar/di-invoice saat ini,
+                                // walau uangnya belum diterima.
                                 app(StokPenyesuaianService::class)
                                     ->lunas($record->id);
 
-                                // Buat jurnal pembantu otomatis
+                                app(JurnalPenjualanTriplekService::class)
+                                    ->buatJurnalPengakuanPiutang($record, $validatorId);
+                            } elseif ($statusBaru === 'LUNAS') {
+                                // ── ALUR LAMA: tetap dipertahankan (mis. untuk
+                                // transaksi lain yang belum migrasi ke Piutang) ──
+                                app(StokPenyesuaianService::class)
+                                    ->lunas($record->id);
+
                                 app(JurnalPenjualanTelurService::class)
                                     ->buatJurnalDariPenjualan($record, $validatorId);
                             }
