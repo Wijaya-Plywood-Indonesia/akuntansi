@@ -283,8 +283,9 @@ class NeracaService
         $allGroupIds = $this->getAllChildGroupIds($rootLabaRugi->id);
         if (empty($allGroupIds)) return 0.0;
 
-        $akunLabaRugi = DB::table('akun_group_sub_anak_akun as pivot')
-            ->join('sub_anak_akuns as saa', 'saa.id', '=', 'pivot.sub_anak_akun_id')
+        $akunLabaRugi = DB::table('akun_group_anak_akun as pivot')
+            ->join('anak_akuns as aa', 'aa.id', '=', 'pivot.anak_akun_id')
+            ->join('sub_anak_akuns as saa', 'saa.id_anak_akun', '=', 'aa.id')
             ->whereIn('pivot.akun_group_id', $allGroupIds)
             ->select('saa.kode_sub_anak_akun', 'saa.saldo_normal')
             ->get()->keyBy('kode_sub_anak_akun');
@@ -350,10 +351,11 @@ class NeracaService
     private function loadGroups(): Collection
     {
         return AkunGroup::with([
-            'subAnakAkuns' => fn($q) => $q->orderBy('kode_sub_anak_akun')
-                ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
-            'childrenRecursive.subAnakAkuns' => fn($q) => $q->orderBy('kode_sub_anak_akun')
-                ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
+            'anakAkuns' => fn($q) => $q->orderBy('kode_anak_akun')
+                ->with([
+                    'subAnakAkuns' => fn($q2) => $q2->orderBy('kode_sub_anak_akun')
+                        ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
+                ]),
             'childrenRecursive.anakAkuns' => fn($q) => $q->orderBy('kode_anak_akun')
                 ->with([
                     'subAnakAkuns' => fn($q2) => $q2->orderBy('kode_sub_anak_akun')
@@ -419,33 +421,66 @@ class NeracaService
         ];
     }
 
-    // ── PERUBAHAN 8: SESUAIKAN SIGNATURE FUNGSI buildSectionsFromRoot ────────
-    // Menambahkan parameter 'array $m3 = []' di bagian akhir
     private function buildSectionsFromRoot(AkunGroup $rootGroup, array $saldo, array $qty = [], array $m3 = []): array
     {
         $items = [];
         $total = 0.0;
 
-        $subs = $rootGroup->relationLoaded('subAnakAkuns')
-            ? $rootGroup->subAnakAkuns
-            : $rootGroup->subAnakAkuns()->orderBy('kode_sub_anak_akun')->get();
+        $anakAkuns = $rootGroup->relationLoaded('anakAkuns')
+            ? $rootGroup->anakAkuns
+            : $rootGroup->anakAkuns()->orderBy('kode_anak_akun')->get();
 
-        foreach ($subs as $sub) {
-            $nilai = $saldo[$sub->kode_sub_anak_akun] ?? 0.0;
-            $q     = isset($qty[$sub->kode_sub_anak_akun]) ? (float) $qty[$sub->kode_sub_anak_akun] : null;
-
-            // ── PERUBAHAN 9: HAPUS VARIABEL ERROR $barang->m3 DAN AMBIL SALDO M3 ──
-            // Mengambil volume m3 dari array $m3 yang ditarik dari database secara dinamis
-            $vol   = isset($m3[$sub->kode_sub_anak_akun]) ? (float) $m3[$sub->kode_sub_anak_akun] : null;
+        foreach ($anakAkuns as $anakAkun) {
+            $nilaiAkun = $this->hitungNilaiAkun($anakAkun, $saldo);
+            
+            $q = 0.0;
+            $vol = 0.0;
+            $hasQty = false;
+            $hasM3 = false;
+            
+            $subAkunList = [];
+            if ($anakAkun->subAnakAkuns->isNotEmpty()) {
+                foreach ($anakAkun->subAnakAkuns as $sub) {
+                    $valSub = $saldo[$sub->kode_sub_anak_akun] ?? 0.0;
+                    $qtySub = isset($qty[$sub->kode_sub_anak_akun]) ? (float) $qty[$sub->kode_sub_anak_akun] : null;
+                    $m3Sub = isset($m3[$sub->kode_sub_anak_akun]) ? (float) $m3[$sub->kode_sub_anak_akun] : null;
+                    $subAkunList[] = [
+                        'kode' => $sub->kode_sub_anak_akun,
+                        'nama' => $sub->nama_sub_anak_akun,
+                        'nilai' => $valSub,
+                        'qty' => $qtySub,
+                        'm3' => $m3Sub,
+                    ];
+                    
+                    if (isset($qty[$sub->kode_sub_anak_akun])) {
+                        $q += (float) $qty[$sub->kode_sub_anak_akun];
+                        $hasQty = true;
+                    }
+                    if (isset($m3[$sub->kode_sub_anak_akun])) {
+                        $vol += (float) $m3[$sub->kode_sub_anak_akun];
+                        $hasM3 = true;
+                    }
+                }
+            } else {
+                if (isset($qty[$anakAkun->kode_anak_akun])) {
+                    $q = (float) $qty[$anakAkun->kode_anak_akun];
+                    $hasQty = true;
+                }
+                if (isset($m3[$anakAkun->kode_anak_akun])) {
+                    $vol = (float) $m3[$anakAkun->kode_anak_akun];
+                    $hasM3 = true;
+                }
+            }
 
             $items[] = [
-                'kode'  => $sub->kode_sub_anak_akun,
-                'nama'  => $sub->nama_sub_anak_akun,
-                'nilai' => $nilai,
-                'qty'   => $q,
-                'm3'    => $vol, // Menggunakan variabel lokal $vol baru (bebas error)
+                'kode'  => $anakAkun->kode_anak_akun,
+                'nama'  => $anakAkun->nama_anak_akun,
+                'nilai' => $nilaiAkun,
+                'qty'   => $hasQty ? $q : null,
+                'm3'    => $hasM3 ? $vol : null,
+                'sub_akuns' => $subAkunList,
             ];
-            $total += $nilai;
+            $total += $nilaiAkun;
         }
 
         return [[[
@@ -470,33 +505,55 @@ class NeracaService
                 $items        = [];
                 $totalSection = 0.0;
 
-                if ($group->relationLoaded('subAnakAkuns') && $group->subAnakAkuns->isNotEmpty()) {
-                    foreach ($group->subAnakAkuns as $sub) {
-                        $nilai = $saldo[$sub->kode_sub_anak_akun] ?? 0.0;
-                        $q     = isset($qty[$sub->kode_sub_anak_akun]) ? (float) $qty[$sub->kode_sub_anak_akun] : null;
-
-                        // ── PERUBAHAN 11: AMBIL DATA M3 DINAMIS PADA GRUP DAUN (LEAF) ──
-                        $vol   = isset($m3[$sub->kode_sub_anak_akun]) ? (float) $m3[$sub->kode_sub_anak_akun] : null;
-
-                        $items[] = [
-                            'kode'  => $sub->kode_sub_anak_akun,
-                            'nama'  => $sub->nama_sub_anak_akun,
-                            'nilai' => $nilai,
-                            'qty'   => $q,
-                            'm3'    => $vol, // Petakan $vol ke index m3
-                        ];
-                        $totalSection += $nilai;
-                    }
-                }
-
                 foreach ($group->anakAkuns as $anakAkun) {
                     $nilaiAkun = $this->hitungNilaiAkun($anakAkun, $saldo);
+                    
+                    $q = 0.0;
+                    $vol = 0.0;
+                    $hasQty = false;
+                    $hasM3 = false;
+                    
+                    $subAkunList = [];
+                    if ($anakAkun->subAnakAkuns->isNotEmpty()) {
+                        foreach ($anakAkun->subAnakAkuns as $sub) {
+                            $valSub = $saldo[$sub->kode_sub_anak_akun] ?? 0.0;
+                            $qtySub = isset($qty[$sub->kode_sub_anak_akun]) ? (float) $qty[$sub->kode_sub_anak_akun] : null;
+                            $m3Sub = isset($m3[$sub->kode_sub_anak_akun]) ? (float) $m3[$sub->kode_sub_anak_akun] : null;
+                            $subAkunList[] = [
+                                'kode' => $sub->kode_sub_anak_akun,
+                                'nama' => $sub->nama_sub_anak_akun,
+                                'nilai' => $valSub,
+                                'qty' => $qtySub,
+                                'm3' => $m3Sub,
+                            ];
+                            
+                            if (isset($qty[$sub->kode_sub_anak_akun])) {
+                                $q += (float) $qty[$sub->kode_sub_anak_akun];
+                                $hasQty = true;
+                            }
+                            if (isset($m3[$sub->kode_sub_anak_akun])) {
+                                $vol += (float) $m3[$sub->kode_sub_anak_akun];
+                                $hasM3 = true;
+                            }
+                        }
+                    } else {
+                        if (isset($qty[$anakAkun->kode_anak_akun])) {
+                            $q = (float) $qty[$anakAkun->kode_anak_akun];
+                            $hasQty = true;
+                        }
+                        if (isset($m3[$anakAkun->kode_anak_akun])) {
+                            $vol = (float) $m3[$anakAkun->kode_anak_akun];
+                            $hasM3 = true;
+                        }
+                    }
+
                     $items[] = [
                         'kode'  => $anakAkun->kode_anak_akun,
                         'nama'  => $anakAkun->nama_anak_akun,
                         'nilai' => $nilaiAkun,
-                        'qty'   => null,
-                        'm3'    => null, // Konsistensi array
+                        'qty'   => $hasQty ? $q : null,
+                        'm3'    => $hasM3 ? $vol : null,
+                        'sub_akuns' => $subAkunList,
                     ];
                     $totalSection += $nilaiAkun;
                 }

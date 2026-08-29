@@ -8,101 +8,74 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AnakAkun extends Model
 {
-    protected $table = 'anak_akuns';
-
     protected $fillable = [
         'id_induk_akun',
+        'parent',
         'kode_anak_akun',
         'nama_anak_akun',
         'keterangan',
-        'parent',
-        'status',
         'saldo_normal',
+        'status',
         'created_by',
     ];
-
-
 
     /*
     |--------------------------------------------------------------------------
     | Relationships
     |--------------------------------------------------------------------------
     */
-    // Anak akun yang menjadi sub-parent (children rekursif)
-    public function children()
-    {
-        return $this->hasMany(AnakAkun::class, 'parent')
-            ->orderBy('kode_anak_akun');
-    }
+
     public function indukAkun(): BelongsTo
     {
         return $this->belongsTo(IndukAkun::class, 'id_induk_akun');
+    }
+
+    public function parentAkun(): BelongsTo
+    {
+        return $this->belongsTo(AnakAkun::class, 'parent');
+    }
+
+    /**
+     * Children rekursif — otomatis eager-load subAnakAkuns
+     * dan children-nya sendiri di tiap level, tanpa perlu
+     * nulis manual "children.children.children..." di controller.
+     */
+    public function children(): HasMany
+    {
+        return $this->hasMany(AnakAkun::class, 'parent')
+            ->orderByRaw("CAST(SUBSTRING_INDEX(kode_anak_akun, '.', 1) AS UNSIGNED) asc")
+            ->orderByRaw("CAST(SUBSTRING_INDEX(kode_anak_akun, '.', -1) AS UNSIGNED) asc")
+            ->with([
+                'subAnakAkuns' => function ($q) {
+                    $q->orderByRaw("CAST(SUBSTRING_INDEX(kode_sub_anak_akun, '.', 1) AS UNSIGNED) asc")
+                        ->orderByRaw("CAST(SUBSTRING_INDEX(kode_sub_anak_akun, '.', -1) AS UNSIGNED) asc");
+                },
+                'children', // rekursif ke dirinya sendiri
+            ]);
     }
 
     public function subAnakAkuns(): HasMany
     {
         return $this->hasMany(SubAnakAkun::class, 'id_anak_akun');
     }
-    /**
-     * Parent Self Reference
-     */
-    public function parentAkun()
+
+    public function akunGroups()
     {
-        return $this->belongsTo(self::class, 'parent');
+        return $this->belongsToMany(
+            AkunGroup::class,
+            'akun_group_anak_akun',
+            'anak_akun_id',
+            'akun_group_id'
+        )->withTimestamps();
     }
-
-
 
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Scope
-    |--------------------------------------------------------------------------
-    */
-
     public function scopeAktif($query)
     {
         return $query->where('status', 'aktif');
     }
-
-    /**
-     * Many to Many - Akun Group
-     */
-    public function akunGroups()
-    {
-        return $this->belongsToMany(
-            AkunGroup::class,
-            'akun_group_anak_akun'
-        )->withTimestamps();
-    }
-    /*
-    |--------------------------------------------------------------------------
-    | HELPERS
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Check if akun is leaf (tidak punya children)
-     */
-    public function isLeaf(): bool
-    {
-        return !$this->children()->exists();
-    }
-
-    /**
-     * Check if akun punya children
-     */
-    public function hasChildren(): bool
-    {
-        return $this->children()->exists();
-    }
-    public function getLabelAttribute(): string
-    {
-        return "{$this->kode_anak_akun} - {$this->nama_anak_akun}";
-    }
 }
-
