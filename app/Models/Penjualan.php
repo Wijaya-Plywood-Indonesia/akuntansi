@@ -14,6 +14,7 @@ class Penjualan extends Model
         'is_member',
         'alamat',
         'metode_pembayaran',
+        'jenis_transaksi', // COD | BAYAR_DIMUKA | DP
         'bank',
         'no_rekening',
         'kendaraan',

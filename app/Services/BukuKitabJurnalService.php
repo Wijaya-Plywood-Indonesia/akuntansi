@@ -30,8 +30,13 @@ class BukuKitabJurnalService
      * @param  string       $jenisPihak    Salah satu dari JurnalPembantuItem::JENIS_PIHAK
      * @param  string       $namaPihak     Nama customer/supplier/dst untuk item
      * @param  string|null  $keteranganDefault  Keterangan default kalau baris tidak punya keterangan sendiri
-     * @param  array<string, array<int, array{id_barang?: int|null, nama_barang?: string|null, nominal: float, keterangan?: string|null}>>  $itemBreakdown
+     * @param  array<string, array<int, array{id_barang?: int|null, nama_barang?: string|null, banyak: float, harga: float, keterangan?: string|null}>>  $itemBreakdown
      *         Rincian PER BARANG untuk variabel_nilai tertentu (mis. 'persediaan_barang_jadi', 'hpp').
+     *         WAJIB isi 'banyak' (qty asli, mis. 3 lembar) dan 'harga' (harga
+     *         SATUAN, bukan total) — nilai baris = banyak x harga. Ini penting
+     *         karena pengurangan stok (Barang::getStokBukuBesarAttribute)
+     *         dihitung dari kolom 'banyak', bukan dari nilai rupiah — kalau
+     *         'banyak' selalu diisi 1, stok jadi salah hitung.
      *         Kalau suatu variabel_nilai ada di sini, baris jurnalnya dipecah jadi
      *         beberapa item (1 per barang) dengan id_barang masing-masing — PENTING
      *         supaya stok per produk (Barang::getStokBukuBesarAttribute) terhitung
@@ -131,7 +136,9 @@ class BukuKitabJurnalService
                     // supaya saat diposting ke Jurnal Umum, tiap barang tetap
                     // jadi baris sendiri (id_barang tidak hilang tertumpuk).
                     foreach ($breakdown as $b) {
-                        $nominalItem = (float) ($b['nominal'] ?? 0);
+                        $banyakItem = (float) ($b['banyak'] ?? 0);
+                        $hargaItem = (float) ($b['harga'] ?? 0);
+                        $nominalItem = round($banyakItem * $hargaItem, 4);
                         if ($nominalItem <= 0) {
                             continue;
                         }
@@ -162,9 +169,9 @@ class BukuKitabJurnalService
                             'nama_barang'  => $b['nama_barang'] ?? null,
                             'no_dokumen'   => $noDokumen,
                             'keterangan'   => $ketItem,
-                            'banyak'       => 1,
+                            'banyak'       => $banyakItem,
                             'm3'           => 0,
-                            'harga'        => $nominalItem,
+                            'harga'        => $hargaItem,
                             'hit_kbk'      => 'b',
                             'status'       => true,
                             'created_by'   => $userId,
@@ -227,7 +234,9 @@ class BukuKitabJurnalService
                     // beberapa barang berbagi 1 akun persediaan yang sama.
                     $urutItem = 1;
                     foreach ($breakdown as $b) {
-                        $nominalItem = (float) ($b['nominal'] ?? 0);
+                        $banyakItem = (float) ($b['banyak'] ?? 0);
+                        $hargaItem = (float) ($b['harga'] ?? 0);
+                        $nominalItem = round($banyakItem * $hargaItem, 4);
                         if ($nominalItem <= 0) {
                             continue;
                         }
@@ -240,9 +249,9 @@ class BukuKitabJurnalService
                             'nama_barang'  => $b['nama_barang'] ?? null,
                             'no_dokumen'   => $noDokumen,
                             'keterangan'   => $b['keterangan'] ?? ($b['nama_barang'] ?? $ketBaris),
-                            'banyak'       => 1,
+                            'banyak'       => $banyakItem,
                             'm3'           => 0,
-                            'harga'        => $nominalItem,
+                            'harga'        => $hargaItem,
                             'hit_kbk'      => 'b',
                             'status'       => true,
                             'created_by'   => $userId,
