@@ -408,8 +408,9 @@ class PosPenjualan extends Page
 
     /**
      * Dipanggil saat user memilih jenis transaksi: COD / BAYAR_DIMUKA / DP.
-     * COD tidak butuh input nominal & tidak butuh pilihan rekening, jadi
-     * di-reset paksa ke kondisi default (tunai, tanpa rekening).
+     * COD tidak butuh input nominal & tidak butuh pilihan rekening — uang
+     * BELUM diterima sama sekali di titik ini (bayar tetap 0), baru benar-benar
+     * diterima nanti lewat menu Pelunasan saat barang sudah diterima customer.
      */
     public function updatedJenisTransaksi(): void
     {
@@ -468,7 +469,13 @@ class PosPenjualan extends Page
     /* ================= COMPUTED ================= */
     public function getKembalianProperty(): int
     {
-        // Konsep "kembalian" tidak berlaku untuk DP (bayar sengaja < total).
+        // COD: uang belum diterima sama sekali di titik ini -> tidak ada
+        // konsep "kembalian" (itu baru relevan nanti pas Pelunasan).
+        if ($this->jenis_transaksi === 'COD') {
+            return 0;
+        }
+
+        // Konsep "kembalian" juga tidak berlaku untuk DP (bayar sengaja < total).
         if ($this->jenis_transaksi === 'DP') {
             return 0;
         }
@@ -481,20 +488,27 @@ class PosPenjualan extends Page
     }
 
     /**
-     * Sisa tagihan untuk transaksi DP (dipakai di tampilan & disimpan nanti
-     * agar modul Pelunasan tinggal menghitung selisih total - bayar).
+     * Sisa tagihan yang masih harus ditagih ke customer setelah transaksi ini
+     * tersimpan — dipakai modul Pelunasan nanti.
+     *   - COD          : seluruh total (belum ada yang dibayar sama sekali).
+     *   - DP           : total dikurangi nominal DP yang sudah masuk.
+     *   - BAYAR_DIMUKA : 0 (sudah lunas penuh saat ini).
      */
-    public function getSisaDpProperty(): int
+    public function getSisaTagihanProperty(): int
     {
-        if ($this->jenis_transaksi !== 'DP') {
-            return 0;
+        if ($this->jenis_transaksi === 'COD') {
+            return $this->total;
         }
 
-        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
-            ? ($this->bayar_tunai + $this->bayar_transfer)
-            : ($this->bayar ?? 0);
+        if ($this->jenis_transaksi === 'DP') {
+            $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+                ? ($this->bayar_tunai + $this->bayar_transfer)
+                : ($this->bayar ?? 0);
 
-        return max($this->total - $totalBayar, 0);
+            return max($this->total - $totalBayar, 0);
+        }
+
+        return 0;
     }
 
     /* ================= MEMBER ================= */
@@ -578,11 +592,13 @@ class PosPenjualan extends Page
         // Pastikan ppn_persen tidak null sebelum disimpan
         $this->ppn_persen = (float) ($this->ppn_persen ?? 0);
 
-        // COD selalu tunai & lunas penuh di tempat.
+        // COD: uang BELUM diterima sama sekali di titik ini — dibiarkan 0.
+        // Uang beneran diterima nanti lewat menu Pelunasan saat barang sampai
+        // ke customer, BUKAN otomatis dianggap lunas saat transaksi dibuat.
         if ($this->jenis_transaksi === 'COD') {
             $this->metode_pembayaran = 'TUNAI';
-            $this->bayar = $this->total;
-            $this->bayar_tunai = $this->total;
+            $this->bayar = 0;
+            $this->bayar_tunai = 0;
             $this->bayar_transfer = 0;
         }
 
@@ -592,7 +608,7 @@ class PosPenjualan extends Page
 
         /*
          * Validasi nominal per jenis transaksi:
-         * - COD          : otomatis lunas (di-set di atas), tidak perlu divalidasi.
+         * - COD          : selalu 0, tidak divalidasi (memang belum ada uang masuk).
          * - BAYAR_DIMUKA : harus dibayar lunas (kecuali member, sama seperti alur lama).
          * - DP           : harus > 0 dan HARUS kurang dari total (kalau pas/lebih,
          *                  seharusnya pakai Bayar Dimuka).
@@ -718,13 +734,15 @@ class PosPenjualan extends Page
             $jenisTransaksiSelesai = $this->jenis_transaksi;
             $this->resetPos();
 
+            $pesanSukses = match ($jenisTransaksiSelesai) {
+                'COD' => 'Transaksi COD tersimpan. Seluruh nominal akan ditagih lewat menu Pelunasan saat barang diterima.',
+                'DP' => 'DP tersimpan. Sisa tagihan akan muncul di menu Pelunasan.',
+                default => 'Kembalian: Rp '.number_format($kembalian),
+            };
+
             Notification::make()
                 ->title('Transaksi Berhasil')
-                ->body(
-                    $jenisTransaksiSelesai === 'DP'
-                        ? 'DP tersimpan. Sisa tagihan akan muncul di menu Pelunasan.'
-                        : 'Kembalian: Rp '.number_format($kembalian)
-                )
+                ->body($pesanSukses)
                 ->success()
                 ->send();
 
