@@ -41,11 +41,13 @@ class JurnalPenjualanTriplekService
         // Siap Jual"), stok tetap terhitung terpisah per produk.
         $breakdownPersediaan = [];
         $breakdownHpp = [];
+        $breakdownPenjualan = [];
         $nilaiPokokBarang = 0.0;
 
         foreach ($penjualan->details as $detail) {
+            $qty = (float) $detail->qty;
             $hargaBeli = (float) ($detail->barang->harga_beli ?? 0);
-            $nominal = (float) $detail->qty * $hargaBeli;
+            $nominal = $qty * $hargaBeli;
 
             if ($nominal <= 0) {
                 continue;
@@ -56,15 +58,34 @@ class JurnalPenjualanTriplekService
             $breakdownPersediaan[] = [
                 'id_barang'   => $detail->barang_id,
                 'nama_barang' => $detail->nama_barang,
-                'nominal'     => $nominal,
+                'banyak'      => $qty,       // qty ASLI (mis. 3 lembar), bukan 1 —
+                'harga'       => $hargaBeli, // harga SATUAN (per lembar), bukan total.
                 'keterangan'  => 'Keluar stok ' . $detail->nama_barang,
             ];
 
+            // HPP SENGAJA tidak diisi id_barang — akun HPP bukan akun stok,
+            // jadi tidak butuh dipisah per barang saat posting ke Jurnal
+            // Umum. Kalau id_barang ikut diisi beda-beda di sini, proses
+            // posting akan memecahnya jadi baris terpisah per barang, padahal
+            // untuk HPP kita memang mau tetap 1 baris gabungan (termasuk
+            // baris "Alokasi Hutang Gaji" di dalamnya).
             $breakdownHpp[] = [
-                'id_barang'   => $detail->barang_id,
                 'nama_barang' => $detail->nama_barang,
-                'nominal'     => $nominal,
+                'banyak'      => $qty,
+                'harga'       => $hargaBeli,
                 'keterangan'  => 'HPP ' . $detail->nama_barang,
+            ];
+
+            // Penjualan JUGA dipecah per barang, pakai harga JUAL BERSIH
+            // (subtotal / qty) — bukan harga_jual mentah — supaya kalau ada
+            // potongan/diskon per baris, nilainya tetap akurat. Sama seperti
+            // HPP, tidak perlu id_barang (akun Pendapatan bukan akun stok).
+            $hargaJualBersih = $qty > 0 ? round((float) $detail->subtotal / $qty, 4) : 0;
+            $breakdownPenjualan[] = [
+                'nama_barang' => $detail->nama_barang,
+                'banyak'      => $qty,
+                'harga'       => $hargaJualBersih,
+                'keterangan'  => 'Penjualan ' . $detail->nama_barang,
             ];
         }
 
@@ -74,10 +95,11 @@ class JurnalPenjualanTriplekService
         // (tanpa id_barang, karena bukan pergerakan barang) — supaya HPP
         // (Debit) tetap balance dengan Persediaan + Hutang Gaji (Kredit),
         // sekaligus HPP per barang tetap akurat (tidak "ketumpuk" gaji).
+        // banyak=1, harga=nominal gaji — karena ini bukan barang bersatuan.
         $breakdownHpp[] = [
-            'id_barang'   => null,
             'nama_barang' => null,
-            'nominal'     => $hutangGaji,
+            'banyak'      => 1,
+            'harga'       => $hutangGaji,
             'keterangan'  => 'Alokasi Hutang Gaji',
         ];
 
@@ -115,6 +137,7 @@ class JurnalPenjualanTriplekService
             itemBreakdown: [
                 'persediaan_barang_jadi' => $breakdownPersediaan,
                 'hpp'                    => $breakdownHpp,
+                'nilai_penjualan'        => $breakdownPenjualan,
             ],
             splitHeaderPerBarang: ['persediaan_barang_jadi'],
         );

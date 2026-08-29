@@ -34,7 +34,7 @@
                     <span
                         class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Waktu:</span>
                     <input type="datetime-local" wire:model.live="tanggal"
-                        class="px-2 py-1 bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded text-xs font-medium text-gray-600 dark:text-gray-300 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
+                        class="px-2 py-1 bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded text-xs font-medium text-gray-600 dark:text-gray-300 focus:ring-2 focus:ring-primary-500/20 transition-all" />
                 </div>
             </div>
             <div
@@ -418,6 +418,7 @@
                         bayar_tunai: @entangle('bayar_tunai'),
                         bayar_transfer: @entangle('bayar_transfer'),
                         metode: @entangle('metode_pembayaran'),
+                        jenisTransaksi: @entangle('jenis_transaksi'),
                         format(val) {
                             if (val === null || val === undefined || val === '' || val == 0) return '0';
                             let cleaned = val.toString().replace(/\D/g, '');
@@ -430,9 +431,15 @@
                             return parseInt(this.bayar) || 0;
                         },
                         get diff() {
+                            if (this.jenisTransaksi === 'DP') {
+                                return Math.max(this.total - this.currentTotalBayar, 0);
+                            }
                             return Math.abs(this.currentTotalBayar - this.total);
                         },
                         get isKurang() {
+                            if (this.jenisTransaksi === 'DP') {
+                                return true;
+                            }
                             return this.currentTotalBayar < this.total;
                         }
                     }">
@@ -469,8 +476,28 @@
                         <div class="flex justify-between items-center">
                             <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Pajak PPN
                                 (+)</span>
-                            <div class="relative flex items-center">
-                                <input type="text" inputmode="numeric" wire:model.live="ppn_persen"
+                            {{--
+                                FIX BUG: sebelumnya input ini polos wire:model.live tanpa
+                                pembersihan nilai, jadi kalau kursor ditaruh di depan karakter
+                                lama (mis. "0") lalu diketik "11", hasilnya numpuk jadi "110"
+                                dan ke-clamp jadi 100%. Sekarang dibungkus x-data seperti field
+                                lain (format ulang tiap input) + auto-select saat fokus, supaya
+                                ketikan baru menggantikan nilai lama, bukan menyisipkannya.
+                            --}}
+                            <div class="relative flex items-center" x-data="{
+                                ppn: @entangle('ppn_persen').live,
+                                format(val) {
+                                    if (val === null || val === undefined || val === '') return '';
+                                    return val.toString().replace(',', '.');
+                                }
+                            }">
+                                <input type="text" inputmode="decimal" :value="format(ppn)"
+                                    @input="
+                                        let raw = $event.target.value.replace(/[^0-9.,]/g, '').replace(',', '.');
+                                        ppn = raw === '' ? 0 : parseFloat(raw);
+                                        $el.value = raw;
+                                    "
+                                    @focus="$event.target.select()"
                                     class="w-24 pl-2.5 pr-7 py-1 text-right font-black text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none" />
                                 <span
                                     class="absolute right-2.5 text-[10px] font-bold text-gray-400 pointer-events-none">%</span>
@@ -479,118 +506,147 @@
                     </div>
 
                     <div class="p-4 lg:p-5 space-y-4">
+                        {{-- JENIS TRANSAKSI: COD / BAYAR DIMUKA / DP --}}
                         <div class="space-y-2">
                             <label
-                                class="text-[10px] font-bold text-gray-500 uppercase tracking-wide block ml-1">Metode
-                                Pembayaran</label>
+                                class="text-[10px] font-bold text-gray-500 uppercase tracking-wide block ml-1">Jenis
+                                Transaksi</label>
                             <div
                                 class="grid grid-cols-3 gap-1 p-1 bg-gray-100/50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <button wire:click="$set('metode_pembayaran', 'TUNAI')"
-                                    class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TUNAI' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Tunai</button>
-                                <button wire:click="$set('metode_pembayaran', 'TRANSFER')"
-                                    class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TRANSFER' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Transfer</button>
-                                <button wire:click="$set('metode_pembayaran', 'TUNAI & TRANSFER')"
-                                    class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TUNAI & TRANSFER' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Tunai
-                                    & Transfer</button>
+                                <button wire:click="$set('jenis_transaksi', 'COD')"
+                                    class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $jenis_transaksi === 'COD' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">COD</button>
+                                <button wire:click="$set('jenis_transaksi', 'BAYAR_DIMUKA')"
+                                    class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $jenis_transaksi === 'BAYAR_DIMUKA' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Bayar
+                                    Dimuka</button>
+                                <button wire:click="$set('jenis_transaksi', 'DP')"
+                                    class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $jenis_transaksi === 'DP' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">DP</button>
                             </div>
-                            @if ($metode_pembayaran === 'TRANSFER' || $metode_pembayaran === 'TUNAI & TRANSFER')
-                                <div wire:key="payment-bank-selector" class="space-y-2">
-                                    <div class="relative">
-                                        <select wire:model.live="rekening_perusahaan_id"
-                                            class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 pr-8 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer">
-                                            <option value="">Pilih Bank...</option>
-                                            @foreach ($rekeningPerusahaan as $rek)
-                                                <option value="{{ $rek->id }}">{{ $rek->atas_nama }} |
-                                                    {{ $rek->nama_bank }} | {{ $rek->no_rekening }}</option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                    @if ($selectedBank)
-                                        <div wire:key="payment-selected-bank-details"
-                                            class="p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-100 dark:border-primary-800/50">
-                                            <div class="flex flex-col">
-                                                <span
-                                                    class="text-[8px] font-bold text-primary-600 dark:text-primary-400 uppercase">Rekening
-                                                    Atas Nama</span>
-                                                <span
-                                                    class="text-xs font-bold text-gray-700 dark:text-gray-200">{{ $selectedBank->atas_nama }}</span>
-                                                <div class="mt-1 flex justify-between items-center">
-                                                    <span
-                                                        class="text-sm font-black text-primary-700 dark:text-primary-300 font-mono tracking-tight">{{ $selectedBank->no_rekening }}</span>
-                                                    <span
-                                                        class="text-[8px] font-bold px-1.5 py-0.5 bg-primary-200 dark:bg-primary-800 rounded text-primary-800 dark:text-primary-200 uppercase">{{ $selectedBank->nama_bank }}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    @endif
-                                </div>
-                            @endif
                         </div>
 
-                        <div
-                            class="space-y-1.5 bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
-
-                            @if ($metode_pembayaran === 'TUNAI & TRANSFER')
-                                <div wire:key="payment-split-fields" class="flex flex-wrap gap-3 mb-2">
-                                    <div class="flex-1 min-w-[140px] space-y-1">
-                                        <label
-                                            class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Tunai
-                                            (Cash)</label>
-                                        <div class="flex items-center gap-1 border-b border-primary-500 pb-0.5">
-                                            <span class="text-xs font-bold text-primary-600">Rp</span>
-                                            <input type="text" :value="format(bayar_tunai)"
-                                                @input="
-                                                    let raw = $event.target.value.replace(/\D/g, '');
-                                                    bayar_tunai = raw ? parseInt(raw) : 0;
-                                                    $el.value = format(bayar_tunai);
-                                                "
-                                                class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white text-gray-900" />
-                                        </div>
-                                    </div>
-                                    <div class="flex-1 min-w-[140px] space-y-1">
-                                        <label
-                                            class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Transfer</label>
-                                        <div class="flex items-center gap-1 border-b border-primary-500 pb-0.5">
-                                            <span class="text-xs font-bold text-primary-600">Rp</span>
-                                            <input type="text" :value="format(bayar_transfer)"
-                                                @input="
-                                                    let raw = $event.target.value.replace(/\D/g, '');
-                                                    bayar_transfer = raw ? parseInt(raw) : 0;
-                                                    $el.value = format(bayar_transfer);
-                                                "
-                                                class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white text-gray-900" />
-                                        </div>
-                                    </div>
-                                </div>
-                            @else
-                                <div wire:key="payment-single-fields" class="space-y-1">
-                                    <div class="flex justify-between items-center">
-                                        <label
-                                            class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1">Nominal
-                                            Bayar</label>
-                                    </div>
-                                    <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
-                                        <span class="text-lg font-bold text-primary-600">Rp</span>
-                                        <input type="text" :value="format(bayar)"
-                                            @input="
-                                                let raw = $event.target.value.replace(/\D/g, '');
-                                                bayar = raw ? parseInt(raw) : 0;
-                                                $el.value = format(bayar);
-                                            "
-                                            class="w-full bg-transparent border-none p-0 text-xl lg:text-2xl font-black focus:ring-0 tracking-tight"
-                                            placeholder="0" />
-                                    </div>
-                                </div>
-                            @endif
-
-                            <div class="pt-0.5 flex justify-between items-center">
-                                <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
-                                    x-text="isKurang ? 'Kurang' : 'Kembali'"></span>
-                                <span class="text-base lg:text-lg font-bold"
-                                    :class="isKurang ? 'text-red-500' : 'text-green-500'" x-text="format(diff)">
+                        @if ($jenis_transaksi === 'COD')
+                            {{-- COD: tidak perlu metode/nominal, langsung lunas di tempat --}}
+                            <div wire:key="cod-info"
+                                class="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-100 dark:border-gray-700 text-center">
+                                <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">
+                                    COD — dibayar penuh saat barang diterima. Langsung Save, tanpa input nominal.
                                 </span>
                             </div>
-                        </div>
+                        @else
+                            {{-- BAYAR DIMUKA / DP: pilih metode tunai / transfer / split --}}
+                            <div wire:key="metode-pembayaran-wrapper" class="space-y-2">
+                                <label
+                                    class="text-[10px] font-bold text-gray-500 uppercase tracking-wide block ml-1">Metode
+                                    Pembayaran</label>
+                                <div
+                                    class="grid grid-cols-3 gap-1 p-1 bg-gray-100/50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <button wire:click="$set('metode_pembayaran', 'TUNAI')"
+                                        class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TUNAI' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Tunai</button>
+                                    <button wire:click="$set('metode_pembayaran', 'TRANSFER')"
+                                        class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TRANSFER' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Transfer</button>
+                                    <button wire:click="$set('metode_pembayaran', 'TUNAI & TRANSFER')"
+                                        class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TUNAI & TRANSFER' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Tunai
+                                        & Transfer</button>
+                                </div>
+                                @if ($metode_pembayaran === 'TRANSFER' || $metode_pembayaran === 'TUNAI & TRANSFER')
+                                    <div wire:key="payment-bank-selector" class="space-y-2">
+                                        <div class="relative">
+                                            <select wire:model.live="rekening_perusahaan_id"
+                                                class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 pr-8 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer">
+                                                <option value="">Pilih Bank...</option>
+                                                @foreach ($rekeningPerusahaan as $rek)
+                                                    <option value="{{ $rek->id }}">{{ $rek->atas_nama }} |
+                                                        {{ $rek->nama_bank }} | {{ $rek->no_rekening }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        @if ($selectedBank)
+                                            <div wire:key="payment-selected-bank-details"
+                                                class="p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-100 dark:border-primary-800/50">
+                                                <div class="flex flex-col">
+                                                    <span
+                                                        class="text-[8px] font-bold text-primary-600 dark:text-primary-400 uppercase">Rekening
+                                                        Atas Nama</span>
+                                                    <span
+                                                        class="text-xs font-bold text-gray-700 dark:text-gray-200">{{ $selectedBank->atas_nama }}</span>
+                                                    <div class="mt-1 flex justify-between items-center">
+                                                        <span
+                                                            class="text-sm font-black text-primary-700 dark:text-primary-300 font-mono tracking-tight">{{ $selectedBank->no_rekening }}</span>
+                                                        <span
+                                                            class="text-[8px] font-bold px-1.5 py-0.5 bg-primary-200 dark:bg-primary-800 rounded text-primary-800 dark:text-primary-200 uppercase">{{ $selectedBank->nama_bank }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div
+                                class="space-y-1.5 bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+
+                                @if ($metode_pembayaran === 'TUNAI & TRANSFER')
+                                    <div wire:key="payment-split-fields" class="flex flex-wrap gap-3 mb-2">
+                                        <div class="flex-1 min-w-[140px] space-y-1">
+                                            <label
+                                                class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Tunai
+                                                (Cash)</label>
+                                            <div class="flex items-center gap-1 border-b border-primary-500 pb-0.5">
+                                                <span class="text-xs font-bold text-primary-600">Rp</span>
+                                                <input type="text" :value="format(bayar_tunai)"
+                                                    @input="
+                                                        let raw = $event.target.value.replace(/\D/g, '');
+                                                        bayar_tunai = raw ? parseInt(raw) : 0;
+                                                        $el.value = format(bayar_tunai);
+                                                    "
+                                                    class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white text-gray-900" />
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 min-w-[140px] space-y-1">
+                                            <label
+                                                class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Transfer</label>
+                                            <div class="flex items-center gap-1 border-b border-primary-500 pb-0.5">
+                                                <span class="text-xs font-bold text-primary-600">Rp</span>
+                                                <input type="text" :value="format(bayar_transfer)"
+                                                    @input="
+                                                        let raw = $event.target.value.replace(/\D/g, '');
+                                                        bayar_transfer = raw ? parseInt(raw) : 0;
+                                                        $el.value = format(bayar_transfer);
+                                                    "
+                                                    class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white text-gray-900" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div wire:key="payment-single-fields" class="space-y-1">
+                                        <div class="flex justify-between items-center">
+                                            <label
+                                                class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1"
+                                                x-text="jenisTransaksi === 'DP' ? 'Nominal DP' : 'Nominal Bayar'"></label>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
+                                            <span class="text-lg font-bold text-primary-600">Rp</span>
+                                            <input type="text" :value="format(bayar)"
+                                                @input="
+                                                    let raw = $event.target.value.replace(/\D/g, '');
+                                                    bayar = raw ? parseInt(raw) : 0;
+                                                    $el.value = format(bayar);
+                                                "
+                                                class="w-full bg-transparent border-none p-0 text-xl lg:text-2xl font-black focus:ring-0 tracking-tight"
+                                                placeholder="0" />
+                                        </div>
+                                    </div>
+                                @endif
+
+                                <div class="pt-0.5 flex justify-between items-center">
+                                    <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
+                                        x-text="jenisTransaksi === 'DP' ? 'Sisa Tagihan' : (isKurang ? 'Kurang' : 'Kembali')"></span>
+                                    <span class="text-base lg:text-lg font-bold"
+                                        :class="(jenisTransaksi !== 'DP' && !isKurang) ? 'text-green-500' : 'text-red-500'"
+                                        x-text="format(diff)">
+                                    </span>
+                                </div>
+                            </div>
+                        @endif
 
                         <div class="flex flex-col gap-1.5">
                             <label
@@ -778,6 +834,7 @@
                             alamat: @this.alamat,
                             telepon: @this.telepon,
                             kode_member: @this.kode_member,
+                            jenis_transaksi: @this.jenis_transaksi,
                             metode_pembayaran: @this.metode_pembayaran,
                             bayar: @this.bayar,
                             bayar_tunai: @this.bayar_tunai,

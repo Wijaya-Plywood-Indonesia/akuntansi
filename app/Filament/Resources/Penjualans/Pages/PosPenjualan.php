@@ -60,6 +60,9 @@ class PosPenjualan extends Page
     public string $telepon = '';
 
     /* ================= PEMBAYARAN ================= */
+    // COD | BAYAR_DIMUKA | DP
+    public string $jenis_transaksi = 'BAYAR_DIMUKA';
+
     public string $metode_pembayaran = 'TUNAI';
 
     public int $bayar = 0;
@@ -402,8 +405,34 @@ class PosPenjualan extends Page
     }
 
     /* ================= PEMBAYARAN ================= */
+
+    /**
+     * Dipanggil saat user memilih jenis transaksi: COD / BAYAR_DIMUKA / DP.
+     * COD tidak butuh input nominal & tidak butuh pilihan rekening, jadi
+     * di-reset paksa ke kondisi default (tunai, tanpa rekening).
+     */
+    public function updatedJenisTransaksi(): void
+    {
+        if ($this->jenis_transaksi === 'COD') {
+            $this->metode_pembayaran = 'TUNAI';
+            $this->rekeningPerusahaan = [];
+            $this->rekening_perusahaan_id = null;
+            $this->selectedBank = null;
+            $this->bayar = 0;
+            $this->bayar_tunai = 0;
+            $this->bayar_transfer = 0;
+        }
+    }
+
     public function updatedMetodePembayaran(): void
     {
+        if ($this->jenis_transaksi === 'COD') {
+            // COD selalu tunai, tidak perlu rekening.
+            $this->metode_pembayaran = 'TUNAI';
+
+            return;
+        }
+
         if ($this->metode_pembayaran === 'TRANSFER' || $this->metode_pembayaran === 'TUNAI & TRANSFER') {
             $this->rekeningPerusahaan = RekeningPerusahaan::all();
         } else {
@@ -439,11 +468,33 @@ class PosPenjualan extends Page
     /* ================= COMPUTED ================= */
     public function getKembalianProperty(): int
     {
+        // Konsep "kembalian" tidak berlaku untuk DP (bayar sengaja < total).
+        if ($this->jenis_transaksi === 'DP') {
+            return 0;
+        }
+
         $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
             ? ($this->bayar_tunai + $this->bayar_transfer)
             : ($this->bayar ?? 0);
 
         return max($totalBayar - $this->total, 0);
+    }
+
+    /**
+     * Sisa tagihan untuk transaksi DP (dipakai di tampilan & disimpan nanti
+     * agar modul Pelunasan tinggal menghitung selisih total - bayar).
+     */
+    public function getSisaDpProperty(): int
+    {
+        if ($this->jenis_transaksi !== 'DP') {
+            return 0;
+        }
+
+        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+            ? ($this->bayar_tunai + $this->bayar_transfer)
+            : ($this->bayar ?? 0);
+
+        return max($this->total - $totalBayar, 0);
     }
 
     /* ================= MEMBER ================= */
@@ -514,23 +565,6 @@ class PosPenjualan extends Page
             return;
         }
 
-        // Pastikan ppn_persen tidak null sebelum disimpan
-        $this->ppn_persen = (float) ($this->ppn_persen ?? 0);
-
-        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
-            ? ($this->bayar_tunai + $this->bayar_transfer)
-            : ($this->bayar ?? 0);
-
-        if (! $this->is_member && $totalBayar < $this->total) {
-            Notification::make()
-                ->title('Pembayaran Kurang')
-                ->body('Nominal pembayaran kurang.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
         if ($this->total <= 0) {
             Notification::make()
                 ->title('Transaksi Tidak Valid')
@@ -541,7 +575,63 @@ class PosPenjualan extends Page
             return;
         }
 
-        if (($this->metode_pembayaran === 'TRANSFER' || ($this->metode_pembayaran === 'TUNAI & TRANSFER' && $this->bayar_transfer > 0)) && ! $this->rekening_perusahaan_id) {
+        // Pastikan ppn_persen tidak null sebelum disimpan
+        $this->ppn_persen = (float) ($this->ppn_persen ?? 0);
+
+        // COD selalu tunai & lunas penuh di tempat.
+        if ($this->jenis_transaksi === 'COD') {
+            $this->metode_pembayaran = 'TUNAI';
+            $this->bayar = $this->total;
+            $this->bayar_tunai = $this->total;
+            $this->bayar_transfer = 0;
+        }
+
+        $totalBayar = ($this->metode_pembayaran === 'TUNAI & TRANSFER')
+            ? ($this->bayar_tunai + $this->bayar_transfer)
+            : ($this->bayar ?? 0);
+
+        /*
+         * Validasi nominal per jenis transaksi:
+         * - COD          : otomatis lunas (di-set di atas), tidak perlu divalidasi.
+         * - BAYAR_DIMUKA : harus dibayar lunas (kecuali member, sama seperti alur lama).
+         * - DP           : harus > 0 dan HARUS kurang dari total (kalau pas/lebih,
+         *                  seharusnya pakai Bayar Dimuka).
+         */
+        if ($this->jenis_transaksi === 'BAYAR_DIMUKA') {
+            if (! $this->is_member && $totalBayar < $this->total) {
+                Notification::make()
+                    ->title('Pembayaran Kurang')
+                    ->body('Nominal pembayaran kurang.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+        } elseif ($this->jenis_transaksi === 'DP') {
+            if ($totalBayar <= 0) {
+                Notification::make()
+                    ->title('Nominal DP Kosong')
+                    ->body('Nominal DP harus lebih dari 0.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            if ($totalBayar >= $this->total) {
+                Notification::make()
+                    ->title('Nominal DP Tidak Valid')
+                    ->body('Nominal DP harus lebih kecil dari total transaksi. Gunakan "Bayar Dimuka" jika ingin melunasi sekaligus.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+        }
+
+        if ($this->jenis_transaksi !== 'COD'
+            && ($this->metode_pembayaran === 'TRANSFER' || ($this->metode_pembayaran === 'TUNAI & TRANSFER' && $this->bayar_transfer > 0))
+            && ! $this->rekening_perusahaan_id) {
             Notification::make()
                 ->title('Rekening Belum Dipilih')
                 ->body('Silahkan pilih rekening perusahaan untuk pembayaran transfer.')
@@ -568,6 +658,12 @@ class PosPenjualan extends Page
                     ? ($this->bayar_tunai + $this->bayar_transfer)
                     : ($this->bayar ?? 0);
 
+                // PENTING: status_transaksi TIDAK diisi otomatis dari POS.
+                // Status itu (PIUTANG/LUNAS/COD/PENDING/DIBATALKAN) hanya diisi lewat
+                // proses "Validasi Transaksi" di halaman View, yang juga memicu
+                // pencatatan ke jurnal pembantu header. Dari POS, transaksi baru
+                // tersimpan sebagai draft menunggu validasi (kolom dibiarkan default/null).
+
                 $penjualan = Penjualan::create([
                     'no_nota' => $this->no_nota,
                     'tanggal' => $this->tanggal,
@@ -575,6 +671,7 @@ class PosPenjualan extends Page
                     'nama_customer' => $this->nama_customer,
                     'alamat' => $this->alamat,
                     'is_member' => (bool) $this->is_member,
+                    'jenis_transaksi' => $this->jenis_transaksi,
                     'metode_pembayaran' => $this->metode_pembayaran,
                     'keterangan' => $this->keterangan_nota,
                     'keterangan_pembayaran' => $this->keterangan_pembayaran,
@@ -618,11 +715,16 @@ class PosPenjualan extends Page
             });
 
             $kembalian = $this->kembalian;
+            $jenisTransaksiSelesai = $this->jenis_transaksi;
             $this->resetPos();
 
             Notification::make()
                 ->title('Transaksi Berhasil')
-                ->body('Kembalian: Rp '.number_format($kembalian))
+                ->body(
+                    $jenisTransaksiSelesai === 'DP'
+                        ? 'DP tersimpan. Sisa tagihan akan muncul di menu Pelunasan.'
+                        : 'Kembalian: Rp '.number_format($kembalian)
+                )
                 ->success()
                 ->send();
 
@@ -638,11 +740,12 @@ class PosPenjualan extends Page
     public function resetPos(): void
     {
         $this->reset([
-            'cart', 'bayar', 'bayar_tunai', 'bayar_transfer', 'metode_pembayaran',
+            'cart', 'bayar', 'bayar_tunai', 'bayar_transfer', 'metode_pembayaran', 'jenis_transaksi',
             'rekening_perusahaan_id', 'rekeningPerusahaan', 'nama_customer', 'alamat',
             'telepon', 'pembeli_id', 'keterangan_nota', 'keterangan_pembayaran',
             'kode_member', 'selectedBank', 'total', 'subtotal', 'ppn_persen', 'ppn_nominal',
         ]);
+        $this->jenis_transaksi = 'BAYAR_DIMUKA';
         $this->no_nota = $this->generateNoNota();
     }
 
@@ -663,6 +766,7 @@ class PosPenjualan extends Page
         $this->alamat = $state['alamat'] ?? '';
         $this->telepon = $state['telepon'] ?? '';
         $this->kode_member = $state['kode_member'] ?? '';
+        $this->jenis_transaksi = $state['jenis_transaksi'] ?? 'BAYAR_DIMUKA';
         $this->metode_pembayaran = $state['metode_pembayaran'] ?? 'TUNAI';
         $this->bayar = (int) ($state['bayar'] ?? 0);
         $this->bayar_tunai = (int) ($state['bayar_tunai'] ?? 0);
@@ -676,7 +780,8 @@ class PosPenjualan extends Page
         $this->nama_sopir = $state['nama_sopir'] ?? null;
         $this->ppn_persen = (float) ($state['ppn_persen'] ?? 0);
 
-        if ($this->metode_pembayaran === 'TRANSFER' || $this->metode_pembayaran === 'TUNAI & TRANSFER') {
+        if ($this->jenis_transaksi !== 'COD'
+            && ($this->metode_pembayaran === 'TRANSFER' || $this->metode_pembayaran === 'TUNAI & TRANSFER')) {
             $this->rekeningPerusahaan = RekeningPerusahaan::all();
             if ($this->rekening_perusahaan_id) {
                 $this->selectedBank = RekeningPerusahaan::find($this->rekening_perusahaan_id);
