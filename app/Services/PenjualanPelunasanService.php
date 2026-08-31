@@ -13,11 +13,6 @@ use RuntimeException;
 
 class PenjualanPelunasanService
 {
-    /**
-     * Jenis transaksi yang bisa punya piutang & butuh proses pelunasan.
-     * LUNAS dan BAYAR_DIMUKA sengaja tidak dimasukkan karena secara bisnis
-     * proses uangnya sudah selesai di awal transaksi.
-     */
     public const JENIS_BISA_DILUNASI = ['COD', 'DP'];
 
     public const METODE_TUNAI = 'TUNAI';
@@ -26,12 +21,10 @@ class PenjualanPelunasanService
 
     public const METODE_CAMPUR = 'TUNAI & TRANSFER';
 
-    /**
-     * Query semua nota untuk ditampilkan di menu Pelunasan.
-     * Semua jenis_transaksi ikut tampil (COD, DP, BAYAR_DIMUKA, LUNAS),
-     * tapi yang jenis-nya COD/DP DAN masih ada sisa tagihan selalu
-     * ditampilkan lebih dulu, baru disusul sisanya di bawah.
-     */
+    public function __construct(
+        private readonly JurnalPenjualanPelunasanService $jurnalService,
+    ) {}
+
     public function queryBelumLunas(?string $search = null): Builder
     {
         return Penjualan::query()
@@ -41,7 +34,6 @@ class PenjualanPelunasanService
                         ->orWhere('nama_customer', 'like', "%{$search}%");
                 });
             })
-            // 0 = COD/DP dengan sisa tagihan (tampil dulu), 1 = sisanya (tampil belakangan)
             ->orderByRaw(
                 'CASE WHEN jenis_transaksi IN (?, ?) AND bayar < total THEN 0 ELSE 1 END ASC',
                 self::JENIS_BISA_DILUNASI
@@ -54,19 +46,11 @@ class PenjualanPelunasanService
         return $this->queryBelumLunas($search)->limit($limit)->get();
     }
 
-    /**
-     * Hitung sisa tagihan sebuah nota. Selalu dibulatkan tidak minus.
-     */
     public function sisaTagihan(Penjualan $penjualan): int
     {
         return max(0, (int) $penjualan->total - (int) $penjualan->bayar);
     }
 
-    /**
-     * Hanya nota jenis COD/DP dengan sisa tagihan > 0 yang boleh diproses
-     * pelunasannya. Nota LUNAS/BAYAR_DIMUKA yang ikut tampil di list
-     * murni untuk informasi, tidak bisa dipilih untuk dibayar ulang.
-     */
     public function bisaDilunasi(Penjualan $penjualan): bool
     {
         return in_array($penjualan->jenis_transaksi, self::JENIS_BISA_DILUNASI, true)
@@ -75,6 +59,11 @@ class PenjualanPelunasanService
 
     /**
      * Proses satu kali pembayaran pelunasan/cicilan terhadap sebuah nota.
+     *
+     * Mendukung TUNAI, TRANSFER, dan CAMPUR (split tunai + transfer).
+     * Untuk CAMPUR, Piutang Usaha akan tercatat di 2 baris jurnal terpisah
+     * (1 dari kitab tunai, 1 dari kitab bank) namun tetap dalam 1 noJurnal
+     * yang sama — lihat JurnalPenjualanPelunasanService::buatJurnalPelunasanCampur().
      *
      * @param  array{
      *     metode_pembayaran: string,
@@ -86,8 +75,8 @@ class PenjualanPelunasanService
      * }  $payload
      * @return Penjualan Nota setelah diupdate.
      *
-     * @throws InvalidArgumentException Jika input tidak valid (nominal 0, melebihi sisa, dsb).
-     * @throws RuntimeException Jika nota tidak memenuhi syarat untuk dilunasi.
+     * @throws InvalidArgumentException Jika input tidak valid.
+     * @throws RuntimeException Jika nota tidak memenuhi syarat, atau rekening tidak terpetakan ke kitab manapun.
      */
     public function prosesPelunasan(Penjualan $penjualan, array $payload): Penjualan
     {
@@ -121,27 +110,44 @@ class PenjualanPelunasanService
                 );
             }
 
-            if (in_array($metode, [self::METODE_TRANSFER, self::METODE_CAMPUR], true)) {
-                $adaNominalTransfer = $metode === self::METODE_CAMPUR
-                    ? (int) ($payload['nominal_transfer'] ?? 0) > 0
-                    : true;
-
-                if ($adaNominalTransfer && empty($payload['rekening_perusahaan_id'])) {
-                    throw new InvalidArgumentException('Rekening perusahaan wajib dipilih untuk pembayaran transfer.');
-                }
-            }
-
             $rekening = ! empty($payload['rekening_perusahaan_id'])
                 ? RekeningPerusahaan::find($payload['rekening_perusahaan_id'])
                 : null;
 
-            $tambahTunai = $metode === self::METODE_CAMPUR
-                ? (int) ($payload['nominal_tunai'] ?? 0)
-                : ($metode === self::METODE_TUNAI ? $nominal : 0);
+            if (in_array($metode, [self::METODE_TRANSFER, self::METODE_CAMPUR], true) && ! $rekening) {
+                throw new InvalidArgumentException('Rekening perusahaan wajib dipilih untuk pembayaran transfer.');
+            }
 
-            $tambahTransfer = $metode === self::METODE_CAMPUR
-                ? (int) ($payload['nominal_transfer'] ?? 0)
-                : ($metode === self::METODE_TRANSFER ? $nominal : 0);
+            $nominalTunaiCampur = 0;
+            $nominalTransferCampur = 0;
+
+            if ($metode === self::METODE_CAMPUR) {
+                $nominalTunaiCampur = (int) ($payload['nominal_tunai'] ?? 0);
+                $nominalTransferCampur = (int) ($payload['nominal_transfer'] ?? 0);
+
+                if ($nominalTunaiCampur <= 0 || $nominalTransferCampur <= 0) {
+                    throw new InvalidArgumentException(
+                        'Untuk metode Tunai & Transfer, nominal tunai dan nominal transfer harus sama-sama lebih dari 0. '.
+                        'Kalau salah satunya 0, gunakan metode Tunai atau Transfer saja.'
+                    );
+                }
+
+                if (($nominalTunaiCampur + $nominalTransferCampur) !== $nominal) {
+                    throw new InvalidArgumentException('Nominal tunai + nominal transfer tidak sama dengan total nominal pelunasan.');
+                }
+            }
+
+            $tambahTunai = match ($metode) {
+                self::METODE_TUNAI => $nominal,
+                self::METODE_CAMPUR => $nominalTunaiCampur,
+                default => 0,
+            };
+
+            $tambahTransfer = match ($metode) {
+                self::METODE_TRANSFER => $nominal,
+                self::METODE_CAMPUR => $nominalTransferCampur,
+                default => 0,
+            };
 
             $nota->bayar = (int) $nota->bayar + $nominal;
             $nota->bayar_tunai = (int) $nota->bayar_tunai + $tambahTunai;
@@ -165,10 +171,29 @@ class PenjualanPelunasanService
             $nota->validated_by = Auth::id();
             $nota->save();
 
+            match ($metode) {
+                self::METODE_TUNAI => $this->jurnalService->buatJurnalPelunasanTunai(
+                    nota: $nota,
+                    userId: (int) Auth::id(),
+                    nominal: (float) $nominal,
+                ),
+                self::METODE_TRANSFER => $this->jurnalService->buatJurnalPelunasanTransfer(
+                    nota: $nota,
+                    userId: (int) Auth::id(),
+                    nominal: (float) $nominal,
+                    rekening: $rekening,
+                ),
+                self::METODE_CAMPUR => $this->jurnalService->buatJurnalPelunasanCampur(
+                    nota: $nota,
+                    userId: (int) Auth::id(),
+                    nominalTunai: (float) $nominalTunaiCampur,
+                    nominalTransfer: (float) $nominalTransferCampur,
+                    rekening: $rekening,
+                ),
+            };
+
             // TODO: catat baris riwayat pelunasan di sini setelah tabel
             // `pelunasan_penjualans` difinalkan (nota_id, nominal, metode, bank, user_id, dst).
-            // TODO: trigger pembuatan jurnal akuntansi sesuai jenis_transaksi nota
-            // (COD -> jurnal 1 tahap saat lunas; DP -> jurnal pelepasan uang muka + sisa).
 
             return $nota->fresh();
         });
