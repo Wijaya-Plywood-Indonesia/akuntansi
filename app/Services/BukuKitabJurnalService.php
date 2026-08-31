@@ -71,6 +71,7 @@ class BukuKitabJurnalService
         ?string $keteranganDefault = null,
         array $itemBreakdown = [],
         array $splitHeaderPerBarang = [],
+        ?int $noJurnalOverride = null,
     ) {
         $barisTemplate = BukuKitab::templateAkun($kodeKitab);
 
@@ -108,8 +109,9 @@ class BukuKitabJurnalService
             $kodeKitab,
             $itemBreakdown,
             $splitHeaderPerBarang,
+            $noJurnalOverride,
         ) {
-            $noJurnal = JurnalPembantuHeader::lockForUpdate()->max('jurnal') + 1;
+            $noJurnal = $noJurnalOverride ?? (JurnalPembantuHeader::lockForUpdate()->max('jurnal') + 1);
 
             $headersDibuat = collect();
             $adaBarisTerpakai = false;

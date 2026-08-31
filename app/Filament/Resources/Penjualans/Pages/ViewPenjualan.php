@@ -7,12 +7,11 @@ use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalUmum;
 use App\Models\Penjualan;
 use App\Services\JurnalBalikService;
-use App\Services\JurnalPenjualanTelurService;
 use App\Services\JurnalPenjualanTriplekService;
 use App\Services\Penjualans\SyncPenjualanService;
 use App\Services\StokPenyesuaianService;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
@@ -23,6 +22,21 @@ use Throwable;
 class ViewPenjualan extends ViewRecord
 {
     protected static string $resource = PenjualanResource::class;
+
+    /**
+     * Mapping jenis_transaksi (dipilih di POS) -> status_transaksi otomatis.
+     * COD & DP sama-sama berujung PIUTANG karena JurnalPenjualanTriplekService
+     * sudah menangani proporsi Kas vs Piutang dari field $penjualan->bayar,
+     * jadi status akhirnya cukup dibedakan LUNAS vs PIUTANG saja.
+     */
+    public static function statusDariJenisTransaksi(?string $jenisTransaksi): string
+    {
+        return match ($jenisTransaksi) {
+            'BAYAR_DIMUKA' => 'LUNAS',
+            'COD', 'DP' => 'PIUTANG',
+            default => 'PIUTANG',
+        };
+    }
 
     protected function getHeaderActions(): array
     {
@@ -42,26 +56,28 @@ class ViewPenjualan extends ViewRecord
                 )
                 ->modalHeading('Validasi Transaksi')
                 ->modalSubmitActionLabel('Simpan Validasi')
-                ->form([
+                ->form(fn ($record) => [
                     TextInput::make('validator_name')
                         ->label('Validator')
                         ->default(fn () => filament()->auth()->user()->name)
                         ->disabled()
                         ->dehydrated(false),
 
-                    Select::make('status_transaksi')
-                        ->label('Status Transaksi')
-                        ->options([
-                            // Modul ini khusus triplek & turunannya (telur
-                            // punya web sendiri) — pengiriman selalu besok,
-                            // jadi validasi normalnya lewat PIUTANG dulu.
-                            'PIUTANG' => 'PIUTANG',
-                            'LUNAS' => 'LUNAS',
-                            'COD' => 'COD',
-                            'PENDING' => 'PENDING',
-                            'DIBATALKAN' => 'DIBATALKAN',
-                        ])
-                        ->required(),
+                    Placeholder::make('status_preview')
+                        ->label('Status Transaksi (otomatis)')
+                        ->content(function () use ($record) {
+                            $status = self::statusDariJenisTransaksi($record->jenis_transaksi);
+                            $keterangan = match ($record->jenis_transaksi) {
+                                'COD' => 'COD — belum ada uang masuk, seluruh nilai jadi Piutang.',
+                                'DP' => 'DP — sebagian sudah dibayar (Rp ' . number_format($record->bayar) . '), sisanya jadi Piutang.',
+                                'BAYAR_DIMUKA' => 'Bayar Dimuka — sudah lunas penuh, langsung jadi LUNAS.',
+                                default => 'Jenis transaksi tidak dikenali, cek data POS.',
+                            };
+
+                            return new \Illuminate\Support\HtmlString(
+                                "<span class='font-bold'>{$status}</span><br><span class='text-xs text-gray-400'>{$keterangan}</span>"
+                            );
+                        }),
                 ])
                 ->action(function ($record, array $data) {
                     if (
@@ -85,58 +101,24 @@ class ViewPenjualan extends ViewRecord
                         return;
                     }
 
-                    $statusBaru = $data['status_transaksi'] ?? null;
-
-                    // FIX: Validasi input status sebelum diproses,
-                    // hindari null/kosong lolos ke logic di bawah.
-                    if (blank($statusBaru)) {
-                        Notification::make()
-                            ->title('Gagal Validasi')
-                            ->body('Status transaksi wajib dipilih.')
-                            ->danger()
-                            ->send();
-
-                        return;
-                    }
+                    // Status TIDAK lagi dipilih manual — otomatis mengikuti
+                    // jenis_transaksi yang sudah ditentukan sejak di POS.
+                    $statusBaru = self::statusDariJenisTransaksi($record->jenis_transaksi);
 
                     $validatorId = filament()->auth()->id();
 
-                    // FIX: Bungkus proses dalam try-catch agar:
-                    // 1. Error dari StokPenyesuaianService / JurnalPenjualanTelurService
-                    //    / JurnalPenjualanTriplekService (mis. stok tidak cukup, akun
-                    //    tidak ditemukan, template Buku Kitab belum lengkap, dsb)
-                    //    tertangkap rapi.
-                    // 2. DB::transaction otomatis rollback saat exception dilempar,
-                    //    jadi tidak ada perubahan data yang nyangkut setengah jalan.
-                    // 3. User mendapat notifikasi error yang jelas, bukan silent fail
-                    //    atau white screen.
                     try {
                         DB::transaction(function () use ($record, $statusBaru, $validatorId) {
-                            if ($statusBaru === 'PIUTANG') {
-                                // ── ALUR BARU: Pengakuan Piutang via Buku Kitab ──
-                                // Web ini khusus triplek & turunannya (ampurlur,
-                                // lem, dll) — semua transaksi wajib lewat
-                                // pengakuan Piutang dulu (pengiriman besok),
-                                // baru dilunasi belakangan (alur pelunasan
-                                // menyusul, belum ada di tahap ini).
-                                //
-                                // Penyesuaian stok tetap jalan di sini karena
-                                // barang sudah keluar/di-invoice saat ini,
-                                // walau uangnya belum diterima.
-                                app(StokPenyesuaianService::class)
-                                    ->lunas($record->id);
+                            // Modul ini khusus triplek & turunannya (telur
+                            // punya web sendiri). Baik status akhirnya PIUTANG
+                            // maupun LUNAS, sama-sama lewat service terpadu ini
+                            // — bedanya cuma proporsi Kas vs Piutang, yang
+                            // sudah dihitung otomatis dari $record->bayar.
+                            app(StokPenyesuaianService::class)
+                                ->lunas($record->id);
 
-                                app(JurnalPenjualanTriplekService::class)
-                                    ->buatJurnalPengakuanPiutang($record, $validatorId);
-                            } elseif ($statusBaru === 'LUNAS') {
-                                // ── ALUR LAMA: tetap dipertahankan (mis. untuk
-                                // transaksi lain yang belum migrasi ke Piutang) ──
-                                app(StokPenyesuaianService::class)
-                                    ->lunas($record->id);
-
-                                app(JurnalPenjualanTelurService::class)
-                                    ->buatJurnalDariPenjualan($record, $validatorId);
-                            }
+                            app(JurnalPenjualanTriplekService::class)
+                                ->buatJurnalPenjualan($record, $validatorId);
 
                             $record->update([
                                 'validated_by' => $validatorId,
