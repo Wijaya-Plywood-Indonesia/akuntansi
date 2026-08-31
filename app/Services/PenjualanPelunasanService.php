@@ -28,6 +28,7 @@ class PenjualanPelunasanService
     public function queryBelumLunas(?string $search = null): Builder
     {
         return Penjualan::query()
+            ->whereNotNull('validated_by')
             ->when($search, function (Builder $query) use ($search) {
                 $query->where(function (Builder $q) use ($search) {
                     $q->where('no_nota', 'like', "%{$search}%")
@@ -58,18 +59,20 @@ class PenjualanPelunasanService
     }
 
     /**
-     * Proses satu kali pembayaran pelunasan/cicilan terhadap sebuah nota.
+     * Proses pelunasan penuh terhadap sebuah nota.
      *
      * Mendukung TUNAI, TRANSFER, dan CAMPUR (split tunai + transfer).
      * Untuk CAMPUR, Piutang Usaha akan tercatat di 2 baris jurnal terpisah
      * (1 dari kitab tunai, 1 dari kitab bank) namun tetap dalam 1 noJurnal
      * yang sama — lihat JurnalPenjualanPelunasanService::buatJurnalPelunasanCampur().
      *
-     * Khusus nota jenis DP: pelunasan WAJIB sekaligus penuh (tidak boleh
-     * dicicil). Ini karena pelunasan DP memicu reklasifikasi akun Uang
-     * Muka Pelanggan -> Piutang Usaha, yang cuma valid terjadi sekali,
-     * pas piutang benar-benar tuntas. Kalau boleh dicicil, DP awal bisa
-     * kereklasifikasi berkali-kali dan jurnal jadi tidak balance.
+     * PENTING: Pelunasan WAJIB sekaligus penuh (tidak boleh dicicil) untuk
+     * SEMUA jenis transaksi (COD maupun DP). Nominal yang diinput harus
+     * pas menutup sisa tagihan, tidak boleh kurang.
+     *
+     * Khusus nota jenis DP: pelunasan penuh ini juga memicu reklasifikasi
+     * akun Uang Muka Pelanggan -> Piutang Usaha, yang cuma valid terjadi
+     * sekali, pas piutang benar-benar tuntas.
      *
      * @param  array{
      *     metode_pembayaran: string,
@@ -110,18 +113,12 @@ class PenjualanPelunasanService
                 throw new InvalidArgumentException('Nominal pelunasan harus lebih dari 0.');
             }
 
-            if ($nominal > $sisa) {
+            // Pelunasan wajib sekaligus penuh (tidak bisa dicicil/parsial),
+            // berlaku untuk semua jenis transaksi (COD maupun DP). Nominal
+            // harus pas menutup sisa tagihan, tidak boleh kurang atau lebih.
+            if ($nominal !== $sisa) {
                 throw new InvalidArgumentException(
-                    'Nominal melebihi sisa tagihan (sisa: Rp '.number_format($sisa).').'
-                );
-            }
-
-            // Nota DP wajib dilunasi sekaligus penuh (tidak bisa dicicil), karena
-            // ada reklasifikasi Uang Muka Pelanggan -> Piutang Usaha yang cuma
-            // valid kalau terjadi sekali, saat piutang benar-benar tuntas.
-            if ($nota->jenis_transaksi === 'DP' && $nominal !== $sisa) {
-                throw new InvalidArgumentException(
-                    'Nota DP harus dilunasi sekaligus penuh (sisa: Rp '.number_format($sisa).'), tidak bisa dicicil.'
+                    'Nominal pelunasan harus pas melunasi sisa tagihan (sisa: Rp '.number_format($sisa).'), tidak bisa dicicil.'
                 );
             }
 
@@ -184,6 +181,8 @@ class PenjualanPelunasanService
                 );
             }
 
+            // Karena nominal sudah divalidasi === $sisa di atas, setelah baris
+            // ini nota->bayar pasti >= nota->total, jadi selalu jadi LUNAS.
             if ((int) $nota->bayar >= (int) $nota->total) {
                 $nota->status_transaksi = 'LUNAS';
             }
