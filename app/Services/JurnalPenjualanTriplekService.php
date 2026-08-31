@@ -5,51 +5,143 @@ namespace App\Services;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
 use App\Models\Penjualan;
-use App\Models\SubAnakAkun;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
- * Jurnal Penjualan Triplek & Turunannya (ampurlur, lem, dll) — berbasis
- * template Buku Kitab, BUKAN hardcode seperti JurnalPenjualanTelurService.
+ * Jurnal Penjualan Triplek & Turunannya — berbasis template Buku Kitab.
  *
- * Modul ini KHUSUS untuk web triplek (telur punya web terpisah). Menangani
- * SEMUA jenis transaksi dari POS (COD / DP / BAYAR_DIMUKA) lewat 1 kode
- * kitab yang sama ('penjualan_triplek_ppn' / '_non_ppn') — bedanya cuma
- * seberapa besar bagian yang masuk Kas vs yang jadi Piutang:
+ * SEMUA jenis_transaksi (COD/DP/BAYAR_DIMUKA) lewat method
+ * buatJurnalPenjualan(), tapi behaviornya BEDA WAKTU pengakuannya:
  *
- *   - COD          : bayar = 0        -> semua jadi Piutang, Kas di-skip (0)
- *   - DP            : 0 < bayar < total -> sebagian Kas, sisanya Piutang
- *   - BAYAR_DIMUKA  : bayar = total    -> semua masuk Kas, Piutang di-skip (0)
- *
- * Baris yang nilainya 0 otomatis dilewati oleh engine (lihat
- * BukuKitabJurnalService::buatJurnalDariKitab), jadi tidak perlu percabangan
- * manual per jenis transaksi di sini.
+ *   - COD          : bayar = 0 -> langsung Piutang PENUH + akui penjualan
+ *                    + kurangi stok SEKARANG (barang keluar sekarang).
+ *   - DP           : HANYA catat Uang Muka diterima (Kas D, Uang Muka K).
+ *                    TIDAK ada pengakuan penjualan, TIDAK ada pengurangan
+ *                    stok di titik ini — itu baru terjadi NANTI di menu
+ *                    Pelunasan (lihat JurnalPelunasanDpTriplekService, kalau
+ *                    sudah dibuat), pakai kitab penjualan_dp_pelunasan_*.
+ *   - BAYAR_DIMUKA : Kas masuk PENUH + Uang Muka (K), LALU (di klik yang
+ *                    sama) Uang Muka dibalik + HPP/PPN/Penjualan/Persediaan/
+ *                    Hutang Gaji diakui + stok berkurang SEKARANG — karena
+ *                    di kasus ini barang memang dianggap langsung dikirim.
  */
 class JurnalPenjualanTriplekService
 {
-    /** Hutang gaji dipatok tetap per transaksi (kesepakatan bisnis). */
     private const HUTANG_GAJI_TETAP = 300000.0;
-
-    /** Kas tunai default kalau tidak ada rekening spesifik yang cocok. */
-    private const KODE_KAS_TUNAI = '1101.1';
 
     public function __construct(
         private readonly BukuKitabJurnalService $engine,
     ) {}
 
-    /**
-     * Bangun jurnal pengakuan penjualan (Kas + Piutang di sisi Debit,
-     * proporsinya tergantung berapa yang sudah dibayar) — dipakai untuk
-     * SEMUA jenis_transaksi (COD/DP/BAYAR_DIMUKA), tidak perlu method
-     * terpisah per jenis.
-     */
     public function buatJurnalPenjualan(Penjualan $penjualan, int $userId): void
     {
         $penjualan->loadMissing(['details.barang', 'rekeningPerusahaan.subAnakAkun']);
 
-        // ── Breakdown PER BARANG untuk Persediaan & HPP (wajib, biar stok
-        //    per produk benar) — sama seperti sebelumnya, tidak berubah.
+        $totalBayar = $this->totalBayar($penjualan);
+
+        DB::transaction(function () use ($penjualan, $userId, $totalBayar) {
+            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            if ($penjualan->jenis_transaksi === 'DP') {
+                // ── DP: HANYA Tahap 1 (uang muka diterima) ──────────────
+                // 2 baris saja: Kas/Bank (D) & Uang Muka Pelanggan (K).
+                // TIDAK ada HPP/Penjualan/Persediaan di sini — itu baru
+                // terjadi nanti saat Pelunasan.
+                $this->postingSplitKas(
+                    prefix: 'penjualan_dp_diterima',
+                    penjualan: $penjualan,
+                    userId: $userId,
+                    noJurnal: $noJurnal,
+                    contextFull: ['dp_penjualan' => $totalBayar],
+                    keteranganDefault: 'Penerimaan DP Penjualan',
+                );
+
+                return; // STOP di sini untuk DP.
+            }
+
+            $data = $this->siapkanDataBarang($penjualan);
+
+            if ($penjualan->jenis_transaksi === 'BAYAR_DIMUKA') {
+                // ── BAYAR_DIMUKA: Tahap 1 + Tahap 2 sekaligus ───────────
+                if ($totalBayar > 0) {
+                    $this->postingSplitKas(
+                        prefix: 'penjualan_bayar_dimuka_diterima',
+                        penjualan: $penjualan,
+                        userId: $userId,
+                        noJurnal: $noJurnal,
+                        contextFull: ['dp_penjualan' => $totalBayar],
+                        keteranganDefault: 'Penerimaan Bayar Dimuka',
+                    );
+                }
+
+                $this->engine->buatJurnalDariKitab(
+                    kodeKitab: 'penjualan_bayar_dimuka_dikirim',
+                    context: [
+                        'dp_penjualan'           => $totalBayar,
+                        'hpp'                    => $data['hpp'],
+                        'ppn_keluaran'           => $data['ppn_nominal'],
+                        'nilai_penjualan'        => (float) $penjualan->sub_total,
+                        'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
+                        'hutang_gaji'            => $data['hutang_gaji'],
+                    ],
+                    noDokumen: $penjualan->no_nota,
+                    tglTransaksi: $penjualan->tanggal,
+                    modulAsal: 'penjualan_triplek',
+                    jenisTransaksi: 'bk',
+                    userId: $userId,
+                    jenisPihak: 'pelanggan',
+                    namaPihak: $penjualan->nama_customer ?: 'Pelanggan',
+                    keteranganDefault: 'Pengiriman Barang (Bayar Dimuka)',
+                    itemBreakdown: [
+                        'persediaan_barang_jadi' => $data['breakdown_persediaan'],
+                        'hpp'                    => $data['breakdown_hpp'],
+                        'nilai_penjualan'        => $data['breakdown_penjualan'],
+                    ],
+                    splitHeaderPerBarang: ['persediaan_barang_jadi'],
+                    noJurnalOverride: $noJurnal,
+                );
+
+                return;
+            }
+
+            // ── COD: bayar = 0, langsung Piutang PENUH + akui penjualan ──
+            $kodeKitab = $data['ppn_nominal'] > 0 ? 'penjualan_triplek_ppn' : 'penjualan_triplek_non_ppn';
+
+            $this->engine->buatJurnalDariKitab(
+                kodeKitab: $kodeKitab,
+                context: [
+                    'piutang_usaha'          => (float) $penjualan->total,
+                    'hpp'                    => $data['hpp'],
+                    'ppn_keluaran'           => $data['ppn_nominal'],
+                    'nilai_penjualan'        => (float) $penjualan->sub_total,
+                    'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
+                    'hutang_gaji'            => $data['hutang_gaji'],
+                ],
+                noDokumen: $penjualan->no_nota,
+                tglTransaksi: $penjualan->tanggal,
+                modulAsal: 'penjualan_triplek',
+                jenisTransaksi: 'bk',
+                userId: $userId,
+                jenisPihak: 'pelanggan',
+                namaPihak: $penjualan->nama_customer ?: 'Pelanggan',
+                keteranganDefault: 'Penjualan Triplek',
+                itemBreakdown: [
+                    'persediaan_barang_jadi' => $data['breakdown_persediaan'],
+                    'hpp'                    => $data['breakdown_hpp'],
+                    'nilai_penjualan'        => $data['breakdown_penjualan'],
+                ],
+                splitHeaderPerBarang: ['persediaan_barang_jadi'],
+                noJurnalOverride: $noJurnal,
+            );
+        });
+    }
+
+    /* =====================================================================
+     * INTERNAL
+     * ===================================================================== */
+
+    private function siapkanDataBarang(Penjualan $penjualan): array
+    {
         $breakdownPersediaan = [];
         $breakdownHpp = [];
         $breakdownPenjualan = [];
@@ -71,16 +163,14 @@ class JurnalPenjualanTriplekService
                 'nama_barang' => $detail->nama_barang,
                 'banyak'      => $qty,
                 'harga'       => $hargaBeli,
-                'keterangan'  => 'Keluar stok ' . $detail->nama_barang,
+                'keterangan'  => 'Keluar stok '.$detail->nama_barang,
             ];
 
-            // HPP & Penjualan SENGAJA tidak diisi id_barang — bukan akun
-            // stok, tidak butuh dipisah per barang saat posting.
             $breakdownHpp[] = [
                 'nama_barang' => $detail->nama_barang,
                 'banyak'      => $qty,
                 'harga'       => $hargaBeli,
-                'keterangan'  => 'HPP ' . $detail->nama_barang,
+                'keterangan'  => 'HPP '.$detail->nama_barang,
             ];
 
             $hargaJualBersih = $qty > 0 ? round((float) $detail->subtotal / $qty, 4) : 0;
@@ -88,91 +178,63 @@ class JurnalPenjualanTriplekService
                 'nama_barang' => $detail->nama_barang,
                 'banyak'      => $qty,
                 'harga'       => $hargaJualBersih,
-                'keterangan'  => 'Penjualan ' . $detail->nama_barang,
+                'keterangan'  => 'Penjualan '.$detail->nama_barang,
             ];
         }
 
         $hutangGaji = self::HUTANG_GAJI_TETAP;
 
-        // D: Piutang + HPP  =  K: PPN + Penjualan + Persediaan + Hutang Gaji
-        // (lihat README_BUKU_KITAB.md) — hutang gaji "numpang" di HPP supaya
-        // baris ini tetap balance walau tidak ada debit lawan sendiri.
-        $hpp = $nilaiPokokBarang + $hutangGaji;
+        $breakdownHpp[] = [
+            'nama_barang' => null,
+            'banyak'      => 1,
+            'harga'       => $hutangGaji,
+            'keterangan'  => 'Alokasi Hutang Gaji',
+        ];
 
-        $ppnNominal = (float) $penjualan->ppn_nominal;
-        $kodeKitab = $ppnNominal > 0 ? 'penjualan_triplek_ppn' : 'penjualan_triplek_non_ppn';
+        return [
+            'breakdown_persediaan' => $breakdownPersediaan,
+            'breakdown_hpp'        => $breakdownHpp,
+            'breakdown_penjualan'  => $breakdownPenjualan,
+            'nilai_pokok_barang'   => $nilaiPokokBarang,
+            'hutang_gaji'          => $hutangGaji,
+            'hpp'                  => $nilaiPokokBarang + $hutangGaji,
+            'ppn_nominal'          => (float) $penjualan->ppn_nominal,
+        ];
+    }
 
-        // ── Bagi total tagihan jadi bagian Kas (sudah dibayar) & Piutang
-        //    (sisa belum dibayar) — inilah yang membedakan COD/DP/BAYAR_DIMUKA.
-        $totalTagihan = (float) $penjualan->total;
-        $totalDiterima = min((float) $penjualan->bayar, $totalTagihan);
-        $sisaPiutang = max($totalTagihan - $totalDiterima, 0);
+    private function totalBayar(Penjualan $penjualan): float
+    {
+        return $penjualan->metode_pembayaran === 'TUNAI & TRANSFER'
+            ? (float) $penjualan->bayar_tunai + (float) $penjualan->bayar_transfer
+            : (float) $penjualan->bayar;
+    }
 
-        DB::transaction(function () use (
-            $penjualan,
-            $userId,
-            $kodeKitab,
-            $breakdownPersediaan,
-            $breakdownHpp,
-            $breakdownPenjualan,
-            $hpp,
-            $ppnNominal,
-            $totalDiterima,
-            $sisaPiutang,
-        ) {
-            // Nomor jurnal DITENTUKAN DI SINI (bukan di dalam engine) supaya
-            // baris Kas (dibuat manual, dinamis per bank) dan baris dari
-            // template kitab (dibuat lewat engine) tetap 1 grup jurnal.
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+    /**
+     * Posting kas yang bisa pecah ke Tunai + Transfer sekaligus, lewat
+     * kitab "{prefix}_tunai" / "{prefix}_bank_xxx". nominal_kas & baris
+     * lain di $contextFull (mis. dp_penjualan) hanya diisi PENUH di leg
+     * PERTAMA; leg kedua (kalau ada split) di-nol-kan supaya tidak dobel.
+     */
+    private function postingSplitKas(
+        string $prefix,
+        Penjualan $penjualan,
+        int $userId,
+        int $noJurnal,
+        array $contextFull,
+        string $keteranganDefault,
+    ): void {
+        $legs = $this->resolveKakiKas($penjualan, $prefix);
+        $sudahAdaLeg = false;
 
-            // ── Bagian Kas (kalau ada yang sudah dibayar) — dinamis,
-            //    tergantung tunai/transfer/rekening bank mana. Ini di LUAR
-            //    Buku Kitab karena rekening bank sifatnya dinamis per
-            //    transaksi, bukan tetap seperti baris template lain.
-            foreach ($this->resolveBarisKasDiterima($penjualan, $totalDiterima) as $kas) {
-                $header = JurnalPembantuHeader::create([
-                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
-                    'tgl_transaksi'      => $penjualan->tanggal,
-                    'jenis_transaksi'    => 'bk',
-                    'modul_asal'         => 'penjualan_triplek',
-                    'jurnal'             => $noJurnal,
-                    'no_akun'            => $kas['kode'],
-                    'nama_akun'          => $kas['nama'],
-                    'map'                => 'd',
-                    'keterangan'         => "Penerimaan Penjualan Triplek | Nota: {$penjualan->no_nota}",
-                    'no_dokumen'         => $penjualan->no_nota,
-                    'total_nilai'        => $kas['nominal'],
-                    'status'             => JurnalPembantuHeader::STATUS_DRAFT,
-                    'dibuat_oleh'        => $userId,
-                ]);
-
-                JurnalPembantuItem::create([
-                    'jurnal_pembantu_header_id' => $header->id,
-                    'urut'         => 1,
-                    'jenis_pihak'  => 'pelanggan',
-                    'nama_pihak'   => $penjualan->nama_customer ?: 'Pelanggan',
-                    'no_dokumen'   => $penjualan->no_nota,
-                    'keterangan'   => 'Penerimaan ' . $kas['nama'],
-                    'banyak'       => 1,
-                    'm3'           => 0,
-                    'harga'        => $kas['nominal'],
-                    'hit_kbk'      => 'b',
-                    'status'       => true,
-                    'created_by'   => $userId,
-                ]);
+        foreach ($legs as [$kodeKitab, $nominalKas]) {
+            if ($nominalKas <= 0 && count($legs) > 1) {
+                continue;
             }
 
-            // ── Bagian dari template Buku Kitab (Piutang sisa, HPP, PPN,
-            //    Penjualan, Persediaan, Hutang Gaji) — nomor jurnal DITITIPKAN
-            //    supaya nyambung dengan header Kas di atas.
-            $context = [
-                'piutang_usaha'          => $sisaPiutang, // 0 untuk BAYAR_DIMUKA -> otomatis di-skip
-                'hpp'                    => $hpp,
-                'ppn_keluaran'           => $ppnNominal,
-                'nilai_penjualan'        => (float) $penjualan->sub_total,
-                'persediaan_barang_jadi' => array_sum(array_map(fn($b) => $b['banyak'] * $b['harga'], $breakdownPersediaan)),
-                'hutang_gaji'            => self::HUTANG_GAJI_TETAP,
-            ];
+            $context = $sudahAdaLeg
+                ? array_fill_keys(array_keys($contextFull), 0)
+                : $contextFull;
+            $context['nominal_kas'] = $nominalKas;
 
             $this->engine->buatJurnalDariKitab(
                 kodeKitab: $kodeKitab,
@@ -184,85 +246,49 @@ class JurnalPenjualanTriplekService
                 userId: $userId,
                 jenisPihak: 'pelanggan',
                 namaPihak: $penjualan->nama_customer ?: 'Pelanggan',
-                keteranganDefault: 'Penjualan Triplek',
-                itemBreakdown: [
-                    'persediaan_barang_jadi' => $breakdownPersediaan,
-                    'hpp'                    => $breakdownHpp,
-                    'nilai_penjualan'        => $breakdownPenjualan,
-                ],
-                splitHeaderPerBarang: ['persediaan_barang_jadi'],
+                keteranganDefault: $keteranganDefault,
                 noJurnalOverride: $noJurnal,
             );
-        });
+
+            $sudahAdaLeg = true;
+        }
+
+        if (! $sudahAdaLeg) {
+            throw new \RuntimeException(
+                "Tidak ada kas yang diterima untuk transaksi {$penjualan->no_nota} — cek input pembayaran."
+            );
+        }
     }
 
-    /**
-     * Tentukan baris Kas yang perlu dibuat berdasarkan berapa yang SUDAH
-     * dibayar (bisa 0/COD, sebagian/DP, atau penuh/BAYAR_DIMUKA), dan ke
-     * rekening/kas mana — mendukung split Tunai + Transfer sekaligus,
-     * mirror pola resolveBarisKas() di JurnalPenjualanTelurService.
-     *
-     * @return array<int, array{kode: string, nama: string, nominal: float}>
-     */
-    private function resolveBarisKasDiterima(Penjualan $penjualan, float $totalDiterima): array
+    /** @return array<int, array{0: string, 1: float}> */
+    private function resolveKakiKas(Penjualan $penjualan, string $prefix): array
     {
-        if ($totalDiterima <= 0) {
-            return [];
-        }
-
-        $bayarTunai = (float) ($penjualan->bayar_tunai ?? 0);
-        $bayarTransfer = (float) ($penjualan->bayar_transfer ?? 0);
-        $totalTercatatSplit = $bayarTunai + $bayarTransfer;
-
-        $baris = [];
-
-        // Fallback: kalau split tunai/transfer tidak tercatat (mis. data lama
-        // atau field belum konsisten diisi), anggap semuanya 1 metode saja.
-        if ($totalTercatatSplit <= 0) {
-            $kode = $penjualan->metode_pembayaran === 'TRANSFER'
-                ? ($penjualan->rekeningPerusahaan?->subAnakAkun?->kode_sub_anak_akun ?: self::KODE_KAS_TUNAI)
-                : self::KODE_KAS_TUNAI;
-
-            $baris[] = [
-                'kode'    => $kode,
-                'nama'    => $this->getNamaAkun($kode),
-                'nominal' => $totalDiterima,
-            ];
-
-            return $baris;
-        }
-
-        if ($bayarTunai > 0) {
-            $baris[] = [
-                'kode'    => self::KODE_KAS_TUNAI,
-                'nama'    => $this->getNamaAkun(self::KODE_KAS_TUNAI),
-                'nominal' => $bayarTunai,
-            ];
-        }
-
-        if ($bayarTransfer > 0) {
-            $kodeBank = $penjualan->rekeningPerusahaan?->subAnakAkun?->kode_sub_anak_akun;
-            if (! $kodeBank) {
-                Log::warning("[JurnalPenjualanTriplek] Rekening transfer {$penjualan->no_rekening} belum di-mapping ke akun, fallback ke Kas Tunai.");
-                $kodeBank = self::KODE_KAS_TUNAI;
-            }
-
-            $baris[] = [
-                'kode'    => $kodeBank,
-                'nama'    => $this->getNamaAkun($kodeBank),
-                'nominal' => $bayarTransfer,
-            ];
-        }
-
-        return $baris;
+        return match ($penjualan->metode_pembayaran) {
+            'TUNAI & TRANSFER' => [
+                [$prefix.'_tunai', (float) $penjualan->bayar_tunai],
+                [$prefix.'_'.$this->slugBank($penjualan), (float) $penjualan->bayar_transfer],
+            ],
+            'TRANSFER' => [
+                [$prefix.'_'.$this->slugBank($penjualan), $this->totalBayar($penjualan)],
+            ],
+            default => [
+                [$prefix.'_tunai', $this->totalBayar($penjualan)],
+            ],
+        };
     }
 
-    private function getNamaAkun(string $kode): string
+    private function slugBank(Penjualan $penjualan): string
     {
-        return cache()->remember(
-            "nama_akun_{$kode}",
-            300,
-            fn() => SubAnakAkun::where('kode_sub_anak_akun', $kode)->value('nama_sub_anak_akun') ?? $kode
-        );
+        $namaAkun = $penjualan->rekeningPerusahaan?->nama_akun
+            ?? $penjualan->rekeningPerusahaan?->subAnakAkun?->nama_sub_anak_akun;
+
+        if (blank($namaAkun)) {
+            throw new \RuntimeException(
+                "Rekening bank untuk transaksi {$penjualan->no_nota} tidak ditemukan — ".
+                'tidak bisa menentukan kode Buku Kitab yang sesuai.'
+            );
+        }
+
+        return strtolower(str_replace(' ', '_', trim($namaAkun)));
     }
 }

@@ -17,6 +17,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\HtmlString;
 use Throwable;
 
 class ViewPenjualan extends ViewRecord
@@ -24,19 +25,32 @@ class ViewPenjualan extends ViewRecord
     protected static string $resource = PenjualanResource::class;
 
     /**
-     * Mapping jenis_transaksi (dipilih di POS) -> status_transaksi otomatis.
-     * COD & DP sama-sama berujung PIUTANG karena JurnalPenjualanTriplekService
-     * sudah menangani proporsi Kas vs Piutang dari field $penjualan->bayar,
-     * jadi status akhirnya cukup dibedakan LUNAS vs PIUTANG saja.
+     * Mapping jenis_transaksi (dipilih di POS) -> status_transaksi otomatis
+     * saat tombol "Validasi Transaksi" diklik.
+     *
+     * DP sengaja DIPISAH dari PIUTANG murni (COD): DP di titik ini baru
+     * sebatas Uang Muka (kewajiban), belum ada Piutang maupun pengakuan
+     * penjualan sama sekali — itu baru terjadi nanti di menu Pelunasan saat
+     * barang benar-benar dikirim (lihat JurnalPenjualanTriplekService &
+     * PenjualanPelunasanService).
      */
     public static function statusDariJenisTransaksi(?string $jenisTransaksi): string
     {
         return match ($jenisTransaksi) {
             'BAYAR_DIMUKA' => 'LUNAS',
-            'COD', 'DP' => 'PIUTANG',
+            'DP' => 'DP',
+            'COD' => 'PIUTANG',
             default => 'PIUTANG',
         };
     }
+
+    /**
+     * Status-status yang berarti transaksi ini SUDAH divalidasi sekali
+     * (apapun hasilnya) — dipakai untuk menyembunyikan tombol "Validasi
+     * Transaksi" supaya tidak bisa diklik dobel (yang akan bikin jurnal
+     * DP/Piutang/Penjualan ke-posting 2x).
+     */
+    private const STATUS_SUDAH_DIVALIDASI = ['LUNAS', 'DP', 'PIUTANG'];
 
     protected function getHeaderActions(): array
     {
@@ -48,7 +62,7 @@ class ViewPenjualan extends ViewRecord
                 ->color('success')
                 ->requiresConfirmation()
                 ->visible(
-                    fn ($record) => $record->status_transaksi !== 'LUNAS'
+                    fn ($record) => ! in_array($record->status_transaksi, self::STATUS_SUDAH_DIVALIDASI, true)
                 )
                 ->disabled(
                     fn ($record) => $record->user_id === filament()->auth()->id()
@@ -68,18 +82,18 @@ class ViewPenjualan extends ViewRecord
                         ->content(function () use ($record) {
                             $status = self::statusDariJenisTransaksi($record->jenis_transaksi);
                             $keterangan = match ($record->jenis_transaksi) {
-                                'COD' => 'COD — belum ada uang masuk, seluruh nilai jadi Piutang.',
-                                'DP' => 'DP — sebagian sudah dibayar (Rp ' . number_format($record->bayar) . '), sisanya jadi Piutang.',
-                                'BAYAR_DIMUKA' => 'Bayar Dimuka — sudah lunas penuh, langsung jadi LUNAS.',
+                                'COD' => 'COD — belum ada uang masuk, seluruh nilai jadi Piutang & penjualan langsung diakui sekarang.',
+                                'DP' => 'DP — mencatat Uang Muka Rp '.number_format($record->bayar).' yang diterima. Pengakuan penjualan & pengurangan stok menyusul di menu Pelunasan.',
+                                'BAYAR_DIMUKA' => 'Bayar Dimuka — sudah lunas penuh, langsung diakui sebagai penjualan (LUNAS).',
                                 default => 'Jenis transaksi tidak dikenali, cek data POS.',
                             };
 
-                            return new \Illuminate\Support\HtmlString(
+                            return new HtmlString(
                                 "<span class='font-bold'>{$status}</span><br><span class='text-xs text-gray-400'>{$keterangan}</span>"
                             );
                         }),
                 ])
-                ->action(function ($record, array $data) {
+                ->action(function ($record) {
                     if (
                         $record->user_id === filament()->auth()->id()
                         && ! filament()->auth()->user()->hasRole('super_admin')
@@ -92,30 +106,29 @@ class ViewPenjualan extends ViewRecord
                         return;
                     }
 
-                    if ($record->status_transaksi === 'LUNAS') {
+                    if (in_array($record->status_transaksi, self::STATUS_SUDAH_DIVALIDASI, true)) {
                         Notification::make()
-                            ->title('Transaksi sudah lunas dan final')
+                            ->title('Transaksi sudah divalidasi')
+                            ->body('Status transaksi ini sudah '.$record->status_transaksi.', tidak bisa divalidasi ulang.')
                             ->warning()
                             ->send();
 
                         return;
                     }
 
-                    // Status TIDAK lagi dipilih manual — otomatis mengikuti
-                    // jenis_transaksi yang sudah ditentukan sejak di POS.
                     $statusBaru = self::statusDariJenisTransaksi($record->jenis_transaksi);
-
                     $validatorId = filament()->auth()->id();
 
                     try {
                         DB::transaction(function () use ($record, $statusBaru, $validatorId) {
-                            // Modul ini khusus triplek & turunannya (telur
-                            // punya web sendiri). Baik status akhirnya PIUTANG
-                            // maupun LUNAS, sama-sama lewat service terpadu ini
-                            // — bedanya cuma proporsi Kas vs Piutang, yang
-                            // sudah dihitung otomatis dari $record->bayar.
-                            app(StokPenyesuaianService::class)
-                                ->lunas($record->id);
+                            // Stok HANYA disesuaikan kalau penjualan benar-benar
+                            // diakui SEKARANG (COD & BAYAR_DIMUKA — barang
+                            // dianggap keluar sekarang). Untuk DP, barang belum
+                            // tentu dikirim di titik ini — stok baru berkurang
+                            // nanti saat Pelunasan.
+                            if ($record->jenis_transaksi !== 'DP') {
+                                app(StokPenyesuaianService::class)->lunas($record->id);
+                            }
 
                             app(JurnalPenjualanTriplekService::class)
                                 ->buatJurnalPenjualan($record, $validatorId);
@@ -187,9 +200,15 @@ class ViewPenjualan extends ViewRecord
                                     ->batalLunas($record->id);
 
                                 // 2. Logika Penyelamatan Jurnal Asli Jika Masih Draft
+                                //
+                                // FIX: modul_asal sekarang bisa 'penjualan_telur'
+                                // (alur lama) ATAU 'penjualan_triplek' (alur baru
+                                // via JurnalPenjualanTriplekService) — cari
+                                // keduanya, jangan hardcode 1 modul saja, atau
+                                // jurnal alur baru tidak akan pernah ketemu di sini.
                                 $headersAsli = JurnalPembantuHeader::where('no_dokumen', $record->no_nota)
                                     ->where('adalah_jurnal_balik', false)
-                                    ->where('modul_asal', 'penjualan_telur') // Sesuai modul service Anda
+                                    ->whereIn('modul_asal', ['penjualan_telur', 'penjualan_triplek'])
                                     ->get();
 
                                 $isMasihDraft = $headersAsli->contains(function ($header) {
@@ -209,7 +228,7 @@ class ViewPenjualan extends ViewRecord
 
                                         JurnalPembantuHeader::where('no_dokumen', $record->no_nota)
                                             ->where('adalah_jurnal_balik', false)
-                                            ->where('modul_asal', 'penjualan_telur')
+                                            ->whereIn('modul_asal', ['penjualan_telur', 'penjualan_triplek'])
                                             ->update(['jurnal' => $nomorFinal]);
                                     }
 
@@ -422,4 +441,4 @@ class ViewPenjualan extends ViewRecord
                 }),
         ];
     }
-}
+} 
