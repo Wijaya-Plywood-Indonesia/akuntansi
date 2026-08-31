@@ -202,7 +202,7 @@
                             return Math.max(0, this.sisa - this.totalInput);
                         },
                         get akanLunas() {
-                            return this.totalInput >= this.sisa && this.sisa > 0;
+                            return this.totalInput === this.sisa && this.sisa > 0;
                         }
                     }">
 
@@ -382,6 +382,12 @@
                                         x-text="akanLunas ? 'LUNAS ✓' : format(sisaSetelah)">
                                     </span>
                                 </div>
+
+                                <template x-if="!akanLunas && totalInput > 0">
+                                    <p class="text-[10px] font-semibold text-red-500 ml-1 pt-0.5">
+                                        Nominal harus pas menutup sisa tagihan. Tidak bisa dicicil.
+                                    </p>
+                                </template>
                             </div>
 
                             {{-- CATATAN --}}
@@ -409,13 +415,15 @@
                         {{-- ACTION --}}
                         <div class="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/20">
                             <div class="flex gap-2">
-                                <button
+                                <button :disabled="!akanLunas"
                                     @click="
+                                        if (!akanLunas) return;
                                         $wire.set('nominal', nominal);
                                         $wire.set('nominal_tunai', nominal_tunai);
                                         $wire.set('nominal_transfer', nominal_transfer);
                                         $wire.simpanPelunasan();
                                     "
+                                    :class="akanLunas ? '' : 'opacity-40 cursor-not-allowed pointer-events-none'"
                                     class="flex-grow py-2.5 btn-primary text-white rounded-lg font-bold text-sm active:translate-y-0.5 transition-all tracking-wide">
                                     Simpan Pelunasan
                                 </button>
