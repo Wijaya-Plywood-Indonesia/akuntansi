@@ -65,6 +65,12 @@ class PenjualanPelunasanService
      * (1 dari kitab tunai, 1 dari kitab bank) namun tetap dalam 1 noJurnal
      * yang sama — lihat JurnalPenjualanPelunasanService::buatJurnalPelunasanCampur().
      *
+     * Khusus nota jenis DP: pelunasan WAJIB sekaligus penuh (tidak boleh
+     * dicicil). Ini karena pelunasan DP memicu reklasifikasi akun Uang
+     * Muka Pelanggan -> Piutang Usaha, yang cuma valid terjadi sekali,
+     * pas piutang benar-benar tuntas. Kalau boleh dicicil, DP awal bisa
+     * kereklasifikasi berkali-kali dan jurnal jadi tidak balance.
+     *
      * @param  array{
      *     metode_pembayaran: string,
      *     nominal_tunai?: int,
@@ -109,6 +115,20 @@ class PenjualanPelunasanService
                     'Nominal melebihi sisa tagihan (sisa: Rp '.number_format($sisa).').'
                 );
             }
+
+            // Nota DP wajib dilunasi sekaligus penuh (tidak bisa dicicil), karena
+            // ada reklasifikasi Uang Muka Pelanggan -> Piutang Usaha yang cuma
+            // valid kalau terjadi sekali, saat piutang benar-benar tuntas.
+            if ($nota->jenis_transaksi === 'DP' && $nominal !== $sisa) {
+                throw new InvalidArgumentException(
+                    'Nota DP harus dilunasi sekaligus penuh (sisa: Rp '.number_format($sisa).'), tidak bisa dicicil.'
+                );
+            }
+
+            // DP awal = jumlah yang sudah dibayar SEBELUM pelunasan ini (uang
+            // muka yang diterima saat nota dibuat). Diambil sebelum $nota->bayar
+            // diupdate di bawah, karena DP selalu lunas sekaligus.
+            $dpAwal = $nota->jenis_transaksi === 'DP' ? (int) $nota->bayar : null;
 
             $rekening = ! empty($payload['rekening_perusahaan_id'])
                 ? RekeningPerusahaan::find($payload['rekening_perusahaan_id'])
@@ -176,12 +196,14 @@ class PenjualanPelunasanService
                     nota: $nota,
                     userId: (int) Auth::id(),
                     nominal: (float) $nominal,
+                    dpAwal: $dpAwal,
                 ),
                 self::METODE_TRANSFER => $this->jurnalService->buatJurnalPelunasanTransfer(
                     nota: $nota,
                     userId: (int) Auth::id(),
                     nominal: (float) $nominal,
                     rekening: $rekening,
+                    dpAwal: $dpAwal,
                 ),
                 self::METODE_CAMPUR => $this->jurnalService->buatJurnalPelunasanCampur(
                     nota: $nota,
@@ -189,6 +211,7 @@ class PenjualanPelunasanService
                     nominalTunai: (float) $nominalTunaiCampur,
                     nominalTransfer: (float) $nominalTransferCampur,
                     rekening: $rekening,
+                    dpAwal: $dpAwal,
                 ),
             };
 
