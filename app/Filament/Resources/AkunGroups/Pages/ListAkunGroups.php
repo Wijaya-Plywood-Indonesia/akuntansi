@@ -4,7 +4,7 @@ namespace App\Filament\Resources\AkunGroups\Pages;
 
 use App\Filament\Resources\AkunGroups\AkunGroupResource;
 use App\Models\AkunGroup;
-use App\Models\SubAnakAkun;
+use App\Models\AnakAkun;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Notifications\Notification;
@@ -25,19 +25,12 @@ class ListAkunGroups extends ListRecords
     ];
 
     /**
-     * Definisi kanonik grup LEAF (tempat Sub Akun benar-benar didaftarkan)
+     * Definisi kanonik grup LEAF (tempat Anak Akun benar-benar didaftarkan)
      * untuk sinkronisasi otomatis. Key = prefix digit pertama kode induk akun.
      *
-     * 'parent' merujuk ke key di PARENT_GROUPS, atau null kalau grup ini
-     * memang harus jadi root sendiri (mis. PASIVA tidak dibawahi apapun,
-     * mengikuti struktur yang sudah kamu buat manual).
-     *
-     * 'tipe' & 'order' dipakai HANYA saat grup belum ada dan perlu dibuat
-     * otomatis — kalau grup sudah ada (walau beda kapitalisasi/spasi),
-     * tipe & order yang sudah tersimpan di grup tersebut TIDAK diubah/ditimpa.
-     * parent_id TETAP akan diisi otomatis kalau sebelumnya kosong (lihat
-     * cariAtauBuatLeaf()), supaya grup yang kepalang dibuat tanpa parent
-     * ikut terhubung tanpa perlu dibuat ulang.
+     * Catatan: SEJAK migrasi pivot, sinkronisasi dilakukan di level
+     * Anak Akun (bukan lagi Sub Anak Akun). Tabel pivot yang dipakai
+     * adalah akun_group_anak_akun via relasi AkunGroup::anakAkuns().
      */
     private const TARGET_GROUPS = [
         '1' => ['nama' => 'AKTIVA LANCAR',         'tipe' => null,             'order' => 1, 'parent' => 'AKTIVA'],
@@ -57,9 +50,9 @@ class ListAkunGroups extends ListRecords
                 ->color('warning')
                 ->requiresConfirmation()
                 ->modalHeading('Sinkronisasi Akun Otomatis')
-                ->modalDescription('Aksi ini akan memasukkan Sub Akun baru ke Grup Akun (Aktiva Lancar, Pasiva, dll) berdasarkan awalan kode akun induk secara otomatis, termasuk membuat grup induk (AKTIVA, LABA RUGI) jika belum ada. Lanjutkan?')
+                ->modalDescription('Aksi ini akan memasukkan Anak Akun baru ke Grup Akun (Aktiva Lancar, Pasiva, dll) berdasarkan awalan kode akun induk secara otomatis, termasuk membuat grup induk (AKTIVA, LABA RUGI) jika belum ada. Lanjutkan?')
                 ->action(function () {
-                    $this->syncSubAkunToGroup();
+                    $this->syncAnakAkunToGroup();
                 }),
             CreateAction::make(),
         ];
@@ -116,7 +109,7 @@ class ListAkunGroups extends ListRecords
     }
 
     /**
-     * Cari atau buat grup LEAF (tempat Sub Akun didaftarkan). Kalau grup
+     * Cari atau buat grup LEAF (tempat Anak Akun didaftarkan). Kalau grup
      * sudah ada tapi parent_id-nya masih kosong sementara definisi kita
      * mengharuskan ada parent, parent_id akan DIISI (bukan ditimpa) —
      * supaya grup yang kepalang dibuat root (seperti kasus PENDAPATAN
@@ -155,9 +148,14 @@ class ListAkunGroups extends ListRecords
     }
 
     /**
-     * Logika sinkronisasi otomatis Sub Anak Akun ke Akun Group
+     * Logika sinkronisasi otomatis Anak Akun ke Akun Group.
+     *
+     * PERUBAHAN: sebelumnya sinkron dilakukan per Sub Anak Akun via tabel
+     * pivot akun_group_sub_anak_akun. Tabel itu sudah di-drop dan datanya
+     * dipindahkan ke akun_group_anak_akun. Method ini sekarang bekerja
+     * di level Anak Akun, konsisten dengan struktur relasi yang aktif.
      */
-    protected function syncSubAkunToGroup(): void
+    protected function syncAnakAkunToGroup(): void
     {
         // Tarik semua grup — dipakai untuk pencarian case/spasi-insensitive
         // tanpa query berulang di dalam loop. Di-refresh manual tiap kali
@@ -206,19 +204,19 @@ class ListAkunGroups extends ListRecords
             }
         }
 
-        // 3. Tarik semua sub akun beserta relasinya untuk mendapatkan kode induk akun
-        $subAkuns = SubAnakAkun::with('anakAkun.indukAkun')->get();
+        // 3. Tarik semua Anak Akun beserta relasi induknya untuk mendapatkan kode induk akun
+        $anakAkuns = AnakAkun::with('indukAkun')->get();
 
         $syncedCount = 0;
 
-        foreach ($subAkuns as $subAkun) {
+        foreach ($anakAkuns as $anakAkun) {
             // Abaikan jika relasi ke induk tidak valid
-            if (! $subAkun->anakAkun || ! $subAkun->anakAkun->indukAkun) {
+            if (! $anakAkun->indukAkun) {
                 continue;
             }
 
             // Ambil awalan/digit pertama dari kode induk akun (misal: '1' dari '1578.00')
-            $kodeInduk = (string) $subAkun->anakAkun->indukAkun->kode_induk_akun;
+            $kodeInduk = (string) $anakAkun->indukAkun->kode_induk_akun;
             $prefix    = substr($kodeInduk, 0, 1);
 
             $def = self::TARGET_GROUPS[$prefix] ?? null;
@@ -233,7 +231,7 @@ class ListAkunGroups extends ListRecords
 
             // syncWithoutDetaching berfungsi untuk mengaitkan data ke pivot
             // tanpa menghapus data lama dan otomatis mencegah duplikasi.
-            $result = $targetGroup->subAnakAkuns()->syncWithoutDetaching([$subAkun->id]);
+            $result = $targetGroup->anakAkuns()->syncWithoutDetaching([$anakAkun->id]);
 
             // Menghitung hanya data yang baru saja berhasil ditambahkan (bukan yang sudah ada sebelumnya)
             if (! empty($result['attached'])) {
@@ -242,7 +240,7 @@ class ListAkunGroups extends ListRecords
         }
 
         // 4. Tampilkan notifikasi keberhasilan
-        $bodyLines = ["Berhasil mensinkronkan <strong>{$syncedCount}</strong> Sub Akun baru ke Akun Group."];
+        $bodyLines = ["Berhasil mensinkronkan <strong>{$syncedCount}</strong> Anak Akun baru ke Akun Group."];
 
         if (! empty($grupBaruDibuat)) {
             $daftarGrupBaru = implode(', ', array_unique($grupBaruDibuat));

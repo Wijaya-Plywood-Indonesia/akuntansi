@@ -42,6 +42,16 @@ class AkunGroup extends Model
         )->withTimestamps();
     }
 
+    public function subAnakAkuns()
+{
+    return $this->belongsToMany(
+        SubAnakAkun::class,
+        'akun_group_sub_anak_akun',
+        'akun_group_id',
+        'sub_anak_akun_id'
+    )->withTimestamps();
+}
+
     /**
      * Parent Group
      */
