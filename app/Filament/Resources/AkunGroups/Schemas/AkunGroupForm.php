@@ -41,6 +41,13 @@ class AkunGroupForm
                     ])
                     ->nullable(),
 
+                Select::make('kategori_arus_kas')
+                    ->label('Kategori Arus Kas')
+                    ->placeholder('Kosongkan jika tidak dihitung di Rekap Arus Kas')
+                    ->helperText('Menandai grup akun ini sebagai lawan transaksi kas untuk kategori tertentu di halaman Rekap Arus Kas.')
+                    ->options(\App\Models\AkunGroup::labelKategoriArusKas())
+                    ->nullable(),
+
                 Toggle::make('hidden')
                     ->label('Sembunyikan')
                     ->default(false),

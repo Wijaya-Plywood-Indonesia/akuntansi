@@ -36,6 +36,13 @@ class AkunGroupsTable
                     ->badge()
                     ->color(fn($state) => $state > 0 ? 'warning' : 'gray'),
 
+                TextColumn::make('kategori_arus_kas')
+                    ->label('Kategori Arus Kas')
+                    ->badge()
+                    ->formatStateUsing(fn($state) => $state ? (\App\Models\AkunGroup::labelKategoriArusKas()[$state] ?? $state) : '-')
+                    ->color(fn($state) => $state ? 'info' : 'gray')
+                    ->toggleable(),
+
                 IconColumn::make('hidden')
                     ->label('Hidden')
                     ->boolean(),
