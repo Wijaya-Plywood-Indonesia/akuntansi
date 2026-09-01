@@ -201,22 +201,23 @@ class LabaRugi extends Page
             return;
         }
 
+        // Catatan: relasi 'subAnakAkuns' langsung di AkunGroup SUDAH TIDAK DIPAKAI.
+        // Struktur sekarang: AkunGroup -> anakAkuns (many-to-many) -> subAnakAkuns (hasMany di AnakAkun)
         $groups = AkunGroup::where('parent_id', $root->id)
             ->visible()
             ->ordered()
             ->with([
-                'subAnakAkuns' => fn($q) => $q
+                'anakAkuns' => fn($q) => $q
+                    ->select(['anak_akuns.id', 'kode_anak_akun', 'nama_anak_akun']),
+                'anakAkuns.subAnakAkuns' => fn($q) => $q
                     ->orderBy('kode_sub_anak_akun')
-                    ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal'])
-                    ->with(['anakAkun:id,kode_anak_akun,nama_anak_akun']),
+                    ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
 
-                'childrenRecursive.subAnakAkuns' => fn($q) => $q
+                'childrenRecursive.anakAkuns' => fn($q) => $q
+                    ->select(['anak_akuns.id', 'kode_anak_akun', 'nama_anak_akun']),
+                'childrenRecursive.anakAkuns.subAnakAkuns' => fn($q) => $q
                     ->orderBy('kode_sub_anak_akun')
-                    ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal'])
-                    ->with(['anakAkun:id,kode_anak_akun,nama_anak_akun']),
-
-                'childrenRecursive.anakAkuns.subAnakAkuns',
-                'anakAkuns.subAnakAkuns',
+                    ->select(['sub_anak_akuns.id', 'id_anak_akun', 'kode_sub_anak_akun', 'nama_sub_anak_akun', 'saldo_normal']),
             ])
             ->get();
 
@@ -311,49 +312,19 @@ class LabaRugi extends Page
         return $saldoPerPeriode;
     }
 
+    /**
+     * Bangun node untuk sebuah AkunGroup.
+     * Struktur data anak: AkunGroup -> anakAkuns -> subAnakAkuns.
+     * (Relasi subAnakAkuns langsung di AkunGroup sudah tidak dipakai lagi.)
+     */
     private function buildGroupNode(AkunGroup $group, array $saldoPerPeriode, array $periodeList, array $qtyPerPeriode = []): array
     {
         $children        = [];
         $nilaiPerPeriode = array_fill_keys(array_map([$this, 'periodeKey'], $periodeList), 0.0);
 
-        if ($group->subAnakAkuns->isNotEmpty()) {
-            $perAnakAkun = $group->subAnakAkuns->groupBy('id_anak_akun');
-
-            foreach ($perAnakAkun as $idAnakAkun => $subs) {
-                $anakAkun = $subs->first()->anakAkun;
-                if (!$anakAkun) continue;
-
-                $subChildren   = [];
-                $nilaiAnakAkun = array_fill_keys(array_map([$this, 'periodeKey'], $periodeList), 0.0);
-
-                foreach ($subs->sortBy('kode_sub_anak_akun') as $sub) {
-                    $subNode = $this->buildSubNode($sub, $saldoPerPeriode, $periodeList, $qtyPerPeriode);
-                    $subChildren[] = $subNode;
-                    foreach ($periodeList as $p) {
-                        $k = $this->periodeKey($p);
-                        $nilaiAnakAkun[$k] += $subNode['nilai_per_periode'][$k] ?? 0;
-                    }
-                }
-
-                $anakNode = [
-                    'type'              => 'anak_akun',
-                    'kode'              => $anakAkun->kode_anak_akun,
-                    'nama'              => $anakAkun->nama_anak_akun,
-                    'children'          => $subChildren,
-                    'nilai_per_periode' => $nilaiAnakAkun,
-                    'nilai_per_bulan'   => $nilaiAnakAkun, // tetap butuh untuk kompatibilitas ke blade
-                ];
-
-                $children[] = $anakNode;
-                foreach ($periodeList as $p) {
-                    $k = $this->periodeKey($p);
-                    $nilaiPerPeriode[$k] += $nilaiAnakAkun[$k];
-                }
-            }
-        }
-
-        foreach ($group->children as $child) {
-            $node = $this->buildGroupNode($child, $saldoPerPeriode, $periodeList, $qtyPerPeriode);
+        // Anak Akun langsung di grup ini
+        foreach ($group->anakAkuns as $anak) {
+            $node = $this->buildAnakAkunNode($anak, $saldoPerPeriode, $periodeList, $qtyPerPeriode);
             $children[] = $node;
             foreach ($periodeList as $p) {
                 $k = $this->periodeKey($p);
@@ -361,14 +332,13 @@ class LabaRugi extends Page
             }
         }
 
-        if ($group->relationLoaded('anakAkuns')) {
-            foreach ($group->anakAkuns as $anak) {
-                $node = $this->buildAnakAkunNode($anak, $saldoPerPeriode, $periodeList, $qtyPerPeriode);
-                $children[] = $node;
-                foreach ($periodeList as $p) {
-                    $k = $this->periodeKey($p);
-                    $nilaiPerPeriode[$k] += $node['nilai_per_periode'][$k] ?? 0;
-                }
+        // Sub-grup (children) secara rekursif
+        foreach ($group->children as $child) {
+            $node = $this->buildGroupNode($child, $saldoPerPeriode, $periodeList, $qtyPerPeriode);
+            $children[] = $node;
+            foreach ($periodeList as $p) {
+                $k = $this->periodeKey($p);
+                $nilaiPerPeriode[$k] += $node['nilai_per_periode'][$k] ?? 0;
             }
         }
 
