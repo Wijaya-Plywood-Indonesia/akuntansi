@@ -95,8 +95,25 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public bool $selectAll = false;
 
+    /**
+     * Diisi otomatis kalau halaman dibuka lewat deep-link
+     * ?jurnal=NNN (mis. dari tombol "Lihat di jurnal" di Rekap Arus Kas).
+     * Membatasi tabel riwayat hanya ke baris-baris nomor jurnal tsb.
+     */
+    public ?int $filterNoJurnal = null;
+
     public function mount(): void
     {
+        $noJurnalDariUrl = request()->query('jurnal');
+        if (filled($noJurnalDariUrl) && ctype_digit((string) $noJurnalDariUrl)) {
+            $this->filterNoJurnal = (int) $noJurnalDariUrl;
+
+            // Kosongkan filter tanggal supaya tidak menyembunyikan transaksi
+            // yang dituju hanya karena berada di luar rentang tanggal aktif.
+            $this->filterTglDari = '';
+            $this->filterTglSampai = '';
+        }
+
         $draft = session()->get('jurnal_draft', []);
 
         $this->tgl = $draft['tgl'] ?? now()->format('Y-m-d');
@@ -189,6 +206,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
     protected function getViewData(): array
     {
         $query = JurnalModel::latest('id');
+        if (! empty($this->filterNoJurnal)) {
+            $query->where('jurnal', $this->filterNoJurnal);
+        }
         if (! empty($this->filterTglDari)) {
             $query->whereDate('tgl', '>=', $this->filterTglDari);
         }
@@ -287,6 +307,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function applyFilter(): void
     {
+        $this->filterNoJurnal = null;
         $this->filterTglDari = $this->filterTglDariInput;
         $this->filterTglSampai = $this->filterTglSampaiInput;
         $this->perPage = 50;
@@ -297,6 +318,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function resetFilter(): void
     {
+        $this->filterNoJurnal = null;
         $this->filterTglDariInput = '';
         $this->filterTglSampaiInput = '';
         $this->filterTglDari = '';

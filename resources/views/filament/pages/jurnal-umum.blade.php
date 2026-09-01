@@ -1316,7 +1316,7 @@
         </div>
 
         {{-- TABLE HISTORY JURNAL UMUM + BULK DELETE --}}
-        <div class="space-y-4" x-data="{
+        <div id="jurnal-umum-history" class="space-y-4" x-data="{
             isFiltering: false,
             fpDari: null,
             fpSampai: null,
@@ -1406,7 +1406,12 @@
             }
         }" x-init="initFilterDatepickers();
         initInfiniteScroll();
-        $wire.on('bulk-delete-done', () => { showConfirm = false; });">
+        $wire.on('bulk-delete-done', () => { showConfirm = false; });
+        @if($filterNoJurnal)
+        $nextTick(() => {
+            document.getElementById('jurnal-umum-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        @endif">
 
             {{-- MODAL KONFIRMASI BULK DELETE --}}
             <div x-show="showConfirm" x-cloak
@@ -1448,6 +1453,29 @@
                     </div>
                 </div>
             </div>
+
+            {{-- BANNER: deep-link dari nomor jurnal tertentu (mis. dari Rekap Arus Kas) --}}
+            @if($filterNoJurnal)
+                <div class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 shadow-xs">
+                    <div class="flex items-center gap-2.5">
+                        <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                        <span class="text-xs font-bold text-amber-700 dark:text-amber-300">
+                            Menampilkan hanya transaksi <span class="font-black">No. Jurnal #{{ $filterNoJurnal }}</span> — hasil dari "Lihat di jurnal".
+                        </span>
+                    </div>
+                    <button type="button" wire:click="resetFilter"
+                        class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-amber-100 dark:hover:bg-amber-900/40 shadow-xs">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Tampilkan Semua
+                    </button>
+                </div>
+            @endif
 
             {{-- Header + Filter Bar --}}
             <div class="flex flex-col gap-3 px-1">
@@ -1696,7 +1724,7 @@
 
                                 <tr data-row-id="{{ $hj->id }}"
                                     :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                    class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein"
+                                    class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein @if($filterNoJurnal && (string) $hj->jurnal === (string) $filterNoJurnal) !bg-amber-50 dark:!bg-amber-900/20 @endif"
                                     style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                     <td class="px-4 py-4 text-center">

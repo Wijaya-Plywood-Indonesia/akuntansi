@@ -17,6 +17,7 @@ class AkunGroup extends Model
         'order',
         'hidden',
         'tipe',
+        'kategori_arus_kas',
     ];
 
     protected $casts = [
@@ -41,16 +42,6 @@ class AkunGroup extends Model
             'anak_akun_id'
         )->withTimestamps();
     }
-
-    public function subAnakAkuns()
-{
-    return $this->belongsToMany(
-        SubAnakAkun::class,
-        'akun_group_sub_anak_akun',
-        'akun_group_id',
-        'sub_anak_akun_id'
-    )->withTimestamps();
-}
 
     /**
      * Parent Group
@@ -97,6 +88,29 @@ class AkunGroup extends Model
     public function childrenRecursive()
     {
         return $this->children()->with('childrenRecursive');
+    }
+
+    /**
+     * Scope hanya grup yang sudah ditandai kategori arus kas.
+     */
+    public function scopeBerkategoriArusKas($query)
+    {
+        return $query->whereNotNull('kategori_arus_kas');
+    }
+
+    /**
+     * Label kategori arus kas untuk ditampilkan di UI.
+     */
+    public static function labelKategoriArusKas(): array
+    {
+        return [
+            'penjualan'      => 'Penjualan',
+            'pendanaan'      => 'Pendanaan (modal, utang, piutang, pinjaman)',
+            'pembelian_stok' => 'Pembelian / Stok',
+            'produksi'       => 'Produksi',
+            'beban_usaha'    => 'Beban Operasional',
+            'lainnya'        => 'Lainnya',
+        ];
     }
 
     /*
