@@ -6,7 +6,7 @@ use App\Models\AkunGroup;
 use App\Models\JurnalUmum;
 use App\Models\SubAnakAkun;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ArusKasService
 {
@@ -58,12 +58,12 @@ class ArusKasService
         $selisih = round($saldoAkhirRiil - $saldoAkhir, 2);
 
         return [
-            'saldo_awal'       => $saldoAwal,
-            'saldo_akhir'      => $saldoAkhir,
-            'total_masuk'      => $totalMasuk,
-            'total_keluar'     => $totalKeluar,
-            'rincian'          => $rincian,
-            'balanced'         => abs($selisih) < 0.01,
+            'saldo_awal'      => $saldoAwal,
+            'saldo_akhir'     => $saldoAkhir,
+            'total_masuk'     => $totalMasuk,
+            'total_keluar'    => $totalKeluar,
+            'rincian'         => $rincian,
+            'balanced'        => abs($selisih) < 0.01,
             'selisih_validasi' => $selisih,
         ];
     }
@@ -84,19 +84,14 @@ class ArusKasService
     {
         return SubAnakAkun::whereHas(
             'anakAkun',
-            fn ($q) => $q->where('kode_anak_akun', 'like', self::PREFIX_KAS.'%')
+            fn($q) => $q->where('kode_anak_akun', 'like', self::PREFIX_KAS . '%')
         )->pluck('kode_sub_anak_akun')->toArray();
     }
 
     /**
      * Peta kode_sub_anak_akun => kode_kategori_arus_kas, dari seluruh
-     * AkunGroup yang sudah ditandai `kategori_arus_kas`.
-     *
-     * PENTING: AkunGroup TIDAK punya relasi langsung ke SubAnakAkun
-     * (tabel pivot lama `akun_group_sub_anak_akun` sudah dihapus via
-     * migrasi 2026_08_29). Satu-satunya jalur yang valid, mengikuti
-     * pola NeracaService::loadGroups() / LabaRugi, adalah:
-     *   AkunGroup -> anakAkuns -> subAnakAkuns
+     * AkunGroup yang sudah ditandai `kategori_arus_kas` (lihat AkunGroupForm).
+     * Mengikuti pola rekursif yang sama dengan LabaRugi/NeracaService.
      */
     private function getKategoriMap(): array
     {
@@ -124,9 +119,7 @@ class ArusKasService
         }
 
         foreach ($group->childrenRecursive as $child) {
-            // Anak grup yang punya kategori sendiri menang atas kategori induk.
-            $kategoriChild = $child->kategori_arus_kas ?: $kategori;
-            $this->collectKodeUntukGrup($child, $kategoriChild, $map);
+            $this->collectKodeUntukGrup($child, $kategori, $map);
         }
     }
 
@@ -172,10 +165,11 @@ class ArusKasService
 
     /**
      * Hitung mutasi kas dalam rentang [start, end], dikelompokkan per
-     * nomor jurnal lalu per (kategori + arah kas).
+     * nomor jurnal lalu per kategori (lihat algoritma di dokumentasi).
      */
     private function hitungMutasi(Carbon $start, Carbon $end, array $kodeKas, array $kategoriMap): array
     {
+        // Semua baris kas dalam rentang, dikelompokkan per nomor jurnal.
         $barisKas = JurnalUmum::whereBetween('tgl', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->whereIn('no_akun', $kodeKas)
             ->get()
@@ -187,17 +181,20 @@ class ArusKasService
 
         $nomorJurnal = $barisKas->keys()->toArray();
 
+        // Semua baris (termasuk non-kas) dalam nomor jurnal yang sama, untuk
+        // menentukan lawan transaksi / kategori.
         $semuaBarisPerJurnal = JurnalUmum::whereIn('jurnal', $nomorJurnal)
             ->get()
             ->groupBy('jurnal');
 
         $labelKategori = AkunGroup::labelKategoriArusKas();
-        $agregat = []; // "{kode_kategori}|{tipe}" => [...]
+        $agregat = []; // kode_kategori => ['nilai_in'=>, 'nilai_out'=>, 'transaksi'=>[]]
 
         foreach ($barisKas as $noJurnal => $barisKasDiJurnalIni) {
             $semuaBaris = $semuaBarisPerJurnal[$noJurnal] ?? collect();
-            $barisNonKas = $semuaBaris->reject(fn ($b) => in_array($b->no_akun, $kodeKas));
+            $barisNonKas = $semuaBaris->reject(fn($b) => in_array($b->no_akun, $kodeKas));
 
+            // Nilai bersih pergerakan kas pada transaksi ini (debit kas = masuk)
             $nilaiMasuk = 0.0;
             $nilaiKeluar = 0.0;
             foreach ($barisKasDiJurnalIni as $b) {
@@ -210,7 +207,7 @@ class ArusKasService
             }
 
             $isTransferInternal = $barisNonKas->isEmpty()
-                || $barisNonKas->every(fn ($b) => in_array($b->no_akun, $kodeKas));
+                || $barisNonKas->every(fn($b) => in_array($b->no_akun, $kodeKas));
 
             $kodeKategori = $isTransferInternal
                 ? self::KATEGORI_TRANSFER_INTERNAL
@@ -220,23 +217,24 @@ class ArusKasService
                 ? 'Transfer Kas Internal'
                 : ($labelKategori[$kodeKategori] ?? 'Lainnya');
 
-            $deskripsi = optional($barisNonKas->first())->keterangan
-                ?: optional($barisNonKas->first())->nama_akun
-                ?: optional($barisKasDiJurnalIni->first())->keterangan
-                ?: 'Transaksi #'.$noJurnal;
+            // Prioritaskan nama akun lawan transaksi (lebih ringkas & konkret,
+            // mis. "Piutang Usaha", "Kas Bu Mut") sebagai judul utama.
+            // Keterangan (sering berisi istilah teknis akuntansi yang diketik
+            // staff, mis. "Pembalikan DP yang sudah diterima") ditampilkan
+            // terpisah sebagai info tambahan, bukan judul utama, supaya tidak
+            // membingungkan pembaca non-akuntan.
+            $namaAkunLawan = optional($barisNonKas->first())->nama_akun;
+            $keteranganAsli = optional($barisNonKas->first())->keterangan
+                ?: optional($barisKasDiJurnalIni->first())->keterangan;
+
+            $deskripsi = $namaAkunLawan ?: ($keteranganAsli ?: 'Transaksi #' . $noJurnal);
 
             $tanggal = optional($barisKasDiJurnalIni->first()->tgl)->format('Y-m-d');
             $netKas = $nilaiMasuk - $nilaiKeluar;
             $tipe = $isTransferInternal ? 'netral' : ($netKas >= 0 ? 'in' : 'out');
 
-            // Kunci agregat WAJIB menyertakan arah kas ('tipe'), bukan hanya
-            // kategori — kategori seperti "Pendanaan" bisa dua arah (modal
-            // masuk vs cicilan utang keluar) dalam periode yang sama, dan
-            // menggabungkannya ke satu key akan salah hitung total masuk/keluar.
-            $key = $kodeKategori.'|'.$tipe;
-
-            if (! isset($agregat[$key])) {
-                $agregat[$key] = [
+            if (!isset($agregat[$kodeKategori])) {
+                $agregat[$kodeKategori] = [
                     'kode_kategori' => $kodeKategori,
                     'nama'          => $namaKategori,
                     'tipe'          => $tipe,
@@ -245,20 +243,21 @@ class ArusKasService
                 ];
             }
 
-            $agregat[$key]['nilai'] += abs($netKas);
-            $agregat[$key]['transaksi'][] = [
-                'jurnal'    => $noJurnal,
-                'tgl'       => $tanggal,
-                'deskripsi' => $deskripsi,
-                'nilai'     => abs($netKas),
-                'tipe'      => $tipe,
+            $agregat[$kodeKategori]['nilai'] += abs($netKas);
+            $agregat[$kodeKategori]['transaksi'][] = [
+                'jurnal'     => $noJurnal,
+                'tgl'        => $tanggal,
+                'deskripsi'  => $deskripsi,
+                'keterangan' => ($namaAkunLawan && $keteranganAsli && $keteranganAsli !== $namaAkunLawan) ? $keteranganAsli : null,
+                'nilai'      => abs($netKas),
+                'tipe'       => $tipe,
             ];
         }
 
+        // Urutkan: kategori kas masuk dulu, lalu keluar, transfer internal di akhir.
         $hasil = array_values($agregat);
         usort($hasil, function ($a, $b) {
             $urutanTipe = ['in' => 0, 'out' => 1, 'netral' => 2];
-
             return $urutanTipe[$a['tipe']] <=> $urutanTipe[$b['tipe']];
         });
 
@@ -274,7 +273,7 @@ class ArusKasService
         };
     }
 
-    private function tentukanKategori(Collection $barisNonKas, array $kategoriMap): string
+    private function tentukanKategori($barisNonKas, array $kategoriMap): string
     {
         foreach ($barisNonKas as $b) {
             if (isset($kategoriMap[$b->no_akun])) {
