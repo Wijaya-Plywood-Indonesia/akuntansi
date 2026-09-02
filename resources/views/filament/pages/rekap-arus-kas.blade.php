@@ -177,27 +177,37 @@
                         @foreach($kat['transaksi'] as $tx)
                         <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-4 py-2.5 sm:pl-[3.75rem] text-sm">
                             <div class="flex items-center justify-between sm:contents">
-                                <div class="text-xs text-gray-400 dark:text-gray-500 sm:min-w-[74px]">
-                                    {{ \Carbon\Carbon::parse($tx['tgl'])->format('d M Y') }}
-                                </div>
-                                <div class="font-bold sm:hidden whitespace-nowrap
-                                    {{ $isNetral ? 'text-gray-500 dark:text-gray-400' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
-                                    {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
-                                </div>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <div class="text-gray-600 dark:text-gray-300 truncate">
-                                    {{ $tx['deskripsi'] }}
-                                    <span class="text-gray-300 dark:text-gray-600">&middot; #{{ $tx['jurnal'] }}</span>
-                                </div>
-                                @if(!empty($tx['keterangan']))
-                                <div class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ $tx['keterangan'] }}</div>
-                                @endif
-                            </div>
-                            <div class="hidden sm:block font-bold min-w-[100px] text-right whitespace-nowrap
-                                {{ $isNetral ? 'text-gray-500 dark:text-gray-400' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
-                                {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
-                            </div>
+    <div class="text-xs text-gray-400 dark:text-gray-500 sm:min-w-[74px]">
+        {{ \Carbon\Carbon::parse($tx['tgl'])->format('d M Y') }}
+    </div>
+    <div class="sm:hidden text-right">
+        <div class="font-bold whitespace-nowrap
+            {{ $isNetral ? 'text-gray-500 dark:text-gray-400' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
+            {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
+        </div>
+        @if(!empty($tx['kas']))
+        <div class="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">{{ $tx['kas'] }}</div>
+        @endif
+    </div>
+</div>
+<div class="flex-1 min-w-0">
+    <div class="text-gray-600 dark:text-gray-300 truncate">
+        {{ $tx['deskripsi'] }}
+        <span class="text-gray-300 dark:text-gray-600">&middot; #{{ $tx['jurnal'] }}</span>
+    </div>
+    @if(!empty($tx['keterangan']))
+    <div class="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{{ $tx['keterangan'] }}</div>
+    @endif
+</div>
+<div class="hidden sm:block min-w-[100px] text-right">
+    <div class="font-bold whitespace-nowrap
+        {{ $isNetral ? 'text-gray-500 dark:text-gray-400' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
+        {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
+    </div>
+    @if(!empty($tx['kas']))
+    <div class="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">{{ $tx['kas'] }}</div>
+    @endif
+</div>
                             <a href="{{ $this->urlJurnal($tx['jurnal']) }}"
                                 class="self-start sm:self-auto text-[11px] font-bold text-sky-500 border border-sky-300 dark:border-sky-800 rounded-md px-2.5 py-1 hover:bg-sky-50 dark:hover:bg-sky-900/20 whitespace-nowrap">
                                 Lihat di Jurnal

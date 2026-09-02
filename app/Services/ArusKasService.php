@@ -229,6 +229,13 @@ class ArusKasService
 
             $deskripsi = $namaAkunLawan ?: ($keteranganAsli ?: 'Transaksi #' . $noJurnal);
 
+            // ── Nama akun kas/bank yang kena mutasi pada transaksi ini ──
+            // Biasanya 1 akun kas per transaksi, tapi kalau ada lebih dari 1
+            // (mis. jurnal yang menyentuh 2 rekening sekaligus / transfer
+            // antar kas), tampilkan semua yang terlibat.
+            $namaKasList = $barisKasDiJurnalIni->pluck('nama_akun')->filter()->unique()->values()->all();
+            $namaKas = implode(', ', $namaKasList);
+
             $tanggal = optional($barisKasDiJurnalIni->first()->tgl)->format('Y-m-d');
             $netKas = $nilaiMasuk - $nilaiKeluar;
             $tipe = $isTransferInternal ? 'netral' : ($netKas >= 0 ? 'in' : 'out');
@@ -249,6 +256,7 @@ class ArusKasService
                 'tgl'        => $tanggal,
                 'deskripsi'  => $deskripsi,
                 'keterangan' => ($namaAkunLawan && $keteranganAsli && $keteranganAsli !== $namaAkunLawan) ? $keteranganAsli : null,
+                'kas'        => $namaKas,
                 'nilai'      => abs($netKas),
                 'tipe'       => $tipe,
             ];
