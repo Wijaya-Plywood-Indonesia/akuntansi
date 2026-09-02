@@ -1404,12 +1404,12 @@
         
                 observer.observe(sentinel);
             }
-        }" x-init="initFilterDatepickers();
+                }" x-init="initFilterDatepickers();
         initInfiniteScroll();
         $wire.on('bulk-delete-done', () => { showConfirm = false; });
-        @if($filterNoJurnal)
+        @if($modeJurnalTunggal)
         $nextTick(() => {
-            document.getElementById('jurnal-umum-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.getElementById('riwayat-jurnal')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
         @endif">
 
@@ -1454,31 +1454,10 @@
                 </div>
             </div>
 
-            {{-- BANNER: deep-link dari nomor jurnal tertentu (mis. dari Rekap Arus Kas) --}}
-            @if($filterNoJurnal)
-                <div class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 shadow-xs">
-                    <div class="flex items-center gap-2.5">
-                        <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                        </svg>
-                        <span class="text-xs font-bold text-amber-700 dark:text-amber-300">
-                            Menampilkan hanya transaksi <span class="font-black">No. Jurnal #{{ $filterNoJurnal }}</span> — hasil dari "Lihat di jurnal".
-                        </span>
-                    </div>
-                    <button type="button" wire:click="resetFilter"
-                        class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-amber-100 dark:hover:bg-amber-900/40 shadow-xs">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        Tampilkan Semua
-                    </button>
-                </div>
-            @endif
+            
 
-            {{-- Header + Filter Bar --}}
-            <div class="flex flex-col gap-3 px-1">
+                        {{-- Header + Filter Bar --}}
+            <div id="riwayat-jurnal" class="flex flex-col gap-3 px-1">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1497,6 +1476,21 @@
                             x-text="'Filter: ' + (activeFilterDari ? formatDateDisplay(activeFilterDari) : '...') + ' → ' + (activeFilterSampai ? formatDateDisplay(activeFilterSampai) : '...')"></span>
                     </div>
                 </div>
+
+                @if($modeJurnalTunggal)
+                <div class="flex items-center justify-between gap-3 px-4 py-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl">
+                    <div class="flex items-center gap-2 text-sky-600 dark:text-sky-400 text-xs font-bold">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z" />
+                        </svg>
+                        Menampilkan hanya Nomor Jurnal #{{ $nomorJurnalDitampilkan }} (dari Rekap Arus Kas)
+                    </div>
+                    <button type="button" wire:click="tampilkanSemuaJurnal"
+                        class="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-none whitespace-nowrap">
+                        Tampilkan Semua Jurnal
+                    </button>
+                </div>
+                @endif
 
                 <div
                     class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 w-full">
@@ -1724,7 +1718,7 @@
 
                                 <tr data-row-id="{{ $hj->id }}"
                                     :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                    class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein @if($filterNoJurnal && (string) $hj->jurnal === (string) $filterNoJurnal) !bg-amber-50 dark:!bg-amber-900/20 @endif"
+                                    class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein @if($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
                                     style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                     <td class="px-4 py-4 text-center">

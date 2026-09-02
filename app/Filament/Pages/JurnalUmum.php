@@ -23,6 +23,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Url;
 use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
@@ -77,13 +78,25 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public bool $wasBalanced = false;
 
+    // Deep-link dari Rekap Arus Kas (tombol "Lihat di Jurnal") mengisi
+    // properti ini lewat query string, lalu applyFilter() dipanggil
+    // otomatis di mount() jika keduanya terisi.
+    #[Url]
     public $filterTglDariInput = '';
 
+    #[Url]
     public $filterTglSampaiInput = '';
 
     public $filterTglDari = '';
 
     public $filterTglSampai = '';
+
+    // Deep-link "Lihat di Jurnal" dari Rekap Arus Kas: jika terisi, tabel
+    // history hanya menampilkan SATU nomor jurnal ini, mengabaikan filter
+    // tanggal & pagination biasa. Tombol "Tampilkan Semua Jurnal" di view
+    // akan mengosongkan ini lagi.
+    #[Url]
+    public $filterJurnalNomor = null;
 
     public int $perPage = 50;
 
@@ -95,25 +108,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public bool $selectAll = false;
 
-    /**
-     * Diisi otomatis kalau halaman dibuka lewat deep-link
-     * ?jurnal=NNN (mis. dari tombol "Lihat di jurnal" di Rekap Arus Kas).
-     * Membatasi tabel riwayat hanya ke baris-baris nomor jurnal tsb.
-     */
-    public ?int $filterNoJurnal = null;
-
     public function mount(): void
     {
-        $noJurnalDariUrl = request()->query('jurnal');
-        if (filled($noJurnalDariUrl) && ctype_digit((string) $noJurnalDariUrl)) {
-            $this->filterNoJurnal = (int) $noJurnalDariUrl;
-
-            // Kosongkan filter tanggal supaya tidak menyembunyikan transaksi
-            // yang dituju hanya karena berada di luar rentang tanggal aktif.
-            $this->filterTglDari = '';
-            $this->filterTglSampai = '';
-        }
-
         $draft = session()->get('jurnal_draft', []);
 
         $this->tgl = $draft['tgl'] ?? now()->format('Y-m-d');
@@ -130,6 +126,15 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $savedMap = $draft['map'] ?? 'd';
         $this->map = in_array(strtolower($savedMap), ['d', 'k']) ? strtolower($savedMap) : 'd';
+
+        // Deep-link dari Rekap Arus Kas: jika query string filter tanggal
+        // sudah terisi (lewat #[Url]), langsung terapkan sebagai filter aktif.
+        // Tidak perlu jika yang dipakai adalah deep-link nomor jurnal tunggal
+        // (filterJurnalNomor), karena mode itu sudah menampilkan barisnya
+        // sendiri tanpa perlu filter tanggal.
+        if (blank($this->filterJurnalNomor) && filled($this->filterTglDariInput) && filled($this->filterTglSampaiInput)) {
+            $this->applyFilter();
+        }
     }
 
     protected function getNextJurnalNumber(): int
@@ -205,22 +210,26 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     protected function getViewData(): array
     {
+        $modeJurnalTunggal = filled($this->filterJurnalNomor);
+
         $query = JurnalModel::latest('id');
-        if (! empty($this->filterNoJurnal)) {
-            $query->where('jurnal', $this->filterNoJurnal);
-        }
-        if (! empty($this->filterTglDari)) {
-            $query->whereDate('tgl', '>=', $this->filterTglDari);
-        }
-        if (! empty($this->filterTglSampai)) {
-            $query->whereDate('tgl', '<=', $this->filterTglSampai);
+
+        if ($modeJurnalTunggal) {
+            $query->where('jurnal', $this->filterJurnalNomor);
+        } else {
+            if (! empty($this->filterTglDari)) {
+                $query->whereDate('tgl', '>=', $this->filterTglDari);
+            }
+            if (! empty($this->filterTglSampai)) {
+                $query->whereDate('tgl', '<=', $this->filterTglSampai);
+            }
         }
 
         // ── FIX: tambahkan selectRaw "total" agar kolom Debit/Kredit
         //         per baris di tabel history tidak menampilkan 0.
         //         Sebelumnya hanya select() kolom mentah tanpa "total",
         //         sehingga $hj->total selalu null di Blade.
-        $data = $query->limit($this->perPage + 1)
+        $data = $query->limit($modeJurnalTunggal ? 1000 : $this->perPage + 1)
             ->select([
                 'id',
                 'tgl',
@@ -246,8 +255,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ")
             ->get();
 
-        $this->hasMorePages = $data->count() > $this->perPage;
-        $historyJurnals = $data->take($this->perPage);
+        $this->hasMorePages = $modeJurnalTunggal ? false : ($data->count() > $this->perPage);
+        $historyJurnals = $modeJurnalTunggal ? $data : $data->take($this->perPage);
 
         // ── Ambil nama barang untuk baris yang punya id_barang ──────
         $barangIds = $historyJurnals->pluck('id_barang')->filter()->unique()->values();
@@ -263,11 +272,15 @@ class JurnalUmum extends Page implements HasActions, HasForms
         }
 
         $totalsQuery = JurnalModel::query();
-        if (! empty($this->filterTglDari)) {
-            $totalsQuery->whereDate('tgl', '>=', $this->filterTglDari);
-        }
-        if (! empty($this->filterTglSampai)) {
-            $totalsQuery->whereDate('tgl', '<=', $this->filterTglSampai);
+        if ($modeJurnalTunggal) {
+            $totalsQuery->where('jurnal', $this->filterJurnalNomor);
+        } else {
+            if (! empty($this->filterTglDari)) {
+                $totalsQuery->whereDate('tgl', '>=', $this->filterTglDari);
+            }
+            if (! empty($this->filterTglSampai)) {
+                $totalsQuery->whereDate('tgl', '<=', $this->filterTglSampai);
+            }
         }
 
         $totals = $totalsQuery->selectRaw("
@@ -302,12 +315,15 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'totalKreditDB' => $totalKreditDB,
             'isHistoryBalanced' => $isHistoryBalanced,
             'selisihDB' => $selisihDB,
+            'modeJurnalTunggal' => $modeJurnalTunggal,
+            'nomorJurnalDitampilkan' => $this->filterJurnalNomor,
         ];
     }
 
     public function applyFilter(): void
     {
-        $this->filterNoJurnal = null;
+        // Filter tanggal manual membatalkan mode "1 nomor jurnal" dari deep-link.
+        $this->filterJurnalNomor = null;
         $this->filterTglDari = $this->filterTglDariInput;
         $this->filterTglSampai = $this->filterTglSampaiInput;
         $this->perPage = 50;
@@ -316,9 +332,26 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->selectAll = false;
     }
 
+    /**
+     * Dipanggil dari tombol "Tampilkan Semua Jurnal" saat sedang dalam
+     * mode deep-link 1 nomor jurnal (dari Rekap Arus Kas).
+     */
+    public function tampilkanSemuaJurnal(): void
+    {
+        $this->filterJurnalNomor = null;
+        $this->filterTglDariInput = '';
+        $this->filterTglSampaiInput = '';
+        $this->filterTglDari = '';
+        $this->filterTglSampai = '';
+        $this->perPage = 50;
+        $this->hasMorePages = true;
+        $this->selectedIds = [];
+        $this->selectAll = false;
+    }
+
     public function resetFilter(): void
     {
-        $this->filterNoJurnal = null;
+        $this->filterJurnalNomor = null;
         $this->filterTglDariInput = '';
         $this->filterTglSampaiInput = '';
         $this->filterTglDari = '';
