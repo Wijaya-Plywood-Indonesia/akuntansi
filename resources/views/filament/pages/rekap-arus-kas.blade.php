@@ -37,28 +37,28 @@
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
             <div>
                 <h1 class="text-lg font-black text-gray-800 dark:text-gray-100">Rekap Arus Kas</h1>
-                <p class="text-sm text-gray-400 dark:text-gray-500 mt-0.5">{{ $labelPeriode }}</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-0.5 font-medium">{{ $labelPeriode }}</p>
             </div>
 
             <div class="grid grid-cols-2 lg:flex lg:flex-wrap items-center gap-2">
                 <button type="button" wire:click="terapkanPreset('kemarin')"
                     class="px-4 py-2.5 lg:py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-none text-center
-                        {{ $periodeAktif === 'kemarin' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-300' }}">
+                        {{ $periodeAktif === 'kemarin' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200' }}">
                     Kemarin
                 </button>
                 <button type="button" wire:click="terapkanPreset('hari_ini')"
                     class="px-4 py-2.5 lg:py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-none text-center
-                        {{ $periodeAktif === 'hari_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-300' }}">
+                        {{ $periodeAktif === 'hari_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200' }}">
                     Hari ini
                 </button>
                 <button type="button" wire:click="terapkanPreset('minggu_ini')"
                     class="px-4 py-2.5 lg:py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-none text-center
-                        {{ $periodeAktif === 'minggu_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-300' }}">
+                        {{ $periodeAktif === 'minggu_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200' }}">
                     7 hari terakhir
                 </button>
                 <button type="button" wire:click="terapkanPreset('bulan_ini')"
                     class="px-4 py-2.5 lg:py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-none text-center
-                        {{ $periodeAktif === 'bulan_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-300' }}">
+                        {{ $periodeAktif === 'bulan_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200' }}">
                     Bulan ini
                 </button>
             </div>
@@ -66,7 +66,7 @@
 
         {{-- Rentang Tanggal Custom --}}
         <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 mb-5">
-            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <span class="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5 mb-3">
                 <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -76,10 +76,10 @@
             <div class="flex flex-col lg:flex-row lg:items-center gap-3">
                 <div class="flex items-center gap-2 w-full lg:w-auto">
                     <input type="date" wire:model="tglDariInput"
-                        class="flex-1 lg:flex-none px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 min-w-0">
-                    <span class="text-gray-300 dark:text-gray-600 flex-shrink-0">&rarr;</span>
+                        class="flex-1 lg:flex-none px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-200 min-w-0">
+                    <span class="text-gray-500 dark:text-gray-400 flex-shrink-0">&rarr;</span>
                     <input type="date" wire:model="tglSampaiInput"
-                        class="flex-1 lg:flex-none px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 min-w-0">
+                        class="flex-1 lg:flex-none px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-200 min-w-0">
                 </div>
 
                 <button type="button" wire:click="terapkanRentangCustom"
@@ -92,15 +92,15 @@
                 @if($errorRentang)
                     <span class="text-xs font-medium text-rose-500">{{ $errorRentang }}</span>
                 @endif
-                <span class="text-[11px] text-gray-400 dark:text-gray-500 lg:ml-auto">Maksimal {{ self::MAX_RENTANG_HARI }} hari (1 tahun) sekali tampil</span>
+                <span class="text-[11px] text-gray-600 dark:text-gray-300 font-medium lg:ml-auto">Maksimal {{ self::MAX_RENTANG_HARI }} hari (1 tahun) sekali tampil</span>
             </div>
         </div>
 
         {{-- 4 Kartu Ringkasan --}}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
             <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 min-w-0">
-                <div class="text-[11px] lg:text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Kas Awal</div>
-                <div class="text-lg lg:text-xl font-black text-gray-700 dark:text-gray-200 mt-1 truncate">Rp {{ number_format($hasil['saldo_awal'] ?? 0, 0, ',', '.') }}</div>
+                <div class="text-[11px] lg:text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap">Kas Awal</div>
+                <div class="text-lg lg:text-xl font-black text-gray-800 dark:text-gray-100 mt-1 truncate">Rp {{ number_format($hasil['saldo_awal'] ?? 0, 0, ',', '.') }}</div>
             </div>
             <div class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 min-w-0">
                 <div class="text-[11px] lg:text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
@@ -123,7 +123,7 @@
         </div>
 
         @if(!($hasil['balanced'] ?? true))
-        <div class="mb-5 flex items-center gap-2 px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold text-amber-600 dark:text-amber-400">
+        <div class="mb-5 flex items-center gap-2 px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold text-amber-700 dark:text-amber-400">
             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             Ada selisih Rp {{ number_format(abs($hasil['selisih_validasi'] ?? 0), 0, ',', '.') }} antara hasil hitungan dan saldo riil — cek kembali data jurnal pada periode ini.
         </div>
@@ -133,7 +133,7 @@
         <div class="text-sm font-black text-gray-700 dark:text-gray-200 mb-3">Rincian per kategori</div>
 
         @if(empty($hasil['rincian'] ?? []))
-        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center text-sm text-gray-400 italic">
+        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center text-sm text-gray-600 dark:text-gray-300 italic font-medium">
             Tidak ada transaksi kas pada periode ini.
         </div>
         @else
@@ -150,7 +150,7 @@
                 <div class="flex items-center gap-3 px-4 py-3.5 cursor-pointer select-none" @click="toggle('{{ $rowKey }}')">
                     <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
                         {{ $isNetral ? 'bg-gray-100 dark:bg-gray-800' : ($isIn ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-rose-50 dark:bg-rose-900/20') }}">
-                        <svg class="w-4 h-4 {{ $isNetral ? 'text-gray-400' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 {{ $isNetral ? 'text-gray-600 dark:text-gray-300' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             @if($isNetral)
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
                             @elseif($isIn)
@@ -162,12 +162,12 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">{{ $kat['nama'] }}</div>
-                        <div class="text-xs text-gray-400 dark:text-gray-500">{{ count($kat['transaksi']) }} transaksi</div>
+                        <div class="text-xs text-gray-600 dark:text-gray-300 font-medium">{{ count($kat['transaksi']) }} transaksi</div>
                     </div>
-                    <div class="text-sm font-black text-right whitespace-nowrap {{ $isNetral ? 'text-gray-500 dark:text-gray-400' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
+                    <div class="text-sm font-black text-right whitespace-nowrap {{ $isNetral ? 'text-gray-700 dark:text-gray-200' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
                         {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($kat['nilai'], 0, ',', '.') }}
                     </div>
-                    <svg class="chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="chevron w-4 h-4 text-gray-600 dark:text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                 </div>
@@ -177,39 +177,39 @@
                         @foreach($kat['transaksi'] as $tx)
                         <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-4 py-2.5 sm:pl-[3.75rem] text-sm">
                             <div class="flex items-center justify-between sm:contents">
-    <div class="text-xs text-gray-400 dark:text-gray-500 sm:min-w-[74px]">
+    <div class="text-xs text-gray-600 dark:text-gray-300 font-semibold sm:min-w-[74px]">
         {{ \Carbon\Carbon::parse($tx['tgl'])->format('d M Y') }}
     </div>
     <div class="sm:hidden text-right">
         <div class="font-bold whitespace-nowrap
-            {{ $isNetral ? 'text-gray-500 dark:text-gray-400' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
+            {{ $isNetral ? 'text-gray-700 dark:text-gray-200' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
             {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
         </div>
         @if(!empty($tx['kas']))
-        <div class="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">{{ $tx['kas'] }}</div>
+        <div class="text-[10px] text-gray-600 dark:text-gray-300 font-medium whitespace-nowrap">{{ $tx['kas'] }}</div>
         @endif
     </div>
 </div>
 <div class="flex-1 min-w-0">
-    <div class="text-gray-600 dark:text-gray-300 truncate">
+    <div class="text-gray-800 dark:text-gray-100 font-medium truncate">
         {{ $tx['deskripsi'] }}
-        <span class="text-gray-300 dark:text-gray-600">&middot; #{{ $tx['jurnal'] }}</span>
+        <span class="text-gray-500 dark:text-gray-400">&middot; #{{ $tx['jurnal'] }}</span>
     </div>
     @if(!empty($tx['keterangan']))
-    <div class="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{{ $tx['keterangan'] }}</div>
+    <div class="text-xs text-gray-600 dark:text-gray-300 truncate mt-0.5">{{ $tx['keterangan'] }}</div>
     @endif
 </div>
 <div class="hidden sm:block min-w-[100px] text-right">
     <div class="font-bold whitespace-nowrap
-        {{ $isNetral ? 'text-gray-500 dark:text-gray-400' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
+        {{ $isNetral ? 'text-gray-700 dark:text-gray-200' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
         {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
     </div>
     @if(!empty($tx['kas']))
-    <div class="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">{{ $tx['kas'] }}</div>
+    <div class="text-[10px] text-gray-600 dark:text-gray-300 font-medium whitespace-nowrap">{{ $tx['kas'] }}</div>
     @endif
 </div>
                             <a href="{{ $this->urlJurnal($tx['jurnal']) }}"
-                                class="self-start sm:self-auto text-[11px] font-bold text-sky-500 border border-sky-300 dark:border-sky-800 rounded-md px-2.5 py-1 hover:bg-sky-50 dark:hover:bg-sky-900/20 whitespace-nowrap">
+                                class="self-start sm:self-auto text-[11px] font-bold text-sky-600 dark:text-sky-400 border border-sky-300 dark:border-sky-800 rounded-md px-2.5 py-1 hover:bg-sky-50 dark:hover:bg-sky-900/20 whitespace-nowrap">
                                 Lihat di Jurnal
                             </a>
                         </div>
