@@ -24,12 +24,9 @@ class NeracaService
             $end   = $periode['end'];   // Instance Carbon
             $key   = $periode['date_string'];
 
-            $saldo            = $this->getSaldoDinamis($start, $end, $jenisFilter);
-            $qty              = $this->getSaldoQtyDinamis($start, $end, $jenisFilter);
-
-            // ── PERUBAHAN 1: AMBIL SALDO M3 DINAMIS DARI DATABASE ──────────────────
-            // Baris ini ditambahkan untuk memanggil method penarik saldo m3 dinamis
-            $m3               = $this->getSaldoM3Dinamis($start, $end, $jenisFilter);
+            $saldo = $this->getSaldoDinamis($start, $end, $jenisFilter);
+            $qty   = $this->getSaldoQtyDinamis($start, $end, $jenisFilter);
+            $m3    = $this->getSaldoM3Dinamis($start, $end, $jenisFilter);
 
             $labaRugiBerjalan = $this->hitungLabaRugiBerjalanDinamis($start, $end);
 
@@ -39,8 +36,6 @@ class NeracaService
                     'tahun' => $periode['tahun'],
                     'bulan' => $periode['bulan']
                 ],
-                // ── PERUBAHAN 2: SERTAKAN VARIABEL $m3 KE DALAM BUILDER NERACA ───────
-                // Parameter $m3 disisipkan di antara $qty dan $labaRugiBerjalan
                 $this->buildNeraca($groups, $saldo, $qty, $m3, $labaRugiBerjalan)
             );
         }
@@ -48,78 +43,60 @@ class NeracaService
         return $result;
     }
 
+    /**
+     * Hitung saldo akhir (rupiah) per akun untuk sebuah periode.
+     *
+     * PENTING: Tidak ada proses tutup buku bulanan di sistem ini, jadi tabel
+     * snapshot 'buku_besar' TIDAK PERNAH terisi/update (selalu kosong).
+     * Karena itu saldo awal periode — baik untuk filter harian maupun
+     * bulanan — SELALU dihitung live dengan mengakumulasi seluruh transaksi
+     * JurnalUmum sebelum tanggal mulai periode.
+     */
     private function getSaldoDinamis(Carbon $start, Carbon $end, string $jenisFilter): array
     {
-        $saldoAwal = [];
         $saldoNormalMap = DB::table('sub_anak_akuns')->pluck('saldo_normal', 'kode_sub_anak_akun')->toArray();
 
-        if ($jenisFilter === 'hari') {
-            // Akumulasi jurnal dari awal mula s.d H-1
-            $mutasiLalu = JurnalUmum::where('tgl', '<', $start->format('Y-m-d'))
-                ->selectRaw("
-                    no_akun,
-                    SUM(
-                        CASE WHEN LOWER(map) = 'd' THEN 
-                            CASE 
-                                WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
-                                WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
-                                ELSE COALESCE(harga, 0)
-                            END
-                        ELSE 0 END
-                    ) as total_debit,
-                    SUM(
-                        CASE WHEN LOWER(map) = 'k' THEN 
-                            CASE 
-                                WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
-                                WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
-                                ELSE COALESCE(harga, 0)
-                            END
-                        ELSE 0 END
-                    ) as total_kredit
-                ")
-                ->groupBy('no_akun')
-                ->get()
-                ->keyBy('no_akun');
+        $mutasiExpr = "
+            no_akun,
+            SUM(
+                CASE WHEN LOWER(map) = 'd' THEN 
+                    CASE 
+                        WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                        WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                        ELSE COALESCE(harga, 0)
+                    END
+                ELSE 0 END
+            ) as total_debit,
+            SUM(
+                CASE WHEN LOWER(map) = 'k' THEN 
+                    CASE 
+                        WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
+                        WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
+                        ELSE COALESCE(harga, 0)
+                    END
+                ELSE 0 END
+            ) as total_kredit
+        ";
 
-            foreach ($mutasiLalu as $kode => $m) {
-                $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
-                $saldoAwal[$kode] = $isKredit
-                    ? ($m->total_kredit - $m->total_debit)
-                    : ($m->total_debit - $m->total_kredit);
-            }
-        } else {
-            // Jika bulanan, pakai tabel buku_besar bulan lalu agar efisien
-            $prevDate  = $start->copy()->subMonth();
-            $saldoAwal = DB::table('buku_besar')
-                ->where('tahun', $prevDate->year)
-                ->where('bulan', $prevDate->month)
-                ->pluck('saldo', 'no_akun')
-                ->toArray();
+        // Saldo awal = akumulasi SEMUA jurnal sebelum tanggal mulai periode.
+        // Berlaku sama untuk filter 'hari' maupun 'bulan'.
+        $saldoAwal = [];
+        $mutasiLalu = JurnalUmum::where('tgl', '<', $start->format('Y-m-d'))
+            ->selectRaw($mutasiExpr)
+            ->groupBy('no_akun')
+            ->get()
+            ->keyBy('no_akun');
+
+        foreach ($mutasiLalu as $kode => $m) {
+            $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
+            $saldoAwal[$kode] = $isKredit
+                ? ($m->total_kredit - $m->total_debit)
+                : ($m->total_debit - $m->total_kredit);
         }
 
         // Mutasi pada rentang tanggal/bulan terpilih
         $mutasi = JurnalUmum::whereBetween('tgl', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-            ->selectRaw("
-                no_akun,
-                SUM(
-                    CASE WHEN LOWER(map) = 'd' THEN 
-                        CASE 
-                            WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
-                            WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
-                            ELSE COALESCE(harga, 0)
-                        END
-                    ELSE 0 END
-                ) as total_debit,
-                SUM(
-                    CASE WHEN LOWER(map) = 'k' THEN 
-                        CASE 
-                            WHEN LOWER(hit_kbk) = 'b' THEN COALESCE(banyak, 0) * COALESCE(harga, 0)
-                            WHEN LOWER(hit_kbk) = 'm' THEN COALESCE(m3, 0) * COALESCE(harga, 0)
-                            ELSE COALESCE(harga, 0)
-                        END
-                    ELSE 0 END
-                ) as total_kredit
-            ")
+            ->selectRaw($mutasiExpr)
             ->groupBy('no_akun')
             ->get()
             ->keyBy('no_akun');
@@ -139,49 +116,38 @@ class NeracaService
         return $result;
     }
 
+    /**
+     * Versi QTY. Saldo awal qty SELALU dihitung live dari akumulasi
+     * JurnalUmum — tabel 'buku_besar' tidak pernah diisi.
+     */
     private function getSaldoQtyDinamis(Carbon $start, Carbon $end, string $jenisFilter): array
     {
-        $qtyAwal = [];
         $saldoNormalMap = DB::table('sub_anak_akuns')->pluck('saldo_normal', 'kode_sub_anak_akun')->toArray();
 
-        if ($jenisFilter === 'hari') {
-            $mutasiQtyLalu = JurnalUmum::where('tgl', '<', $start->format('Y-m-d'))
-                ->whereNotNull('banyak')->where('banyak', '>', 0)
-                ->selectRaw("
-                    no_akun,
-                    SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(banyak, 0) ELSE 0 END) as qty_debit,
-                    SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(banyak, 0) ELSE 0 END) as qty_kredit
-                ")
-                ->groupBy('no_akun')
-                ->get()
-                ->keyBy('no_akun');
+        $qtyExpr = "
+            no_akun,
+            SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(banyak, 0) ELSE 0 END) as qty_debit,
+            SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(banyak, 0) ELSE 0 END) as qty_kredit
+        ";
 
-            foreach ($mutasiQtyLalu as $kode => $m) {
-                $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
-                $qtyAwal[$kode] = $isKredit
-                    ? ($m->qty_kredit - $m->qty_debit)
-                    : ($m->qty_debit - $m->qty_kredit);
-            }
-        } else {
-            $prevDate = $start->copy()->subMonth();
-            try {
-                $qtyAwal = DB::table('buku_besar')
-                    ->where('tahun', $prevDate->year)
-                    ->where('bulan', $prevDate->month)
-                    ->whereNotNull('qty')->where('qty', '>', 0)
-                    ->pluck('qty', 'no_akun')->toArray();
-            } catch (\Exception $e) {
-                $qtyAwal = [];
-            }
+        $qtyAwal = [];
+        $mutasiQtyLalu = JurnalUmum::where('tgl', '<', $start->format('Y-m-d'))
+            ->whereNotNull('banyak')->where('banyak', '>', 0)
+            ->selectRaw($qtyExpr)
+            ->groupBy('no_akun')
+            ->get()
+            ->keyBy('no_akun');
+
+        foreach ($mutasiQtyLalu as $kode => $m) {
+            $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
+            $qtyAwal[$kode] = $isKredit
+                ? ($m->qty_kredit - $m->qty_debit)
+                : ($m->qty_debit - $m->qty_kredit);
         }
 
         $mutasiQty = JurnalUmum::whereBetween('tgl', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->whereNotNull('banyak')->where('banyak', '>', 0)
-            ->selectRaw("
-                no_akun,
-                SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(banyak, 0) ELSE 0 END) as qty_debit,
-                SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(banyak, 0) ELSE 0 END) as qty_kredit
-            ")
+            ->selectRaw($qtyExpr)
             ->groupBy('no_akun')
             ->get()
             ->keyBy('no_akun');
@@ -205,51 +171,39 @@ class NeracaService
         return $result;
     }
 
-    // ── PERUBAHAN 3: MENAMBAHKAN METHOD BARU UNTUK SALDO M3 DINAMIS ────────────────────
-    // Metode ini sepenuhnya baru untuk mengakumulasi nilai volume m3 dari Jurnal Umum / Buku Besar
+    /**
+     * Versi M3 (volume). Sama seperti saldo dan qty di atas: saldo awal m3
+     * SELALU dihitung live dari akumulasi JurnalUmum, TIDAK lagi bergantung
+     * pada tabel 'buku_besar' yang tidak pernah diisi.
+     */
     private function getSaldoM3Dinamis(Carbon $start, Carbon $end, string $jenisFilter): array
     {
-        $m3Awal = [];
         $saldoNormalMap = DB::table('sub_anak_akuns')->pluck('saldo_normal', 'kode_sub_anak_akun')->toArray();
 
-        if ($jenisFilter === 'hari') {
-            $mutasiM3Lalu = JurnalUmum::where('tgl', '<', $start->format('Y-m-d'))
-                ->whereNotNull('m3')->where('m3', '>', 0)
-                ->selectRaw("
-                    no_akun,
-                    SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(m3, 0) ELSE 0 END) as m3_debit,
-                    SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(m3, 0) ELSE 0 END) as m3_kredit
-                ")
-                ->groupBy('no_akun')
-                ->get()
-                ->keyBy('no_akun');
+        $m3Expr = "
+            no_akun,
+            SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(m3, 0) ELSE 0 END) as m3_debit,
+            SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(m3, 0) ELSE 0 END) as m3_kredit
+        ";
 
-            foreach ($mutasiM3Lalu as $kode => $m) {
-                $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
-                $m3Awal[$kode] = $isKredit
-                    ? ($m->m3_kredit - $m->m3_debit)
-                    : ($m->m3_debit - $m->m3_kredit);
-            }
-        } else {
-            $prevDate = $start->copy()->subMonth();
-            try {
-                $m3Awal = DB::table('buku_besar')
-                    ->where('tahun', $prevDate->year)
-                    ->where('bulan', $prevDate->month)
-                    ->whereNotNull('m3')->where('m3', '>', 0)
-                    ->pluck('m3', 'no_akun')->toArray();
-            } catch (\Exception $e) {
-                $m3Awal = [];
-            }
+        $m3Awal = [];
+        $mutasiM3Lalu = JurnalUmum::where('tgl', '<', $start->format('Y-m-d'))
+            ->whereNotNull('m3')->where('m3', '>', 0)
+            ->selectRaw($m3Expr)
+            ->groupBy('no_akun')
+            ->get()
+            ->keyBy('no_akun');
+
+        foreach ($mutasiM3Lalu as $kode => $m) {
+            $isKredit = in_array(strtolower($saldoNormalMap[$kode] ?? 'debit'), ['kredit', 'credit', 'k']);
+            $m3Awal[$kode] = $isKredit
+                ? ($m->m3_kredit - $m->m3_debit)
+                : ($m->m3_debit - $m->m3_kredit);
         }
 
         $mutasiM3 = JurnalUmum::whereBetween('tgl', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->whereNotNull('m3')->where('m3', '>', 0)
-            ->selectRaw("
-                no_akun,
-                SUM(CASE WHEN LOWER(map) = 'd' THEN COALESCE(m3, 0) ELSE 0 END) as m3_debit,
-                SUM(CASE WHEN LOWER(map) = 'k' THEN COALESCE(m3, 0) ELSE 0 END) as m3_kredit
-            ")
+            ->selectRaw($m3Expr)
             ->groupBy('no_akun')
             ->get()
             ->keyBy('no_akun');
@@ -369,8 +323,6 @@ class NeracaService
         ])->whereNull('parent_id')->visible()->ordered()->get();
     }
 
-    // ── PERUBAHAN 4: ATUR PARAMETER FUNGSI buildNeraca ───────────────────────
-    // Menambahkan parameter 'array $m3 = []' di antara $qty dan $labaRugiBerjalan
     private function buildNeraca(Collection $groups, array $saldo, array $qty = [], array $m3 = [], float $labaRugiBerjalan = 0.0): array
     {
         $aktiva = ['sections' => [], 'total' => 0.0];
@@ -380,10 +332,8 @@ class NeracaService
             $namaUpper = strtoupper(trim($rootGroup->nama));
 
             if ($rootGroup->childrenRecursive->isEmpty()) {
-                // ── PERUBAHAN 5: TERUSKAN VARIABEL $m3 KE FUNCTION ANAK ─────────────────
                 [$sections, $totalRoot] = $this->buildSectionsFromRoot($rootGroup, $saldo, $qty, $m3);
             } else {
-                // ── PERUBAHAN 6: TERUSKAN VARIABEL $m3 KE FUNCTION REKURSIF ─────────────
                 [$sections, $totalRoot] = $this->buildSections($rootGroup->childrenRecursive, $saldo, $qty, $m3);
             }
 
@@ -404,7 +354,6 @@ class NeracaService
                     'nama'  => 'Laba (Rugi) Periode Berjalan',
                     'nilai' => $labaRugiBerjalan,
                     'qty'   => null,
-                    // ── PERUBAHAN 7: TAMBAHKAN KEY 'm3' UNTUK KONSISTENSI ARRAY ──────────
                     'm3'    => null,
                 ]],
                 'total'        => $labaRugiBerjalan,
@@ -432,12 +381,12 @@ class NeracaService
 
         foreach ($anakAkuns as $anakAkun) {
             $nilaiAkun = $this->hitungNilaiAkun($anakAkun, $saldo);
-            
+
             $q = 0.0;
             $vol = 0.0;
             $hasQty = false;
             $hasM3 = false;
-            
+
             $subAkunList = [];
             if ($anakAkun->subAnakAkuns->isNotEmpty()) {
                 foreach ($anakAkun->subAnakAkuns as $sub) {
@@ -451,7 +400,7 @@ class NeracaService
                         'qty' => $qtySub,
                         'm3' => $m3Sub,
                     ];
-                    
+
                     if (isset($qty[$sub->kode_sub_anak_akun])) {
                         $q += (float) $qty[$sub->kode_sub_anak_akun];
                         $hasQty = true;
@@ -491,8 +440,6 @@ class NeracaService
         ]], $total];
     }
 
-    // ── PERUBAHAN 10: SESUAIKAN SIGNATURE FUNGSI buildSections ───────────────
-    // Menambahkan parameter 'array $m3 = []' di bagian akhir
     private function buildSections(Collection $groups, array $saldo, array $qty = [], array $m3 = []): array
     {
         $sections = [];
@@ -507,12 +454,12 @@ class NeracaService
 
                 foreach ($group->anakAkuns as $anakAkun) {
                     $nilaiAkun = $this->hitungNilaiAkun($anakAkun, $saldo);
-                    
+
                     $q = 0.0;
                     $vol = 0.0;
                     $hasQty = false;
                     $hasM3 = false;
-                    
+
                     $subAkunList = [];
                     if ($anakAkun->subAnakAkuns->isNotEmpty()) {
                         foreach ($anakAkun->subAnakAkuns as $sub) {
@@ -526,7 +473,7 @@ class NeracaService
                                 'qty' => $qtySub,
                                 'm3' => $m3Sub,
                             ];
-                            
+
                             if (isset($qty[$sub->kode_sub_anak_akun])) {
                                 $q += (float) $qty[$sub->kode_sub_anak_akun];
                                 $hasQty = true;
@@ -566,7 +513,6 @@ class NeracaService
                 ];
                 $totalAll += $totalSection;
             } else {
-                // ── PERUBAHAN 12: TERUSKAN ARRAY $m3 KE METODE REKURSIF ANAK ──────────
                 [$subSections, $totalBranch] = $this->buildSections($group->children, $saldo, $qty, $m3);
                 $sections[] = [
                     'group'        => $group->nama,
