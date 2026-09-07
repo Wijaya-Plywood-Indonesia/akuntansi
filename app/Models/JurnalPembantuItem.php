@@ -53,7 +53,7 @@ class JurnalPembantuItem extends Model
     const HIT_KBK = [
         'm' => '× M³',
         'b' => '× Banyak',
-        null => 'Langsung',
+        '' => 'Langsung',
     ];
 
     // ── Relasi ────────────────────────────────────────────────────────

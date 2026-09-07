@@ -35,6 +35,8 @@ class KatalogVariabelKitab
 
         // ── Penjualan ─────────────────────────────────────────────────
         'nilai_penjualan'    => 'Nilai Penjualan (Pendapatan)',
+        'nilai_retur'        => 'Nilai Retur Penjualan (Pengurang Penjualan)',
+        'kewajiban_retur'    => 'Kewajiban Retur (Liabilitas Jangka Pendek Lainnya)',
         'hpp'                => 'Harga Pokok Penjualan (HPP)',
         'ppn_keluaran'       => 'PPN Keluaran (Hutang PPN)',
         'piutang_usaha'      => 'Piutang Usaha',
