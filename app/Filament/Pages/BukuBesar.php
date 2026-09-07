@@ -9,6 +9,7 @@ use App\Models\BukuBesar as BukuBesarModel;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Carbon\Carbon;
+use Filament\Support\Enums\Width;
 use UnitEnum;
 use Illuminate\Support\Facades\DB;
 
@@ -28,6 +29,10 @@ class BukuBesar extends Page
     public $saldoAwalMap = [];
     public $saldoAwalQtyMap = [];   // qty berbasis 'banyak'
     public $saldoAwalM3Map = [];    // qty berbasis 'm3'
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     /** Toggle: jika true, akun yang saldo/mutasinya nol tetap ditampilkan
      *  (berguna untuk audit/verifikasi COA). Default false = akun kosong
