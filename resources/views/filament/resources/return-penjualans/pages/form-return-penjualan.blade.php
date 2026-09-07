@@ -239,8 +239,28 @@
                         </div>
                         <div
                             class="flex justify-between text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-200 dark:border-gray-700 mt-1">
-                            <span>Pencatatan</span><span class="font-mono">{{ $calc['kode_kitab'] }}</span>
+                            <span>Buku Kitab</span><span class="font-semibold text-gray-800 dark:text-gray-200">{{ $calc['nama_kitab'] }}</span>
                         </div>
+                        <div
+                            class="flex justify-between text-gray-500 dark:text-gray-400">
+                            <span>Kode Kitab</span><span class="font-mono text-[11px]">{{ $calc['kode_kitab'] }}</span>
+                        </div>
+
+                        @if (!empty($calc['preview_jurnal']))
+                            <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Simulasi Jurnal (Buku Kitab):</div>
+                                <div class="space-y-1">
+                                    @foreach ($calc['preview_jurnal'] as $pj)
+                                        @if ($pj['debit'] > 0 || $pj['kredit'] > 0)
+                                            <div class="flex justify-between items-center text-[11px] {{ $pj['posisi'] === 'K' ? 'pl-2.5 text-gray-500 dark:text-gray-400' : 'font-medium text-gray-800 dark:text-gray-200' }}">
+                                                <span>[{{ $pj['posisi'] }}] {{ $pj['no_akun'] }} - {{ $pj['nama_akun'] }}</span>
+                                                <span class="font-mono">Rp {{ number_format($pj['posisi'] === 'D' ? $pj['debit'] : $pj['kredit'], 0, ',', '.') }}</span>
+                                            </div>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 </details>
 
@@ -248,7 +268,7 @@
                     <label class="text-xs font-bold text-gray-700 dark:text-gray-300">Dikembalikan lewat</label>
                     <select wire:model.live="akun_pengembalian"
                         class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-3 text-sm font-bold text-gray-900 dark:text-white">
-                        @foreach (\App\Services\JurnalReturnPenjualanService::AKUN_REFUND as $kodeAkun => $info)
+                        @foreach (\App\Services\JurnalReturnPenjualanService::getAkunRefund() as $kodeAkun => $info)
                             <option value="{{ $kodeAkun }}">{{ $info['nama'] }} ({{ $info['metode'] }})</option>
                         @endforeach
                     </select>

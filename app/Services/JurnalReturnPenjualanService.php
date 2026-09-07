@@ -3,17 +3,19 @@
 namespace App\Services;
 
 use App\Models\BukuKitab;
+use App\Models\BukuKitabAkun;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
 use App\Models\Penjualan;
 use App\Models\ReturnPenjualan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class JurnalReturnPenjualanService
 {
     /**
-     * 8 Rekening / Akun Pengembalian yang tersedia untuk Retur.
+     * Fallback 8 Rekening / Akun Pengembalian jika database buku_kitabs belum tersedia.
      */
     public const AKUN_REFUND = [
         '1101.1' => [
@@ -63,12 +65,148 @@ class JurnalReturnPenjualanService
     ) {}
 
     /**
-     * Tentukan kode Buku Kitab dari ke-16 Buku Kitab Retur yang tersedia (8 PPN & 8 Non-PPN).
+     * Ambil daftar akun pengembalian secara dinamis langsung dari template Buku Kitab yang aktif.
+     * Tidak lagi hardcode; rekening atau akun baru cukup ditambahkan ke Buku Kitab.
+     *
+     * @return array<string, array{nama: string, suffix: string, metode: string, variabel: string}>
+     */
+    public static function getAkunRefund(): array
+    {
+        $akuns = BukuKitabAkun::whereHas('bukuKitab', function ($q) {
+                $q->where('is_active', true)->where('kode', 'like', 'retur_%');
+            })
+            ->where('posisi', 'k')
+            ->whereIn('variabel_nilai', ['nominal_kas', 'kewajiban_retur'])
+            ->select('no_akun', 'nama_akun', 'variabel_nilai')
+            ->distinct()
+            ->orderBy('no_akun')
+            ->get();
+
+        if ($akuns->isEmpty()) {
+            return self::AKUN_REFUND;
+        }
+
+        $result = [];
+        foreach ($akuns as $a) {
+            $namaUpper = strtoupper($a->nama_akun);
+            $metode = 'TRANSFER';
+            if ($a->variabel_nilai === 'kewajiban_retur' || str_contains($namaUpper, 'LIABILITAS')) {
+                $metode = 'LIABILITAS';
+            } elseif (str_contains($namaUpper, 'KAS') || str_contains($namaUpper, 'TUNAI')) {
+                $metode = 'TUNAI';
+            }
+
+            $suffix = Str::snake(Str::slug(preg_replace('/[^a-zA-Z0-9\s]/', '', $namaUpper), '_'));
+
+            $result[$a->no_akun] = [
+                'nama' => $namaUpper,
+                'suffix' => $suffix,
+                'metode' => $metode,
+                'variabel' => $a->variabel_nilai,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Ambil info/konfigurasi akun pengembalian tertentu dari Buku Kitab.
+     */
+    public static function getAkunRefundConfig(?string $akun): array
+    {
+        $daftar = self::getAkunRefund();
+        if ($akun && isset($daftar[$akun])) {
+            return $daftar[$akun];
+        }
+
+        return [
+            'nama' => 'KAS BU MUT',
+            'suffix' => 'kas_bu_mut',
+            'metode' => 'TUNAI',
+            'variabel' => 'nominal_kas',
+        ];
+    }
+
+    /**
+     * Dapatkan akun pengembalian default dari Buku Kitab yang aktif.
+     */
+    public static function getDefaultAkunPengembalian(): string
+    {
+        $daftar = self::getAkunRefund();
+
+        foreach ($daftar as $kode => $info) {
+            if ($info['metode'] === 'TUNAI') {
+                return (string) $kode;
+            }
+        }
+
+        return (string) (array_key_first($daftar) ?? '1101.1');
+    }
+
+    /**
+     * Cari model BukuKitab yang sesuai dengan status PPN dan akun pengembalian.
+     * Sepenuhnya membaca relasi akun dan konfigurasi variabel di database.
+     */
+    public static function cariBukuKitab(
+        bool $isPpn,
+        ?string $akunPengembalian = null
+    ): ?BukuKitab {
+        $query = BukuKitab::query()
+            ->where('is_active', true)
+            ->where('kode', 'like', 'retur_%');
+
+        // Filter berdasarkan ada tidaknya baris PPN di template Buku Kitab
+        if ($isPpn) {
+            $query->whereHas('akunDetail', function ($q) {
+                $q->where('variabel_nilai', 'ppn_keluaran');
+            });
+        } else {
+            $query->whereDoesntHave('akunDetail', function ($q) {
+                $q->where('variabel_nilai', 'ppn_keluaran');
+            });
+        }
+
+        // Filter berdasarkan akun pengembalian di sisi kredit (posisi = 'k')
+        if ($akunPengembalian) {
+            $query->whereHas('akunDetail', function ($q) use ($akunPengembalian) {
+                $q->where('no_akun', $akunPengembalian)
+                    ->where('posisi', 'k');
+            });
+        }
+
+        $kitab = $query->with('akunDetail')->first();
+
+        if ($kitab) {
+            return $kitab;
+        }
+
+        // Fallback: jika akun pengembalian spesifik tidak cocok, ambil template retur aktif pertama yang sesuai PPN
+        return BukuKitab::query()
+            ->where('is_active', true)
+            ->where('kode', 'like', 'retur_%')
+            ->when($isPpn, function ($q) {
+                $q->whereHas('akunDetail', fn ($sq) => $sq->where('variabel_nilai', 'ppn_keluaran'));
+            }, function ($q) {
+                $q->whereDoesntHave('akunDetail', fn ($sq) => $sq->where('variabel_nilai', 'ppn_keluaran'));
+            })
+            ->with('akunDetail')
+            ->first();
+    }
+
+    /**
+     * Tentukan kode Buku Kitab dari database secara dinamis.
      */
     public static function tentukanKodeKitab(
         bool $isPpn,
-        ?string $akunPengembalian = '1101.1'
+        ?string $akunPengembalian = null
     ): string {
+        $kitab = self::cariBukuKitab($isPpn, $akunPengembalian);
+
+        if ($kitab) {
+            return $kitab->kode;
+        }
+
+        // Fallback terakhir jika database Buku Kitab kosong
         $suffix = self::AKUN_REFUND[$akunPengembalian]['suffix'] ?? 'kas_bu_mut';
 
         return $isPpn
@@ -84,7 +222,7 @@ class JurnalReturnPenjualanService
     public function kalkulasi(
         Penjualan $penjualan,
         array $itemsRetur,
-        ?string $akunPengembalian = '1101.1',
+        ?string $akunPengembalian = null,
         ?int $excludeReturnId = null
     ): array {
         $penjualan->loadMissing(['details.barang']);
@@ -111,8 +249,12 @@ class JurnalReturnPenjualanService
         // Tentukan kategori jenis retur (Normal Penuh vs Sebagian)
         $jenisRetur = $isReturPenuh ? 'NORMAL' : 'SEBAGIAN';
 
-        $kodeKitab = self::tentukanKodeKitab($isPpn, $akunPengembalian);
-        $namaKitab = BukuKitab::where('kode', $kodeKitab)->value('nama') ?? $kodeKitab;
+        $akunPengembalian = $akunPengembalian ?: self::getDefaultAkunPengembalian();
+
+        // Baca template Buku Kitab secara penuh dari database
+        $kitab = self::cariBukuKitab($isPpn, $akunPengembalian);
+        $kodeKitab = $kitab?->kode ?? self::tentukanKodeKitab($isPpn, $akunPengembalian);
+        $namaKitab = $kitab?->nama ?? $kodeKitab;
 
         // Hitung nominal rincian
         $subtotalRetur = 0.0;
@@ -139,9 +281,7 @@ class JurnalReturnPenjualanService
             $namaBarang = $item['nama_barang'] ?? 'Barang';
             $idBarang = $item['id_barang'] ?? null;
 
-            // Akun Persediaan Barang Jadi displit per barang (butuh id_barang agar
-            // BukuKitabJurnalService bisa memisahkan baris jurnal per item, sesuai
-            // 'splitHeaderPerBarang' => ['persediaan_barang_jadi'] di buatJurnalReturn()).
+            // Akun Persediaan displit per barang untuk engine BukuKitabJurnalService
             $breakdownPersediaan[] = [
                 'id_barang' => $idBarang,
                 'nama_barang' => $namaBarang,
@@ -150,12 +290,7 @@ class JurnalReturnPenjualanService
                 'keterangan' => "Retur Masuk Stok: {$namaBarang}",
             ];
 
-            // Akun HPP TIDAK displit per barang, jadi sengaja TIDAK diberi 'id_barang'.
-            // 'id_barang' hanya relevan untuk breakdown yang perlu dipisah per barang
-            // (lihat splitHeaderPerBarang di buatJurnalReturn(), yang hanya
-            // menyertakan 'persediaan_barang_jadi'). Kalau HPP ikut diberi id_barang,
-            // ada risiko ikut displit per barang oleh engine jurnal padahal seharusnya
-            // digabung jadi satu ringkasan.
+            // Akun HPP tidak displit per barang, cukup 1 agregat
             $breakdownHpp[] = [
                 'nama_barang' => $namaBarang,
                 'banyak' => $qty,
@@ -177,25 +312,59 @@ class JurnalReturnPenjualanService
 
         $totalNilaiRetur = $subtotalRetur + $ppnNominal;
 
+        // Bangun preview simulasi baris jurnal membaca struktur akun langsung dari Buku Kitab
+        $previewJurnal = [];
+        if ($kitab) {
+            $contextPreview = [
+                'nilai_retur'     => $subtotalRetur,
+                'ppn_keluaran'    => $ppnNominal,
+                'hpp'             => $totalHpp,
+                'nominal_kas'     => $totalNilaiRetur,
+                'kewajiban_retur' => $totalNilaiRetur,
+            ];
+
+            foreach ($kitab->akunDetail as $b) {
+                if (str_starts_with($b->variabel_nilai, 'persediaan_') || str_contains($b->variabel_nilai, 'persediaan')) {
+                    $contextPreview[$b->variabel_nilai] = $totalHpp;
+                }
+                $nom = (float) ($contextPreview[$b->variabel_nilai] ?? 0);
+                $pos = strtolower($b->posisi);
+
+                $previewJurnal[] = [
+                    'urut'           => $b->urut,
+                    'no_akun'        => $b->no_akun,
+                    'nama_akun'      => $b->nama_akun,
+                    'posisi'         => strtoupper($pos),
+                    'variabel_nilai' => $b->variabel_nilai,
+                    'keterangan'     => $b->keterangan,
+                    'debit'          => $pos === 'd' ? $nom : 0,
+                    'kredit'         => $pos === 'k' ? $nom : 0,
+                ];
+            }
+        }
+
         return [
-            'is_dp' => ($penjualan->jenis_transaksi === 'DP'),
-            'is_retur_penuh' => $isReturPenuh,
-            'is_ppn' => $isPpn,
-            'jenis_retur' => $jenisRetur,
-            'kode_kitab' => $kodeKitab,
-            'nama_kitab' => $namaKitab,
-            'akun_pengembalian' => $akunPengembalian,
-            'subtotal_retur' => $subtotalRetur,
-            'ppn_nominal' => $ppnNominal,
-            'total_retur' => $totalNilaiRetur,
-            'total_hpp' => $totalHpp,
+            'is_dp'                => ($penjualan->jenis_transaksi === 'DP'),
+            'is_retur_penuh'       => $isReturPenuh,
+            'is_ppn'               => $isPpn,
+            'jenis_retur'          => $jenisRetur,
+            'kode_kitab'           => $kodeKitab,
+            'nama_kitab'           => $namaKitab,
+            'buku_kitab_id'        => $kitab?->id,
+            'akun_pengembalian'    => $akunPengembalian,
+            'subtotal_retur'       => $subtotalRetur,
+            'ppn_nominal'          => $ppnNominal,
+            'total_retur'          => $totalNilaiRetur,
+            'total_hpp'            => $totalHpp,
             'breakdown_persediaan' => $breakdownPersediaan,
-            'breakdown_hpp' => $breakdownHpp,
+            'breakdown_hpp'        => $breakdownHpp,
+            'preview_jurnal'       => $previewJurnal,
         ];
     }
 
     /**
      * Buat jurnal pembantu otomatis untuk transaksi retur penjualan.
+     * Sepenuhnya membaca akun & variabel dari template Buku Kitab.
      */
     public function buatJurnalReturn(ReturnPenjualan $return, int $userId): void
     {
@@ -233,27 +402,65 @@ class JurnalReturnPenjualanService
         $calc = $this->kalkulasi(
             penjualan: $penjualan,
             itemsRetur: $items,
-            akunPengembalian: $return->akun_pengembalian ?: '1101.1',
+            akunPengembalian: $return->akun_pengembalian ?: self::getDefaultAkunPengembalian(),
             excludeReturnId: $return->id
         );
 
         $kodeKitab = $return->kode_kitab ?: $calc['kode_kitab'];
 
-        // Siapkan Context nilai untuk BukuKitabJurnalService
-        // Semua retur (karena nota sudah lunas) diperlakukan sama menggunakan Buku Kitab retur normal
+        // Cari atau validasi template Buku Kitab dari database
+        $kitab = BukuKitab::where('kode', $kodeKitab)->with('akunDetail')->first()
+            ?? self::cariBukuKitab($calc['is_ppn'], $return->akun_pengembalian);
+
+        if (! $kitab) {
+            throw new RuntimeException("Template Buku Kitab '{$kodeKitab}' tidak ditemukan atau tidak aktif.");
+        }
+
+        $kodeKitab = $kitab->kode;
+
+        // Siapkan Context nilai secara dinamis dari variabel yang didefinisikan di Buku Kitab
         $context = [
-            'persediaan_barang_jadi' => $calc['total_hpp'],
-            'hpp' => $calc['total_hpp'],
-            'nilai_retur' => $calc['subtotal_retur'],
-            'ppn_keluaran' => $calc['ppn_nominal'],
+            'nilai_retur'     => $calc['subtotal_retur'],
+            'ppn_keluaran'    => $calc['ppn_nominal'],
+            'hpp'             => $calc['total_hpp'],
+            'nominal_kas'     => $calc['total_retur'],
+            'kewajiban_retur' => $calc['total_retur'],
         ];
 
-        $isLiabilitas = ($return->akun_pengembalian === '2228.0');
+        $itemBreakdown = [
+            'hpp' => $calc['breakdown_hpp'],
+        ];
 
-        if ($isLiabilitas) {
-            $context['kewajiban_retur'] = $calc['total_retur'];
+        $splitHeaderPerBarang = [];
+
+        // Baca seluruh baris Buku Kitab untuk mengisi variabel dan item breakdown secara dinamis
+        foreach ($kitab->akunDetail as $baris) {
+            $var = $baris->variabel_nilai;
+            if (! $var) {
+                continue;
+            }
+
+            if (str_starts_with($var, 'persediaan_') || str_contains($var, 'persediaan')) {
+                $context[$var] = $calc['total_hpp'];
+                $itemBreakdown[$var] = $calc['breakdown_persediaan'];
+                $splitHeaderPerBarang[] = $var;
+            } elseif (in_array($var, ['nominal_kas', 'kewajiban_retur', 'piutang_usaha', 'dp_penjualan'], true)) {
+                $context[$var] = $calc['total_retur'];
+            } elseif ($var === 'nilai_retur') {
+                $context[$var] = $calc['subtotal_retur'];
+            } elseif ($var === 'ppn_keluaran') {
+                $context[$var] = $calc['ppn_nominal'];
+            } elseif ($var === 'hpp') {
+                $context[$var] = $calc['total_hpp'];
+            }
+        }
+
+        if (empty($splitHeaderPerBarang)) {
+            $splitHeaderPerBarang = ['persediaan_barang_jadi'];
+            $context['persediaan_barang_jadi'] = $calc['total_hpp'];
+            $itemBreakdown['persediaan_barang_jadi'] = $calc['breakdown_persediaan'];
         } else {
-            $context['nominal_kas'] = $calc['total_retur'];
+            $splitHeaderPerBarang = array_values(array_unique($splitHeaderPerBarang));
         }
 
         $noDokumen = $return->no_retur ?: "RET-{$return->id} ({$return->no_nota})";
@@ -264,7 +471,8 @@ class JurnalReturnPenjualanService
             $noDokumen,
             $return,
             $userId,
-            $calc
+            $itemBreakdown,
+            $splitHeaderPerBarang
         ) {
             $this->engine->buatJurnalDariKitab(
                 kodeKitab: $kodeKitab,
@@ -277,11 +485,8 @@ class JurnalReturnPenjualanService
                 jenisPihak: 'pelanggan',
                 namaPihak: $return->nama_customer ?: 'Pelanggan',
                 keteranganDefault: "Retur Penjualan | Ref: {$return->no_nota}",
-                itemBreakdown: [
-                    'persediaan_barang_jadi' => $calc['breakdown_persediaan'],
-                    'hpp' => $calc['breakdown_hpp'],
-                ],
-                splitHeaderPerBarang: ['persediaan_barang_jadi'],
+                itemBreakdown: $itemBreakdown,
+                splitHeaderPerBarang: $splitHeaderPerBarang,
             );
         });
     }

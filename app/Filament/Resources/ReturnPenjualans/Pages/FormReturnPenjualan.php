@@ -227,7 +227,7 @@ class FormReturnPenjualan extends Page
         // Default: jika nota asal transfer dan ada rekening, sesuaikan default akun pengembalian
         if ($nota->metode_pembayaran === 'TRANSFER' && $nota->rekeningPerusahaan?->subAnakAkun) {
             $kodeAkunRek = $nota->rekeningPerusahaan->subAnakAkun->kode_sub_anak_akun;
-            if (array_key_exists($kodeAkunRek, JurnalReturnPenjualanService::AKUN_REFUND)) {
+            if (array_key_exists($kodeAkunRek, JurnalReturnPenjualanService::getAkunRefund())) {
                 $this->akun_pengembalian = $kodeAkunRek;
             }
         }
@@ -250,7 +250,7 @@ class FormReturnPenjualan extends Page
         $this->selectedPenjualanId = null;
         $this->selectedNota = null;
         $this->items = [];
-        $this->akun_pengembalian = '1101.1';
+        $this->akun_pengembalian = JurnalReturnPenjualanService::getDefaultAkunPengembalian();
         $this->keterangan_retur = '';
     }
 
@@ -384,19 +384,24 @@ class FormReturnPenjualan extends Page
     public function kalkulasi(): array
     {
         if (! $this->selectedNota) {
+            $defaultAkun = JurnalReturnPenjualanService::getDefaultAkunPengembalian();
+            $defaultKitab = JurnalReturnPenjualanService::cariBukuKitab(false, $defaultAkun);
+
             return [
                 'is_dp' => false,
                 'is_retur_penuh' => false,
                 'is_ppn' => false,
                 'jenis_retur' => 'NORMAL',
-                'kode_kitab' => 'retur_normal_kas_bu_mut',
-                'nama_kitab' => 'RETUR NORMAL (KAS BU MUT)',
-                'akun_pengembalian' => '1101.1',
+                'kode_kitab' => $defaultKitab?->kode ?? 'retur_normal_kas_bu_mut',
+                'nama_kitab' => $defaultKitab?->nama ?? 'RETUR NORMAL (KAS BU MUT)',
+                'buku_kitab_id' => $defaultKitab?->id,
+                'akun_pengembalian' => $defaultAkun,
                 'subtotal_retur' => 0,
                 'ppn_nominal' => 0,
                 'total_retur' => 0,
                 'total_hpp' => 0,
-                'nomor_kitab' => 1,
+                'nomor_kitab' => $defaultKitab?->id ?? 1,
+                'preview_jurnal' => [],
             ];
         }
 
@@ -419,13 +424,13 @@ class FormReturnPenjualan extends Page
             $this->akun_pengembalian
         );
 
-        $calc['nomor_kitab'] = $this->getNomorKitab($calc['kode_kitab']);
+        $calc['nomor_kitab'] = $calc['buku_kitab_id'] ?? $this->getNomorKitab($calc['kode_kitab']);
 
         return $calc;
     }
 
     /**
-     * Nomor urut 1 - 16 sesuai daftar resmi Buku Kitab Retur Normal (8 PPN & 8 Non-PPN).
+     * Nomor urut / ID template Buku Kitab Retur.
      */
     private function getNomorKitab(string $kodeKitab): int
     {
@@ -451,7 +456,7 @@ class FormReturnPenjualan extends Page
             'retur_normal_non_ppn_liabilitas_jk_pendek' => 16,
         ];
 
-        return $map[$kodeKitab] ?? 0;
+        return $map[$kodeKitab] ?? (int) (\App\Models\BukuKitab::where('kode', $kodeKitab)->value('id') ?? 0);
     }
 
     /**
@@ -505,11 +510,7 @@ class FormReturnPenjualan extends Page
                 $lastCount = ReturnPenjualan::where('no_retur', 'like', "{$todayPrefix}%")->count() + 1;
                 $noRetur = sprintf('%s-%04d', $todayPrefix, $lastCount);
 
-                $refundConfig = JurnalReturnPenjualanService::AKUN_REFUND[$this->akun_pengembalian] ?? [
-                    'metode' => 'TUNAI',
-                    'nama' => 'KAS BU MUT',
-                ];
-
+                $refundConfig = JurnalReturnPenjualanService::getAkunRefundConfig($this->akun_pengembalian);
                 $metode = $refundConfig['metode'];
                 $userId = auth()->id() ?: 1;
 
