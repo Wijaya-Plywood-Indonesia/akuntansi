@@ -60,51 +60,51 @@ class AnakAkunsRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->headerActions([
-                // AttachAction::make()
-                //     ->label('Daftarkan Akun')
-                //     ->preloadRecordSelect()
-                //     ->multiple()
-                //     ->recordTitle(
-                //         fn(AnakAkun $record) =>
-                //         "{$record->kode_anak_akun} - {$record->nama_anak_akun}"
-                //     )
-                //     ->recordSelectSearchColumns([
-                //         'kode_anak_akun',
-                //         'nama_anak_akun',
-                //     ])
-                //     ->recordSelectOptionsQuery(
-                //         function ($query, $livewire) {
-                //             return $query
-                //                 ->where('status', 'aktif')
-                //                 ->whereDoesntHave(
-                //                     'akunGroups',
-                //                     fn($q) =>
-                //                     $q->where(
-                //                         'akun_group_id',
-                //                         $livewire->ownerRecord->id
-                //                     )
-
-                //                 );
-                //         }
-                //     ),
                 AttachAction::make()
                     ->label('Daftarkan Akun')
                     ->preloadRecordSelect()
                     ->multiple()
                     ->recordTitle(
-                        fn(AnakAkun $record) =>
+                        fn (AnakAkun $record) =>
                         "{$record->kode_anak_akun} - {$record->nama_anak_akun}"
                     )
                     ->recordSelectSearchColumns([
                         'kode_anak_akun',
                         'nama_anak_akun',
                     ])
-                    ->recordSelectOptionsQuery(
-                        fn($query) =>
-                        $query
-                            ->where('status', 'aktif')
-                            ->whereDoesntHave('akunGroups') // 🔥 global lock
-                    ),
+                    ->recordSelectOptionsQuery(function ($query) {
+                        $query->where('status', 'aktif');
+
+                        // Sejak grup arus kas dipisah TOTAL dari grup struktural
+                        // (tidak ada lagi grup "hybrid" yang merangkap fungsi
+                        // Laba Rugi/Neraca sekaligus Arus Kas), aturannya jadi
+                        // sederhana — cukup satu kondisi:
+                        $iniGrupArusKas = filled($this->getOwnerRecord()->kategori_arus_kas);
+
+                        if ($iniGrupArusKas) {
+                            // Grup bantu ARUS KAS (mis. "[Arus Kas] Penjualan").
+                            // Akun BOLEH sudah terdaftar di grup struktural
+                            // manapun — itu memang dirancang rangkap (1 akun
+                            // = 1 rumah struktural + boleh beberapa kartu
+                            // arus kas). Yang tetap dikunci: tidak boleh
+                            // dobel di 2 grup arus kas berbeda sekaligus,
+                            // supaya kategori kas-nya tidak ambigu.
+                            return $query->whereDoesntHave(
+                                'akunGroups',
+                                fn ($q) => $q->whereNotNull('akun_groups.kategori_arus_kas')
+                            );
+                        }
+
+                        // Grup STRUKTURAL (Aktiva Lancar, Pasiva, Pendapatan
+                        // Penjualan, Beban, HPP, dst). Lock GLOBAL PENUH:
+                        // akun yang sudah terdaftar di grup struktural
+                        // manapun tidak akan muncul lagi di sini. Ini
+                        // proteksi utama supaya admin tidak salah
+                        // mendaftarkan akun kepala yang sama ke >1 grup
+                        // struktural (mis. akun Aset ikut kepencet masuk
+                        // grup Pendapatan).
+                        return $query->whereDoesntHave('akunGroups');
+                    }),
             ])
             ->actions([
                 DetachAction::make(),

@@ -25,20 +25,78 @@ class ListAkunGroups extends ListRecords
     ];
 
     /**
-     * Definisi kanonik grup LEAF (tempat Anak Akun benar-benar didaftarkan)
-     * untuk sinkronisasi otomatis. Key = prefix digit pertama kode induk akun.
+     * Definisi kanonik grup LEAF yang anggotanya = "SEMUA Anak Akun di
+     * bawah prefix kode induk akun tertentu". Key = prefix digit pertama
+     * kode induk akun. Cocok untuk grup yang memang menaungi satu blok
+     * penuh (mis. semua akun Pendapatan, semua akun Beban).
      *
-     * Catatan: SEJAK migrasi pivot, sinkronisasi dilakukan di level
-     * Anak Akun (bukan lagi Sub Anak Akun). Tabel pivot yang dipakai
-     * adalah akun_group_anak_akun via relasi AkunGroup::anakAkuns().
+     * Satu prefix bisa menunjuk ke LEBIH DARI SATU grup target sekaligus
+     * (satu untuk struktur Neraca/Laba Rugi, satu lagi untuk grup bantu
+     * Arus Kas yang isinya identik dengan grup struktural itu).
      */
     private const TARGET_GROUPS = [
-        '1' => ['nama' => 'AKTIVA LANCAR',         'tipe' => null,             'order' => 1, 'parent' => 'AKTIVA'],
-        '2' => ['nama' => 'PASIVA',                 'tipe' => null,             'order' => 1, 'parent' => null],
-        '3' => ['nama' => 'PASIVA',                 'tipe' => null,             'order' => 1, 'parent' => null],
-        '4' => ['nama' => 'PENDAPATAN PENJUALAN',   'tipe' => 'pendapatan',     'order' => 1, 'parent' => 'LABA RUGI'],
-        '5' => ['nama' => 'BEBAN',                  'tipe' => 'beban_produksi', 'order' => 2, 'parent' => 'LABA RUGI'],
-        '6' => ['nama' => 'HPP',                    'tipe' => 'hpp',            'order' => 3, 'parent' => 'LABA RUGI'],
+        '1' => [
+            ['nama' => 'AKTIVA LANCAR', 'tipe' => null, 'kategori_arus_kas' => null, 'order' => 1, 'parent' => 'AKTIVA', 'hidden' => false],
+        ],
+        '2' => [
+            ['nama' => 'PASIVA', 'tipe' => null, 'kategori_arus_kas' => null, 'order' => 1, 'parent' => null, 'hidden' => false],
+        ],
+        '3' => [
+            ['nama' => 'PASIVA', 'tipe' => null, 'kategori_arus_kas' => null, 'order' => 1, 'parent' => null, 'hidden' => false],
+        ],
+        '4' => [
+            ['nama' => 'PENDAPATAN PENJUALAN', 'tipe' => 'pendapatan', 'kategori_arus_kas' => null, 'order' => 1, 'parent' => 'LABA RUGI', 'hidden' => false],
+            ['nama' => '[Arus Kas] Penjualan', 'tipe' => null, 'kategori_arus_kas' => 'penjualan', 'order' => 94, 'parent' => null, 'hidden' => true],
+        ],
+        '5' => [
+            ['nama' => 'BEBAN', 'tipe' => 'beban_produksi', 'kategori_arus_kas' => null, 'order' => 2, 'parent' => 'LABA RUGI', 'hidden' => false],
+            ['nama' => '[Arus Kas] Produksi', 'tipe' => null, 'kategori_arus_kas' => 'produksi', 'order' => 95, 'parent' => null, 'hidden' => true],
+        ],
+        '6' => [
+            ['nama' => 'HPP', 'tipe' => 'hpp', 'kategori_arus_kas' => null, 'order' => 3, 'parent' => 'LABA RUGI', 'hidden' => false],
+            ['nama' => '[Arus Kas] Pembelian & Stok', 'tipe' => null, 'kategori_arus_kas' => 'pembelian_stok', 'order' => 96, 'parent' => null, 'hidden' => true],
+        ],
+    ];
+
+    /**
+     * Grup bantu Arus Kas yang anggotanya = KURASI MANUAL (bukan "semua
+     * akun di bawah prefix X", tapi pilihan akun tertentu saja — mis.
+     * hanya sebagian dari Aktiva Lancar/Pasiva yang relevan untuk kategori
+     * "Pendanaan"). Karena tidak bisa ditangkap aturan prefix, di sini
+     * ditandai eksplisit lewat `kode_anak_akun` satu-satu.
+     *
+     * INI SATU-SATUNYA SUMBER KEBENARAN untuk grup-grup ini — kalau
+     * database di-reset dan grup Akun Group dihapus semua, menjalankan
+     * "Sinkron Akun Baru" akan membangun ulang grup-grup ini persis
+     * seperti semula, tanpa perlu SQL manual lagi.
+     */
+    private const EXPLICIT_ARUS_KAS_GROUPS = [
+        '[Arus Kas] Piutang, Utang & Modal' => [
+            'kategori_arus_kas' => 'pendanaan',
+            'order' => 90,
+            'kode_anak_akun' => [
+                '1122', '1123', '1124', '1125', '1181', '1501', // Piutang & Aset Kontrak
+                '2102', '2103', '2111', '2186', '2187', '2192',  // Utang jangka pendek
+                '2201', '2202', '2301', '2303', '2304', '2312',  // Utang bank & jangka panjang
+                '3102', '3120', '3298',                          // Modal & Ekuitas
+                '4511',                                          // Pendapatan Bunga
+            ],
+        ],
+        '[Arus Kas] Persediaan' => [
+            'kategori_arus_kas' => 'pembelian_stok',
+            'order' => 91,
+            'kode_anak_akun' => ['1402', '1403', '1404'],
+        ],
+        '[Arus Kas] DP Penjualan' => [
+            'kategori_arus_kas' => 'penjualan',
+            'order' => 92,
+            'kode_anak_akun' => ['2203'],
+        ],
+        '[Arus Kas] Biaya Operasional Lain' => [
+            'kategori_arus_kas' => 'beban_usaha',
+            'order' => 93,
+            'kode_anak_akun' => ['1421', '1499', '2195'],
+        ],
     ];
 
     protected function getHeaderActions(): array
@@ -50,7 +108,7 @@ class ListAkunGroups extends ListRecords
                 ->color('warning')
                 ->requiresConfirmation()
                 ->modalHeading('Sinkronisasi Akun Otomatis')
-                ->modalDescription('Aksi ini akan memasukkan Anak Akun baru ke Grup Akun (Aktiva Lancar, Pasiva, dll) berdasarkan awalan kode akun induk secara otomatis, termasuk membuat grup induk (AKTIVA, LABA RUGI) jika belum ada. Lanjutkan?')
+                ->modalDescription('Aksi ini akan memasukkan Anak Akun ke Grup Akun struktural (Aktiva Lancar/Pasiva/Laba Rugi), grup bantu Arus Kas berbasis prefix, DAN grup bantu Arus Kas dengan kurasi manual (Piutang/Utang/Modal, Persediaan, DP Penjualan, Biaya Operasional Lain) — termasuk membuat grup yang belum ada. Lanjutkan?')
                 ->action(function () {
                     $this->syncAnakAkunToGroup();
                 }),
@@ -77,7 +135,7 @@ class ListAkunGroups extends ListRecords
         $target = $this->normalisasiNama($namaKanonik);
 
         return $semuaGroup->first(
-            fn(AkunGroup $g) => $this->normalisasiNama($g->nama) === $target
+            fn (AkunGroup $g) => $this->normalisasiNama($g->nama) === $target
         );
     }
 
@@ -90,7 +148,7 @@ class ListAkunGroups extends ListRecords
      */
     private function cariAtauBuatParent($semuaGroup, string $namaParentKey): array
     {
-        $def      = self::PARENT_GROUPS[$namaParentKey];
+        $def = self::PARENT_GROUPS[$namaParentKey];
         $existing = $this->cariDiCollection($semuaGroup, $namaParentKey);
 
         if ($existing) {
@@ -98,11 +156,12 @@ class ListAkunGroups extends ListRecords
         }
 
         $baru = AkunGroup::create([
-            'nama'      => $namaParentKey,
+            'nama' => $namaParentKey,
             'parent_id' => null,
-            'tipe'      => null,
-            'order'     => $def['order'],
-            'hidden'    => false,
+            'tipe' => null,
+            'kategori_arus_kas' => null,
+            'order' => $def['order'],
+            'hidden' => false,
         ]);
 
         return [$baru, true];
@@ -112,8 +171,8 @@ class ListAkunGroups extends ListRecords
      * Cari atau buat grup LEAF (tempat Anak Akun didaftarkan). Kalau grup
      * sudah ada tapi parent_id-nya masih kosong sementara definisi kita
      * mengharuskan ada parent, parent_id akan DIISI (bukan ditimpa) —
-     * supaya grup yang kepalang dibuat root (seperti kasus PENDAPATAN
-     * PENJUALAN/BEBAN/HPP sebelumnya) otomatis ikut kekoneksi ke LABA RUGI.
+     * supaya grup yang kepalang dibuat root otomatis ikut kekoneksi ke
+     * parent seharusnya.
      * Kalau parent_id sudah terisi dengan grup LAIN (bukan yang kita
      * harapkan), TIDAK disentuh — dianggap itu pengaturan manual yang
      * sengaja dan wajib dihormati.
@@ -137,114 +196,174 @@ class ListAkunGroups extends ListRecords
         }
 
         $baru = AkunGroup::create([
-            'nama'      => $def['nama'],
+            'nama' => $def['nama'],
             'parent_id' => $parentGroup?->id,
-            'tipe'      => $def['tipe'],
-            'order'     => $def['order'],
-            'hidden'    => false,
+            'tipe' => $def['tipe'],
+            'kategori_arus_kas' => $def['kategori_arus_kas'] ?? null,
+            'order' => $def['order'],
+            'hidden' => $def['hidden'] ?? false,
         ]);
 
         return [$baru, true, false];
     }
 
     /**
+     * Cari atau buat grup ARUS KAS EKSPLISIT (kurasi manual, tanpa parent).
+     * Sama polanya dengan cariAtauBuatLeaf, tapi definisinya lebih
+     * sederhana (tidak butuh tipe/parent) karena grup ini murni bantu
+     * Arus Kas, bukan bagian dari struktur Neraca/Laba Rugi.
+     *
+     * Mengembalikan [AkunGroup $group, bool $baruDibuat].
+     */
+    private function cariAtauBuatEksplisit($semuaGroup, string $nama, array $def): array
+    {
+        $existing = $this->cariDiCollection($semuaGroup, $nama);
+
+        if ($existing) {
+            return [$existing, false];
+        }
+
+        $baru = AkunGroup::create([
+            'nama' => $nama,
+            'parent_id' => null,
+            'tipe' => null,
+            'kategori_arus_kas' => $def['kategori_arus_kas'],
+            'order' => $def['order'],
+            'hidden' => true,
+        ]);
+
+        return [$baru, true];
+    }
+
+    /**
      * Logika sinkronisasi otomatis Anak Akun ke Akun Group.
      *
-     * PERUBAHAN: sebelumnya sinkron dilakukan per Sub Anak Akun via tabel
-     * pivot akun_group_sub_anak_akun. Tabel itu sudah di-drop dan datanya
-     * dipindahkan ke akun_group_anak_akun. Method ini sekarang bekerja
-     * di level Anak Akun, konsisten dengan struktur relasi yang aktif.
+     * Dua mekanisme dijalankan berurutan:
+     *  1. Berbasis PREFIX (TARGET_GROUPS) — untuk grup yang anggotanya
+     *     memang "semua akun di bawah prefix induk akun X".
+     *  2. Berbasis KODE EKSPLISIT (EXPLICIT_ARUS_KAS_GROUPS) — untuk grup
+     *     bantu Arus Kas yang isinya kurasi manual, tidak bisa ditangkap
+     *     aturan prefix.
      */
     protected function syncAnakAkunToGroup(): void
     {
-        // Tarik semua grup — dipakai untuk pencarian case/spasi-insensitive
-        // tanpa query berulang di dalam loop. Di-refresh manual tiap kali
-        // ada create supaya pencarian berikutnya (mis. prefix '3' mencari
-        // 'PASIVA' yang baru dibuat oleh prefix '2') tetap melihat data terbaru.
         $semuaGroup = AkunGroup::all();
 
-        // 1. Pastikan grup ROOT (AKTIVA, LABA RUGI) tersedia lebih dulu.
-        $parentCache      = []; // key PARENT_GROUPS => AkunGroup
-        $grupBaruDibuat   = []; // nama grup (root maupun leaf) yang baru dibuat
-        $parentDiperbaiki = []; // nama grup leaf yang parent_id-nya baru diisi
+        $parentCache = [];
+        $grupBaruDibuat = [];
+        $parentDiperbaiki = [];
+        $syncedCount = 0;
 
+        // ══════════════════════════════════════════════════════════
+        // BAGIAN 1 — Sinkronisasi berbasis PREFIX
+        // ══════════════════════════════════════════════════════════
+
+        // 1a. Pastikan grup ROOT (AKTIVA, LABA RUGI) tersedia lebih dulu.
         foreach (self::PARENT_GROUPS as $key => $def) {
             [$group, $baru] = $this->cariAtauBuatParent($semuaGroup, $key);
             $parentCache[$key] = $group;
 
             if ($baru) {
                 $grupBaruDibuat[] = $key;
-                $semuaGroup = AkunGroup::all(); // refresh supaya leaf berikutnya melihat parent baru ini
-            }
-        }
-
-        // 2. Siapkan cache grup LEAF: cari yang sudah ada (case/spasi-
-        //    insensitive), atau buat baru, atau perbaiki parent_id-nya
-        //    kalau sebelumnya kosong. Beberapa prefix (2 & 3) sengaja
-        //    menunjuk ke grup leaf yang sama ("PASIVA"), jadi kita cache
-        //    per-nama supaya tidak dibuat/diproses dobel.
-        $leafCache = []; // nama_kanonik => AkunGroup
-
-        foreach (self::TARGET_GROUPS as $prefix => $def) {
-            if (isset($leafCache[$def['nama']])) {
-                continue;
-            }
-
-            $parentGroup = $def['parent'] ? ($parentCache[$def['parent']] ?? null) : null;
-
-            [$group, $baru, $diperbaiki] = $this->cariAtauBuatLeaf($semuaGroup, $def, $parentGroup);
-            $leafCache[$def['nama']] = $group;
-
-            if ($baru) {
-                $grupBaruDibuat[] = $def['nama'];
                 $semuaGroup = AkunGroup::all();
             }
-            if ($diperbaiki) {
-                $parentDiperbaiki[] = $def['nama'];
+        }
+
+        // 1b. Siapkan cache grup LEAF berbasis prefix.
+        $leafCache = []; // nama_kanonik => AkunGroup
+
+        foreach (self::TARGET_GROUPS as $prefix => $daftarDef) {
+            foreach ($daftarDef as $def) {
+                if (isset($leafCache[$def['nama']])) {
+                    continue;
+                }
+
+                $parentGroup = $def['parent'] ? ($parentCache[$def['parent']] ?? null) : null;
+
+                [$group, $baru, $diperbaiki] = $this->cariAtauBuatLeaf($semuaGroup, $def, $parentGroup);
+                $leafCache[$def['nama']] = $group;
+
+                if ($baru) {
+                    $grupBaruDibuat[] = $def['nama'];
+                    $semuaGroup = AkunGroup::all();
+                }
+                if ($diperbaiki) {
+                    $parentDiperbaiki[] = $def['nama'];
+                }
             }
         }
 
-        // 3. Tarik semua Anak Akun beserta relasi induknya untuk mendapatkan kode induk akun
+        // 1c. Sync tiap Anak Akun ke grup berbasis prefix yang cocok.
         $anakAkuns = AnakAkun::with('indukAkun')->get();
 
-        $syncedCount = 0;
-
         foreach ($anakAkuns as $anakAkun) {
-            // Abaikan jika relasi ke induk tidak valid
             if (! $anakAkun->indukAkun) {
                 continue;
             }
 
-            // Ambil awalan/digit pertama dari kode induk akun (misal: '1' dari '1578.00')
             $kodeInduk = (string) $anakAkun->indukAkun->kode_induk_akun;
-            $prefix    = substr($kodeInduk, 0, 1);
+            $prefix = substr($kodeInduk, 0, 1);
 
-            $def = self::TARGET_GROUPS[$prefix] ?? null;
-            if (! $def) {
+            $daftarDef = self::TARGET_GROUPS[$prefix] ?? [];
+            if (empty($daftarDef)) {
                 continue;
             }
 
-            $targetGroup = $leafCache[$def['nama']] ?? null;
-            if (! $targetGroup) {
-                continue;
-            }
+            foreach ($daftarDef as $def) {
+                $targetGroup = $leafCache[$def['nama']] ?? null;
+                if (! $targetGroup) {
+                    continue;
+                }
 
-            // syncWithoutDetaching berfungsi untuk mengaitkan data ke pivot
-            // tanpa menghapus data lama dan otomatis mencegah duplikasi.
-            $result = $targetGroup->anakAkuns()->syncWithoutDetaching([$anakAkun->id]);
+                $result = $targetGroup->anakAkuns()->syncWithoutDetaching([$anakAkun->id]);
 
-            // Menghitung hanya data yang baru saja berhasil ditambahkan (bukan yang sudah ada sebelumnya)
-            if (! empty($result['attached'])) {
-                $syncedCount++;
+                if (! empty($result['attached'])) {
+                    $syncedCount++;
+                }
             }
         }
 
-        // 4. Tampilkan notifikasi keberhasilan
-        $bodyLines = ["Berhasil mensinkronkan <strong>{$syncedCount}</strong> Anak Akun baru ke Akun Group."];
+        // ══════════════════════════════════════════════════════════
+        // BAGIAN 2 — Sinkronisasi berbasis KODE EKSPLISIT (kurasi manual)
+        // ══════════════════════════════════════════════════════════
+
+        // Peta kode_anak_akun => id, sekali tarik, dipakai untuk semua grup eksplisit.
+        $anakAkunByKode = AnakAkun::pluck('id', 'kode_anak_akun');
+
+        foreach (self::EXPLICIT_ARUS_KAS_GROUPS as $nama => $def) {
+            [$group, $baru] = $this->cariAtauBuatEksplisit($semuaGroup, $nama, $def);
+
+            if ($baru) {
+                $grupBaruDibuat[] = $nama;
+                $semuaGroup = AkunGroup::all();
+            }
+
+            $idUntukDisync = collect($def['kode_anak_akun'])
+                ->map(fn ($kode) => $anakAkunByKode[$kode] ?? null)
+                ->filter()
+                ->values()
+                ->all();
+
+            if (empty($idUntukDisync)) {
+                continue;
+            }
+
+            $result = $group->anakAkuns()->syncWithoutDetaching($idUntukDisync);
+
+            if (! empty($result['attached'])) {
+                $syncedCount += count($result['attached']);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 3. Notifikasi hasil
+        // ══════════════════════════════════════════════════════════
+
+        $bodyLines = ["Berhasil mensinkronkan <strong>{$syncedCount}</strong> pendaftaran Anak Akun baru ke Akun Group (struktural + arus kas)."];
 
         if (! empty($grupBaruDibuat)) {
             $daftarGrupBaru = implode(', ', array_unique($grupBaruDibuat));
-            $bodyLines[] = "Grup baru otomatis dibuat: <strong>{$daftarGrupBaru}</strong>. Silakan cek dan sesuaikan Tipe/Urutan-nya jika diperlukan.";
+            $bodyLines[] = "Grup baru otomatis dibuat: <strong>{$daftarGrupBaru}</strong>. Silakan cek dan sesuaikan Tipe/Kategori Arus Kas/Urutan-nya jika diperlukan.";
         }
 
         if (! empty($parentDiperbaiki)) {

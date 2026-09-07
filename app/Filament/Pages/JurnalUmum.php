@@ -20,6 +20,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Support\Enums\Width;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -107,6 +108,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public array $selectedIds = [];
 
     public bool $selectAll = false;
+
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     public function mount(): void
     {

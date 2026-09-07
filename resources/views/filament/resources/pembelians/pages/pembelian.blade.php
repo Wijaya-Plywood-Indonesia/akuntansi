@@ -6,6 +6,9 @@
                 biayaLain: @entangle('biaya_lain'),
                 ppnPersen: @entangle('ppn_persen'),
                 bayar: @entangle('payment_amount'),
+                bayarTunai: @entangle('payment_amount_tunai'),
+                bayarTransfer: @entangle('payment_amount_transfer'),
+                jenisPembayaran: @entangle('jenis_pembayaran'),
                 nomorNota: @entangle('nomor_nota'),
                 tanggal: @entangle('tanggal'),
                 supplierId: @entangle('supplier_id'),
@@ -40,13 +43,20 @@
                     );
                 },
 
+                get totalDibayarSekarang() {
+                    if (this.paymentMethod === 'tunai_transfer') {
+                        return (parseFloat(this.bayarTunai) || 0) + (parseFloat(this.bayarTransfer) || 0);
+                    }
+                    return parseFloat(this.bayar) || 0;
+                },
+
                 get sisaBayar() {
                     if (this.grandTotal <= 0) return 0;
-                    return Math.round(this.grandTotal) - Math.round(parseFloat(this.bayar) || 0);
+                    return Math.round(this.grandTotal) - Math.round(this.totalDibayarSekarang);
                 },
 
                 get statusBayar() {
-                    let b = parseFloat(this.bayar) || 0;
+                    let b = this.totalDibayarSekarang;
                     if (b <= 0 || this.grandTotal <= 0) return 'none';
                     if (this.sisaBayar > 0)  return 'kurang';
                     if (this.sisaBayar < 0)  return 'kembalian';
@@ -64,6 +74,11 @@
                 },
 
                 setBayarPas() {
+                    if (this.paymentMethod === 'tunai_transfer') {
+                        this.bayarTunai = this.grandTotal;
+                        this.bayarTransfer = 0;
+                        return;
+                    }
                     this.bayar = this.grandTotal;
                 },
 
@@ -86,6 +101,9 @@
                         payment_method: this.paymentMethod,
                         rekening_perusahaan_id: this.rekeningPerusahaanId,
                         payment_amount: this.bayar,
+                        payment_amount_tunai: this.bayarTunai,
+                        payment_amount_transfer: this.bayarTransfer,
+                        jenis_pembayaran: this.jenisPembayaran,
                         tanggal_bayar: this.tanggalBayar,
                         payment_reference: this.paymentReference,
                         payment_catatan: this.paymentCatatan
@@ -642,8 +660,9 @@
                                         <div class="relative flex items-center">
                                             <input type="text"
                                                 inputmode="numeric"
-                                                x-model="ppnPersen"
+                                                :value="ppnPersen"
                                                 @input="ppnPersen = $event.target.value.replace(/\D/g, '')"
+                                                @focus="$event.target.select()"
                                                 class="w-36 pl-2.5 pr-7 py-1 text-right font-black text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none" />
                                             <span class="absolute right-2.5 text-[10px] font-bold text-gray-400 pointer-events-none">%</span>
                                         </div>
@@ -700,24 +719,73 @@
 
                                 {{-- Kasir / Pembayaran Section --}}
                                 <div class="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                                    <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5 ml-1">
-                                        <x-heroicon-o-banknotes class="w-4 h-4 text-primary-500" /> Metode Pembayaran
-                                    </h3>
 
-                                    <div class="grid grid-cols-2 gap-1 p-1 bg-gray-100/50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                        @foreach(\App\Models\PembelianMetodePembayaran::labelMetode() as $val => $label)
-                                        <button type="button"
-                                            @click="paymentMethod = '{{ $val }}'"
-                                            :class="paymentMethod === '{{ $val }}'
-                                                    ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600 font-black'
-                                                    : 'text-gray-500'"
-                                            class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all text-center">
-                                            {{ $label }}
-                                        </button>
+                                    {{-- JENIS PEMBAYARAN: NORMAL vs BAYAR DIMUKA --}}
+                                    <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5 ml-1">
+                                        <x-heroicon-o-truck class="w-4 h-4 text-primary-500" /> Jenis Pembayaran
+                                    </h3>
+                                    <div class="grid grid-cols-3 gap-1 p-1 bg-gray-100/50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                        @foreach(\App\Models\Pembelian::labelJenisPembayaran() as $val => $label)
+                                            <button type="button"
+                                                @click="jenisPembayaran = '{{ $val }}'"
+                                                :class="jenisPembayaran === '{{ $val }}'
+                                                        ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600 font-black'
+                                                        : 'text-gray-500'"
+                                                class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all text-center">
+                                                {{ $label }}
+                                            </button>
                                         @endforeach
                                     </div>
 
-                                    @if($payment_method === \App\Models\PembelianMetodePembayaran::METODE_TRANSFER)
+                                    <p class="text-[10px] text-gray-400 leading-relaxed ml-1"
+                                        x-show="jenisPembayaran === 'BAYAR_DIMUKA'" x-cloak>
+                                        Barang belum diterima — wajib dibayar <strong>lunas penuh sekarang</strong>.
+                                        Persediaan baru diakui nanti lewat menu <strong>Kedatangan Barang</strong>.
+                                    </p>
+                                    <p class="text-[10px] text-gray-400 leading-relaxed ml-1"
+                                        x-show="jenisPembayaran === 'NORMAL'" x-cloak>
+                                        Barang &amp; Hutang Usaha diakui penuh sekarang. Nominal bayar di bawah ini
+                                        opsional (boleh 0 = full hutang).
+                                    </p>
+                                    <p class="text-[10px] text-gray-400 leading-relaxed ml-1"
+                                        x-show="jenisPembayaran === 'DP'" x-cloak>
+                                        Uang muka DP tahap pertama, wajib diisi (boleh belum lunas). Sisa boleh
+                                        dicicil lagi lewat menu <strong>Kedatangan Barang &rarr; Tambah DP</strong>.
+                                        Barang &amp; pelunasan sisa diakui bersamaan saat barang datang.
+                                    </p>
+
+                                    <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5 ml-1 pt-2">
+                                        <x-heroicon-o-banknotes class="w-4 h-4 text-primary-500" /> Metode Pembayaran
+                                    </h3>
+
+                                    <div class="grid grid-cols-3 gap-1 p-1 bg-gray-100/50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                        <button type="button"
+                                            @click="paymentMethod = '{{ \App\Models\PembelianMetodePembayaran::METODE_TUNAI }}'"
+                                            :class="paymentMethod === '{{ \App\Models\PembelianMetodePembayaran::METODE_TUNAI }}'
+                                                    ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600 font-black'
+                                                    : 'text-gray-500'"
+                                            class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all text-center">
+                                            Tunai
+                                        </button>
+                                        <button type="button"
+                                            @click="paymentMethod = '{{ \App\Models\PembelianMetodePembayaran::METODE_TRANSFER }}'"
+                                            :class="paymentMethod === '{{ \App\Models\PembelianMetodePembayaran::METODE_TRANSFER }}'
+                                                    ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600 font-black'
+                                                    : 'text-gray-500'"
+                                            class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all text-center">
+                                            Transfer
+                                        </button>
+                                        <button type="button"
+                                            @click="paymentMethod = 'tunai_transfer'"
+                                            :class="paymentMethod === 'tunai_transfer'
+                                                    ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600 font-black'
+                                                    : 'text-gray-500'"
+                                            class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all text-center">
+                                            Tunai & Transfer
+                                        </button>
+                                    </div>
+
+                                    @if(in_array($payment_method, [\App\Models\PembelianMetodePembayaran::METODE_TRANSFER, 'tunai_transfer']))
                                     <div class="flex flex-col gap-1.5">
                                         <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Rekening Tujuan</label>
                                         <select wire:model.live="rekening_perusahaan_id"
@@ -745,7 +813,9 @@
                                         </div>
                                     </div>
 
-                                    <div class="space-y-1.5 bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800"
+                                    {{-- NOMINAL BAYAR: single (Tunai/Transfer) --}}
+                                    <div x-show="paymentMethod !== 'tunai_transfer'" x-cloak
+                                        class="space-y-1.5 bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800"
                                         x-data="{
                                              bayarInput: format(bayar),
                                              init() {
@@ -756,7 +826,8 @@
                                          }">
 
                                         <div class="flex justify-between items-center">
-                                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1">Nominal Bayar</label>
+                                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1"
+                                                x-text="jenisPembayaran === 'BAYAR_DIMUKA' ? 'Nominal Dibayar Dimuka (Wajib Lunas)' : (jenisPembayaran === 'DP' ? 'Nominal DP Tahap 1 (Boleh Belum Lunas)' : 'Nominal Bayar (Opsional)')"></label>
                                             <button type="button" @click="setBayarPas()" class="text-[9px] font-bold text-primary-600 hover:underline uppercase tracking-wide">Bayar Pas</button>
                                         </div>
                                         <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
@@ -775,7 +846,61 @@
 
                                         <div class="pt-0.5 flex justify-between items-center" x-show="grandTotal > 0">
                                             <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
-                                                x-text="sisaBayar > 0 ? 'Kurang Bayar' : (sisaBayar < 0 ? 'Kembalian' : 'Pas')">
+                                                x-text="sisaBayar > 0 ? (jenisPembayaran === 'BAYAR_DIMUKA' ? 'Kurang (wajib lunas)' : 'Sisa Hutang') : (sisaBayar < 0 ? 'Kembalian' : 'Pas')">
+                                            </span>
+                                            <span class="text-base lg:text-lg font-bold"
+                                                :class="sisaBayar > 0 ? 'text-red-500' : (sisaBayar < 0 ? 'text-green-500' : 'text-primary-600')"
+                                                x-text="fmt(Math.abs(sisaBayar))">
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {{-- NOMINAL BAYAR: split Tunai & Transfer --}}
+                                    <div x-show="paymentMethod === 'tunai_transfer'" x-cloak
+                                        class="space-y-3 bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800"
+                                        x-data="{
+                                             tunaiInput: format(bayarTunai),
+                                             transferInput: format(bayarTransfer),
+                                             init() {
+                                                 this.$watch('bayarTunai', v => { this.tunaiInput = format(v); });
+                                                 this.$watch('bayarTransfer', v => { this.transferInput = format(v); });
+                                             }
+                                         }">
+                                        <div class="flex justify-between items-center">
+                                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1">Nominal Split</label>
+                                            <button type="button" @click="setBayarPas()" class="text-[9px] font-bold text-primary-600 hover:underline uppercase tracking-wide">Bayar Pas (Tunai)</button>
+                                        </div>
+                                        <div class="flex flex-wrap gap-3">
+                                            <div class="flex-1 min-w-[120px] space-y-1">
+                                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Tunai</label>
+                                                <div class="flex items-center gap-1 border-b border-primary-500 pb-0.5">
+                                                    <span class="text-xs font-bold text-primary-600">Rp</span>
+                                                    <input type="text" x-model="tunaiInput"
+                                                        @input="
+                                                            let raw = $event.target.value.replace(/\D/g, '');
+                                                            bayarTunai = raw ? parseInt(raw) : 0;
+                                                            tunaiInput = format(bayarTunai);
+                                                        "
+                                                        class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white" />
+                                                </div>
+                                            </div>
+                                            <div class="flex-1 min-w-[120px] space-y-1">
+                                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Transfer</label>
+                                                <div class="flex items-center gap-1 border-b border-primary-500 pb-0.5">
+                                                    <span class="text-xs font-bold text-primary-600">Rp</span>
+                                                    <input type="text" x-model="transferInput"
+                                                        @input="
+                                                            let raw = $event.target.value.replace(/\D/g, '');
+                                                            bayarTransfer = raw ? parseInt(raw) : 0;
+                                                            transferInput = format(bayarTransfer);
+                                                        "
+                                                        class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="pt-0.5 flex justify-between items-center" x-show="grandTotal > 0">
+                                            <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
+                                                x-text="sisaBayar > 0 ? (jenisPembayaran === 'BAYAR_DIMUKA' ? 'Kurang (wajib lunas)' : 'Sisa Hutang') : (sisaBayar < 0 ? 'Kembalian' : 'Pas')">
                                             </span>
                                             <span class="text-base lg:text-lg font-bold"
                                                 :class="sisaBayar > 0 ? 'text-red-500' : (sisaBayar < 0 ? 'text-green-500' : 'text-primary-600')"
@@ -872,6 +997,9 @@
                             payment_method: component.$wire.payment_method,
                             rekening_perusahaan_id: component.$wire.rekening_perusahaan_id,
                             payment_amount: component.$wire.payment_amount,
+                            payment_amount_tunai: component.$wire.payment_amount_tunai,
+                            payment_amount_transfer: component.$wire.payment_amount_transfer,
+                            jenis_pembayaran: component.$wire.jenis_pembayaran,
                             tanggal_bayar: component.$wire.tanggal_bayar,
                             payment_reference: component.$wire.payment_reference,
                             payment_catatan: component.$wire.payment_catatan

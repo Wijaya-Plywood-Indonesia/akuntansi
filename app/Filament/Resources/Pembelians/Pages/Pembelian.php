@@ -41,6 +41,10 @@ class Pembelian extends Page
     public $items = [];
     public $status;
 
+    // BARU: skema transaksi — NORMAL (bayar dibelakang) / BAYAR_DIMUKA.
+    // DP sengaja belum ditampilkan sebagai opsi (belum didukung penuh).
+    public string $jenis_pembayaran = ModelsPembelian::JENIS_NORMAL;
+
     public string $search        = '';
     public array  $searchResults = [];
     public bool   $showDropdown  = false;
@@ -49,14 +53,25 @@ class Pembelian extends Page
     public $total_diskon = null;
 
     // Pajak PPN
-    public $ppn_persen   = 11; // Menyimpan persentase PPN default 11%
+    public $ppn_persen   = 0; // Default 0, kasir isi manual kalau ada PPN
     public $total_ppn    = null; // Menyimpan nominal pajak dalam rupiah
 
     public $ongkir       = null;
     public $biaya_lain   = null;
 
+    // DISEDERHANAKAN: dulu ada TUNAI/TRANSFER/CICILAN/DP dicampur jadi 1
+    // field. Sekarang payment_method CUMA soal "lewat apa" (cara bayar),
+    // bukan lagi soal "skema transaksi" (itu tugas $jenis_pembayaran di
+    // atas). CICILAN & LAINNYA (DP) tidak lagi jadi pilihan di sini — Cicilan
+    // dianggap sama dengan NORMAL (hutang dilunasi belakangan, boleh
+    // bertahap lewat menu Pelunasan Hutang terpisah), dan DP dipisah jadi
+    // $jenis_pembayaran sendiri (belum diaktifkan).
+    const METODE_TUNAI_TRANSFER = 'tunai_transfer';
+
     public $payment_method    = PembelianMetodePembayaran::METODE_TUNAI;
-    public $payment_amount    = null;
+    public $payment_amount    = null; // dipakai untuk TUNAI / TRANSFER (single)
+    public $payment_amount_tunai    = null; // dipakai kalau split
+    public $payment_amount_transfer = null; // dipakai kalau split
     public $tanggal_bayar;
     public $payment_reference = '';
     public $payment_catatan   = '';
@@ -71,6 +86,16 @@ class Pembelian extends Page
         $this->created_by_name = auth()->user()->name ?? 'User';
         $this->tanggal         = now()->format('Y-m-d');
         $this->tanggal_bayar   = now()->format('Y-m-d');
+    }
+
+    public function updatedJenisPembayaran(): void
+    {
+        // Reset input pembayaran tiap ganti skema, biar tidak nyangkut nilai
+        // lama yang sudah tidak relevan (mis. pindah dari BAYAR_DIMUKA ke
+        // NORMAL, payment_amount lama dari skema sebelumnya dibersihkan).
+        $this->payment_amount = null;
+        $this->payment_amount_tunai = null;
+        $this->payment_amount_transfer = null;
     }
 
     public function updatedSearch(): void
@@ -200,7 +225,10 @@ class Pembelian extends Page
 
     public function updatedPaymentMethod(): void
     {
-        if ($this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER) {
+        if (in_array($this->payment_method, [
+            PembelianMetodePembayaran::METODE_TRANSFER,
+            self::METODE_TUNAI_TRANSFER,
+        ], true)) {
             $this->rekeningPerusahaan = RekeningPerusahaan::all();
         } else {
             $this->rekeningPerusahaan = [];
@@ -299,7 +327,6 @@ class Pembelian extends Page
 
         $this->sub_total = $total;
 
-        // Kalkulasi nominal rupiah PPN secara real-time berdasarkan subtotal di backend
         $this->total_ppn = round(($this->sub_total * ($this->parseNumber($this->ppn_persen))) / 100);
     }
 
@@ -323,6 +350,13 @@ class Pembelian extends Page
     public function setBayarPas(): void
     {
         $grand = $this->grandTotal();
+
+        if ($this->payment_method === self::METODE_TUNAI_TRANSFER) {
+            $this->payment_amount_tunai = $grand > 0 ? $grand : null;
+            $this->payment_amount_transfer = null;
+            return;
+        }
+
         $this->payment_amount = $grand > 0 ? $grand : null;
     }
 
@@ -360,6 +394,19 @@ class Pembelian extends Page
         return (float) ($str ?: 0);
     }
 
+    /**
+     * Total yang mau dibayar SEKARANG, apapun payment_method-nya (single
+     * atau split tunai+transfer).
+     */
+    private function totalDibayarSekarang(): float
+    {
+        if ($this->payment_method === self::METODE_TUNAI_TRANSFER) {
+            return $this->parseNumber($this->payment_amount_tunai) + $this->parseNumber($this->payment_amount_transfer);
+        }
+
+        return $this->parseNumber($this->payment_amount);
+    }
+
     public function simpan(): void
     {
         $this->recalculateSubTotal();
@@ -370,7 +417,7 @@ class Pembelian extends Page
                 'tanggal'              => 'required|date',
                 'supplier_id'          => 'required_unless:is_new_supplier,true',
                 'supplier_name'        => 'required_if:is_new_supplier,true',
-                // 'status_barang'        => 'required|in:belum_datang,sebagian_datang,sudah_datang', // TODO: fitur status kedatangan barang belum dilanjutkan (property, field, & kolom DB belum ada)
+                'jenis_pembayaran'     => 'required|in:'.ModelsPembelian::JENIS_NORMAL.','.ModelsPembelian::JENIS_BAYAR_DIMUKA.','.ModelsPembelian::JENIS_DP,
                 'items'                => 'required|array|min:1',
                 'items.*.barang_id'    => 'required',
                 'items.*.qty'          => 'required|numeric|min:0.01',
@@ -382,7 +429,7 @@ class Pembelian extends Page
                 'tanggal.required'            => 'Tanggal pembelian wajib diisi.',
                 'supplier_id.required_unless' => 'Silakan pilih supplier atau tambah supplier baru.',
                 'supplier_name.required_if'   => 'Nama supplier baru wajib diisi.',
-                // 'status_barang.required' => 'Status kedatangan barang wajib dipilih.', // TODO: nonaktif bersamaan dengan rule di atas
+                'jenis_pembayaran.in'         => 'Jenis pembayaran tidak dikenali.',
                 'items.required'              => 'Keranjang pembelian minimal harus berisi 1 barang.',
                 'items.min'                   => 'Keranjang pembelian minimal harus berisi 1 barang.',
                 'items.*.qty.required'        => 'Qty barang harus diisi.',
@@ -400,12 +447,13 @@ class Pembelian extends Page
         }
 
         $grand   = $this->grandTotal();
-        $dibayar = $this->parseNumber($this->payment_amount);
+        $dibayar = $this->totalDibayarSekarang();
 
-        if ($this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER
-            && $dibayar > 0
-            && empty($this->rekening_perusahaan_id)
-        ) {
+        // Validasi rekening kalau ada porsi transfer.
+        $butuhRekening = ($this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER && $dibayar > 0)
+            || ($this->payment_method === self::METODE_TUNAI_TRANSFER && $this->parseNumber($this->payment_amount_transfer) > 0);
+
+        if ($butuhRekening && empty($this->rekening_perusahaan_id)) {
             Notification::make()
                 ->title('Rekening Belum Dipilih')
                 ->body('Silakan pilih rekening perusahaan tujuan transfer.')
@@ -414,11 +462,52 @@ class Pembelian extends Page
             return;
         }
 
-        if (($this->payment_method === PembelianMetodePembayaran::METODE_TUNAI || $this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER) && $grand > 0) {
+        /*
+         * Validasi nominal per JENIS PEMBAYARAN (bukan lagi per payment_method):
+         * - NORMAL       : pembayaran sekarang OPSIONAL (boleh 0, boleh
+         *                  sebagian, boleh lunas — semua diakui sebagai
+         *                  pelunasan instan atas Hutang Usaha yang penuh).
+         * - BAYAR_DIMUKA : WAJIB dibayar LUNAS PENUH sekarang (karena barang
+         *                  belum ada, ini murni uang muka).
+         * - DP           : WAJIB ada nominal DP tahap pertama (>0), TAPI
+         *                  boleh belum lunas (sisa & cicilan DP berikutnya
+         *                  menyusul lewat menu "Kedatangan Barang" -> "Tambah
+         *                  DP"), dan tidak boleh melebihi grand_total.
+         */
+        if ($this->jenis_pembayaran === ModelsPembelian::JENIS_BAYAR_DIMUKA) {
             if ($dibayar < $grand) {
                 Notification::make()
                     ->title('Pembayaran Kurang')
-                    ->body('Untuk metode pembayaran ' . ($this->payment_method === PembelianMetodePembayaran::METODE_TUNAI ? 'Tunai' : 'Transfer Bank') . ', nominal pembayaran harus lunas. Silakan gunakan metode Cicilan atau Down Payment (DP) jika ingin membayar sebagian.')
+                    ->body('Bayar Dimuka wajib dibayar LUNAS PENUH sekarang (Rp '.number_format($grand).'), karena barang belum diterima.')
+                    ->danger()
+                    ->send();
+                return;
+            }
+
+            if ($dibayar <= 0) {
+                Notification::make()
+                    ->title('Nominal Bayar Dimuka Kosong')
+                    ->body('Bayar Dimuka wajib ada nominal yang dibayar.')
+                    ->danger()
+                    ->send();
+                return;
+            }
+        }
+
+        if ($this->jenis_pembayaran === ModelsPembelian::JENIS_DP) {
+            if ($dibayar <= 0) {
+                Notification::make()
+                    ->title('Nominal DP Kosong')
+                    ->body('DP tahap pertama wajib diisi (lebih dari 0). Sisa boleh dicicil lagi nanti lewat menu Kedatangan Barang.')
+                    ->danger()
+                    ->send();
+                return;
+            }
+
+            if ($dibayar > $grand) {
+                Notification::make()
+                    ->title('Nominal DP Melebihi Total')
+                    ->body('Nominal DP tidak boleh lebih besar dari grand total (Rp '.number_format($grand).').')
                     ->danger()
                     ->send();
                 return;
@@ -442,14 +531,18 @@ class Pembelian extends Page
             foreach ($this->foto_nota as $foto) {
                 $paths[] = $foto->store('pembelian', 'public');
             }
-            // Buat instance sementara untuk menghitung status via method model,
-            // supaya logic TIDAK diduplikasi di Livewire (single source of truth).
-            $tempPembelian = new ModelsPembelian([
-                'grand_total' => $grand,
-            ]);
-            // totalSudahDibayar() butuh relasi tersimpan di DB, jadi untuk kasus baru
-            // (belum ada record), kita hitung manual dari $dibayar yang sudah kita tahu:
-            $this->status = ModelsPembelian::STATUS_LUNAS;
+
+            // Status pembayaran (draft/hutang/cicilan/lunas) dihitung dari
+            // apakah nominal yang dibayar SEKARANG menutupi grand_total —
+            // TIDAK terikat pada jenis_pembayaran (NORMAL yang belum dibayar
+            // sama sekali tetap sah, statusnya jadi 'hutang').
+            if ($dibayar <= 0) {
+                $this->status = ModelsPembelian::STATUS_HUTANG;
+            } elseif ($dibayar < $grand) {
+                $this->status = ModelsPembelian::STATUS_CICILAN;
+            } else {
+                $this->status = ModelsPembelian::STATUS_LUNAS;
+            }
 
             $pembelian = ModelsPembelian::create([
                 'nomor_nota'       => $this->nomor_nota,
@@ -460,12 +553,12 @@ class Pembelian extends Page
                 'supplier_phone'   => $this->supplier_phone,
                 'supplier_address' => $this->supplier_address,
                 'status'           => $this->status,
-                // 'status_barang'          => $this->status_barang, // TODO: nonaktif, fitur status kedatangan barang belum dilanjutkan
+                'jenis_pembayaran' => $this->jenis_pembayaran,
                 'catatan'          => $this->catatan,
                 'foto'             => !empty($paths) ? $paths : null,
                 'sub_total'        => $this->sub_total,
                 'total_diskon'     => $this->parseNumber($this->total_diskon),
-                'total_ppn'        => $this->parseNumber($this->total_ppn), // Tersimpan otomatis sebagai nominal rupiah hasil kalkulasi PPN persen
+                'total_ppn'        => $this->parseNumber($this->total_ppn),
                 'ongkir'           => $this->parseNumber($this->ongkir),
                 'biaya_lain'       => $this->parseNumber($this->biaya_lain),
                 'grand_total'      => $grand,
@@ -497,7 +590,39 @@ class Pembelian extends Page
                 DetailPembelian::insert($detailData);
             }
 
-            if ($dibayar > 0) {
+            // BARU: split Tunai + Transfer bikin 2 record pembayaran sekaligus
+            // (bukan 1 record dengan field bayar_tunai/bayar_transfer terpisah
+            // seperti di Penjualan) — memanfaatkan relasi hasMany yang memang
+            // sudah ada dari awal di Pembelian::metodePembayarans().
+            if ($this->payment_method === self::METODE_TUNAI_TRANSFER) {
+                $tunai = $this->parseNumber($this->payment_amount_tunai);
+                $transfer = $this->parseNumber($this->payment_amount_transfer);
+
+                if ($tunai > 0) {
+                    PembelianMetodePembayaran::create([
+                        'pembelian_id'   => $pembelian->id,
+                        'created_by'     => $this->created_by,
+                        'tanggal_bayar'  => $this->tanggal_bayar,
+                        'amount'         => $tunai,
+                        'payment_method' => PembelianMetodePembayaran::METODE_TUNAI,
+                        'reference_number' => $this->payment_reference,
+                        'catatan'        => $this->payment_catatan,
+                    ]);
+                }
+
+                if ($transfer > 0) {
+                    PembelianMetodePembayaran::create([
+                        'pembelian_id'   => $pembelian->id,
+                        'created_by'     => $this->created_by,
+                        'tanggal_bayar'  => $this->tanggal_bayar,
+                        'amount'         => $transfer,
+                        'payment_method' => PembelianMetodePembayaran::METODE_TRANSFER,
+                        'rekening_perusahaan_id' => $this->rekening_perusahaan_id,
+                        'reference_number' => $this->payment_reference,
+                        'catatan'        => $this->payment_catatan,
+                    ]);
+                }
+            } elseif ($dibayar > 0) {
                 PembelianMetodePembayaran::create([
                     'pembelian_id'            => $pembelian->id,
                     'created_by'              => $this->created_by,
@@ -548,8 +673,13 @@ class Pembelian extends Page
         $this->sub_total         = $state['sub_total'] ?? 0;
         $this->total_diskon      = $state['total_diskon'] ?? null;
 
-        // Membaca keadaan simpanan PPN
-        $this->ppn_persen        = $state['ppn_persen'] ?? 11;
+        $this->jenis_pembayaran  = in_array($state['jenis_pembayaran'] ?? null, [
+            ModelsPembelian::JENIS_NORMAL,
+            ModelsPembelian::JENIS_BAYAR_DIMUKA,
+            ModelsPembelian::JENIS_DP,
+        ], true) ? $state['jenis_pembayaran'] : ModelsPembelian::JENIS_NORMAL;
+
+        $this->ppn_persen        = $state['ppn_persen'] ?? 0;
         $this->total_ppn         = $state['total_ppn'] ?? null;
 
         $this->ongkir            = $state['ongkir'] ?? null;
@@ -558,16 +688,17 @@ class Pembelian extends Page
         $this->payment_method = in_array($restoredMethod, [
             PembelianMetodePembayaran::METODE_TUNAI,
             PembelianMetodePembayaran::METODE_TRANSFER,
-            PembelianMetodePembayaran::METODE_CICILAN,
-            PembelianMetodePembayaran::METODE_LAINNYA,
+            self::METODE_TUNAI_TRANSFER,
         ], true) ? $restoredMethod : PembelianMetodePembayaran::METODE_TUNAI;
         $this->payment_amount    = $state['payment_amount'] ?? null;
+        $this->payment_amount_tunai    = $state['payment_amount_tunai'] ?? null;
+        $this->payment_amount_transfer = $state['payment_amount_transfer'] ?? null;
         $this->tanggal_bayar     = $state['tanggal_bayar'] ?? now()->format('Y-m-d');
         $this->payment_reference = $state['payment_reference'] ?? '';
         $this->payment_catatan   = $state['payment_catatan'] ?? '';
 
         $this->rekening_perusahaan_id = $state['rekening_perusahaan_id'] ?? null;
-        if ($this->payment_method === PembelianMetodePembayaran::METODE_TRANSFER) {
+        if (in_array($this->payment_method, [PembelianMetodePembayaran::METODE_TRANSFER, self::METODE_TUNAI_TRANSFER], true)) {
             $this->rekeningPerusahaan = RekeningPerusahaan::all();
             if ($this->rekening_perusahaan_id) {
                 $this->selectedBank = RekeningPerusahaan::find($this->rekening_perusahaan_id);

@@ -30,13 +30,19 @@ class BukuKitabJurnalService
      * @param  string       $jenisPihak    Salah satu dari JurnalPembantuItem::JENIS_PIHAK
      * @param  string       $namaPihak     Nama customer/supplier/dst untuk item
      * @param  string|null  $keteranganDefault  Keterangan default kalau baris tidak punya keterangan sendiri
-     * @param  array<string, array<int, array{id_barang?: int|null, nama_barang?: string|null, banyak: float, harga: float, keterangan?: string|null}>>  $itemBreakdown
+     * @param  array<string, array<int, array{id_barang?: int|null, nama_barang?: string|null, banyak: float, harga: float, keterangan?: string|null, no_akun?: string|null, nama_akun?: string|null}>>  $itemBreakdown
      *         Rincian PER BARANG untuk variabel_nilai tertentu (mis. 'persediaan_barang_jadi', 'hpp').
      *         WAJIB isi 'banyak' (qty asli, mis. 3 lembar) dan 'harga' (harga
      *         SATUAN, bukan total) — nilai baris = banyak x harga. Ini penting
      *         karena pengurangan stok (Barang::getStokBukuBesarAttribute)
      *         dihitung dari kolom 'banyak', bukan dari nilai rupiah — kalau
      *         'banyak' selalu diisi 1, stok jadi salah hitung.
+     *         'no_akun'/'nama_akun' OPSIONAL: kalau diisi, MENGGANTIKAN akun
+     *         tetap dari template untuk baris barang itu — dipakai saat
+     *         barang-barang yang dibeli/dijual punya akun persediaan
+     *         BERBEDA-BEDA (bukan cuma id_barang beda tapi akun sama seperti
+     *         kasus triplek), jadi tidak perlu bikin 1 kode kitab per akun.
+     *         Kalau tidak diisi, tetap pakai akun dari baris template seperti biasa.
      *         Kalau suatu variabel_nilai ada di sini, baris jurnalnya dipecah jadi
      *         beberapa item (1 per barang) dengan id_barang masing-masing — PENTING
      *         supaya stok per produk (Barang::getStokBukuBesarAttribute) terhitung
@@ -147,14 +153,22 @@ class BukuKitabJurnalService
 
                         $ketItem = $b['keterangan'] ?? ($b['nama_barang'] ?? $baris->keterangan ?? $keteranganDefault ?? $kodeKitab);
 
+                        // Override akun per-barang kalau breakdown bawa no_akun
+                        // sendiri (mis. tiap barang punya akun persediaan beda-
+                        // beda, bukan cuma id_barang beda tapi akun sama). Kalau
+                        // tidak dikirim, fallback ke akun tetap dari template
+                        // seperti biasa.
+                        $noAkunDipakai = $b['no_akun'] ?? $baris->no_akun;
+                        $namaAkunDipakai = $b['nama_akun'] ?? $baris->nama_akun;
+
                         $headerBarang = JurnalPembantuHeader::create([
                             'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
                             'tgl_transaksi'      => $tglTransaksi,
                             'jenis_transaksi'    => $jenisTransaksi,
                             'modul_asal'         => $modulAsal,
                             'jurnal'             => $noJurnal,
-                            'no_akun'            => $baris->no_akun,
-                            'nama_akun'          => $baris->nama_akun,
+                            'no_akun'            => $noAkunDipakai,
+                            'nama_akun'          => $namaAkunDipakai,
                             'map'                => $baris->posisi,
                             'keterangan'         => "{$ketItem} | Nota: {$noDokumen}",
                             'no_dokumen'         => $noDokumen,

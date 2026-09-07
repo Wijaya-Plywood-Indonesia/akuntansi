@@ -15,6 +15,16 @@ class Pembelian extends Model
     const STATUS_LUNAS = 'lunas';
     const STATUS_BATAL = 'batal';
 
+    // Skema transaksi (beda dari 'status' di atas) — kapan barang datang vs
+    // kapan uang keluar. Dipilih di form "Tambah Pembelian".
+    const JENIS_NORMAL       = 'NORMAL';       // barang & hutang diakui penuh sekarang, dilunasi belakangan
+    const JENIS_BAYAR_DIMUKA = 'BAYAR_DIMUKA'; // uang dibayar penuh dulu, barang menyusul (menu Kedatangan Barang)
+    const JENIS_DP           = 'DP';           // uang dibayar bertahap (boleh berkali-kali), barang + pelunasan sisa menyusul (menu Kedatangan Barang)
+
+    // Jenis pembayaran yang butuh konfirmasi "Kedatangan Barang" terpisah
+    // (karena barang belum ada di tangan saat uang keluar).
+    const JENIS_BUTUH_KONFIRMASI_BARANG = [self::JENIS_BAYAR_DIMUKA, self::JENIS_DP];
+
     protected $fillable = [
         'created_by',
         'validated_by',
@@ -34,12 +44,16 @@ class Pembelian extends Model
         'biaya_lain',
         'grand_total',
         'status',
+        'jenis_pembayaran',
+        'barang_diterima_at',
+        'barang_diterima_by',
         'catatan',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
         'tanggal_validasi' => 'datetime',
+        'barang_diterima_at' => 'datetime',
         'foto' => 'array',
         'sub_total' => 'decimal:2',
         'total_diskon' => 'decimal:2',
@@ -75,6 +89,15 @@ class Pembelian extends Model
         ];
     }
 
+    public static function labelJenisPembayaran(): array
+    {
+        return [
+            self::JENIS_NORMAL       => 'Normal (Bayar Dibelakang)',
+            self::JENIS_BAYAR_DIMUKA => 'Bayar Dimuka',
+            self::JENIS_DP           => 'Down Payment (DP)',
+        ];
+    }
+
     // ==================
     // Relationships
     // ==================
@@ -87,6 +110,11 @@ class Pembelian extends Model
     public function validatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'validated_by');
+    }
+
+    public function barangDiterimaBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'barang_diterima_by');
     }
 
     public function supplier(): BelongsTo
@@ -136,7 +164,50 @@ class Pembelian extends Model
 
     public function sisaTagihan(): float
     {
-        return (float) $this->grand_total - $this->totalSudahDibayar();
+        return max(0.0, (float) $this->grand_total - $this->totalSudahDibayar());
+    }
+
+    public function sudahDiterimaBarangnya(): bool
+    {
+        return ! is_null($this->barang_diterima_at);
+    }
+
+    /**
+     * BAYAR_DIMUKA/DP yang sudah divalidasi (jurnal awal sudah tercatat)
+     * tapi barangnya belum dikonfirmasi datang — inilah yang muncul di menu
+     * "Kedatangan Barang".
+     */
+    public function menungguKedatanganBarang(): bool
+    {
+        return in_array($this->jenis_pembayaran, self::JENIS_BUTUH_KONFIRMASI_BARANG, true)
+            && ! empty($this->validated_by)
+            && ! $this->sudahDiterimaBarangnya();
+    }
+
+    /**
+     * Khusus NORMAL: boleh bayar hutang belakangan (jatuh tempo) selama
+     * sudah divalidasi dan sisa tagihan masih > 0. Beda dari
+     * menungguKedatanganBarang() — barangnya SUDAH diakui dari awal, yang
+     * ditunggu di sini murni pelunasan uangnya.
+     */
+    public function bisaBayarHutang(): bool
+    {
+        return $this->jenis_pembayaran === self::JENIS_NORMAL
+            && ! empty($this->validated_by)
+            && $this->status !== self::STATUS_BATAL
+            && $this->sisaTagihan() > 0;
+    }
+
+    /**
+     * Khusus DP: boleh nambah cicilan DP lagi selama barang belum datang
+     * dan sisa tagihan masih > 0.
+     */
+    public function bisaTambahDp(): bool
+    {
+        return $this->jenis_pembayaran === self::JENIS_DP
+            && ! empty($this->validated_by)
+            && ! $this->sudahDiterimaBarangnya()
+            && $this->sisaTagihan() > 0;
     }
 
     public function hitungGrandTotal(
