@@ -199,11 +199,19 @@ class JurnalPembantuHeadersTable
                     ->action(function ($record) {
                         try {
                             DB::transaction(function () use ($record) {
+                                // FIX: tambah orderBy('map')->orderBy('id') supaya
+                                // urutan baris yang dikirim ke Jurnal Umum SELALU
+                                // dikelompokkan Debit dulu baru Kredit (d,d,d,k,k,k),
+                                // bukan ikut urutan "natural" DB yang tidak dijamin
+                                // konsisten. 'map' bernilai 'd'/'k' (huruf kecil),
+                                // dan 'd' < 'k' secara alfabetis jadi cukup orderBy biasa.
                                 $headers = JurnalPembantuHeader::query()
                                     ->with([
                                         'items' => fn($q) => $q->where('status', true)
                                     ])
                                     ->where('jurnal', $record->jurnal)
+                                    ->orderBy('map')
+                                    ->orderBy('id')
                                     ->lockForUpdate()
                                     ->get();
 
@@ -404,12 +412,17 @@ class JurnalPembantuHeadersTable
                     ->action(function ($record) {
                         try {
                             DB::transaction(function () use ($record) {
+                                // FIX: sama seperti action "posting" di atas — urutkan
+                                // Debit dulu baru Kredit supaya jurnal balik yang
+                                // dihasilkan juga konsisten urutannya.
                                 $headers = JurnalPembantuHeader::query()
                                     ->with([
                                         'items' => fn($q) => $q->where('status', true)
                                     ])
                                     ->where('jurnal', $record->jurnal)
                                     ->where('status', JurnalPembantuHeader::STATUS_DIPOSTING)
+                                    ->orderBy('map')
+                                    ->orderBy('id')
                                     ->lockForUpdate()
                                     ->get();
 
@@ -440,6 +453,11 @@ class JurnalPembantuHeadersTable
                                         'jurnal' => $nomorJurnalBaru,
                                         'no_akun' => $header->no_akun,
                                         'nama_akun' => $header->nama_akun,
+                                        // Jurnal balik SENGAJA membalik posisi D<->K, jadi
+                                        // kalau baris asli sudah D,D,K,K, hasil baliknya
+                                        // otomatis jadi K,K,D,D dalam urutan insert yang
+                                        // sama — TIDAK di-re-sort di sini, karena listing
+                                        // & posting toh sudah orderBy('map') sendiri.
                                         'map' => strtolower($header->map) === 'd' ? 'k' : 'd',
                                         'keterangan' => 'BALIK: ' . $header->keterangan,
                                         'no_dokumen' => $header->no_dokumen,
@@ -503,6 +521,21 @@ class JurnalPembantuHeadersTable
                     DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('created_at', 'desc');
+            // FIX: sebelumnya defaultSort('created_at', 'desc') — ini bikin
+            // baris yang dibuat BELAKANGAN (mis. baris K yang di-loop setelah
+            // baris D) tampil DI ATAS baris yang dibuat duluan, jadi dalam 1
+            // No. Jurnal urutannya kebalik/acak (K, K, D, D alih-alih D, D, K, K).
+            //
+            // Sekarang: urutkan per grup 'jurnal' (nomor jurnal terbaru di atas,
+            // supaya transaksi baru tetap gampang ditemukan), lalu DI DALAM
+            // grup jurnal yang sama, urutkan 'map' (d sebelum k, alfabetis)
+            // dan 'id' (stabil, sesuai urutan insert asli) sebagai tie-breaker.
+            ->modifyQueryUsing(
+                fn(Builder $query) =>
+                $query
+                    ->orderByDesc('jurnal')
+                    ->orderBy('map')
+                    ->orderBy('id')
+            );
     }
 }
