@@ -11,12 +11,14 @@ class ReturnPenjualan extends Model
 
     protected $casts = [
         'tanggal' => 'datetime',
+        'sub_total' => 'decimal:2',
+        'ppn_nominal' => 'decimal:2',
         'total' => 'decimal:2',
         'bayar' => 'decimal:2',
         'kembalian' => 'decimal:2',
         'is_member' => 'boolean',
-        'user_id' => 'integer',
-        'validated_by' => 'integer',
+        'created_by' => 'integer',
+        'validate_by' => 'integer',
     ];
 
     /*
@@ -27,37 +29,65 @@ class ReturnPenjualan extends Model
 
     public function penjualan()
     {
-        return $this->belongsTo(Penjualan::class);
+        return $this->belongsTo(Penjualan::class, 'penjualan_id');
     }
+
     public function details()
     {
-        return $this->hasMany(DetailPenjualan::class);
+        return $this->hasMany(ReturnPenjualanDetail::class, 'id_return', 'id');
     }
 
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function validator()
     {
-        return $this->belongsTo(User::class, 'validated_by');
+        return $this->belongsTo(User::class, 'validate_by');
     }
+
     public function rekeningPerusahaan()
     {
         return $this->belongsTo(
             RekeningPerusahaan::class,
-            'no_rekening',   // kolom di penjualans
-            'no_rekening'    // kolom di rekening_perusahaan
+            'no_rekening',
+            'no_rekening'
         );
     }
+
+    public function subAnakAkunPengembalian()
+    {
+        return $this->belongsTo(
+            SubAnakAkun::class,
+            'akun_pengembalian',
+            'kode_sub_anak_akun'
+        );
+    }
+
+    public function bukuKitab()
+    {
+        return $this->belongsTo(BukuKitab::class, 'kode_kitab', 'kode');
+    }
+
     public function toko()
     {
         return $this->belongsTo(IdentitasToko::class, 'toko_id');
     }
-    // Di dalam class ReturnPenjualan
+
     public function details_return()
     {
         return $this->hasMany(ReturnPenjualanDetail::class, 'id_return', 'id');
+    }
+
+    public function jurnalPembantuHeaders()
+    {
+        return $this->hasMany(JurnalPembantuHeader::class, 'no_dokumen', 'no_retur')
+            ->where('modul_asal', 'penjualan_return');
+    }
+
+    public function getNoJurnalAttribute(): ?int
+    {
+        return $this->jurnalPembantuHeaders()->first()?->jurnal;
     }
 }

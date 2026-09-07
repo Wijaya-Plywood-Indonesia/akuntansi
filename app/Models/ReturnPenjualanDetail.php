@@ -11,6 +11,7 @@ class ReturnPenjualanDetail extends Model
 
     protected $casts = [
         'harga_awal' => 'decimal:2',
+        'harga_beli' => 'decimal:2',
         'harga_jual' => 'decimal:2',
         'potongan' => 'decimal:2',
         'subtotal' => 'decimal:2',
@@ -25,5 +26,10 @@ class ReturnPenjualanDetail extends Model
     public function barang()
     {
         return $this->belongsTo(Barang::class, 'id_barang');
+    }
+
+    public function penjualanDetail()
+    {
+        return $this->belongsTo(DetailPenjualan::class, 'penjualan_detail_id');
     }
 }

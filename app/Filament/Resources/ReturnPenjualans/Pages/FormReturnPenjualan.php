@@ -2,606 +2,585 @@
 
 namespace App\Filament\Resources\ReturnPenjualans\Pages;
 
-use App\Models\ReturnPenjualan;
-use App\Models\ReturnPenjualanDetail;
-use Filament\Schemas\Components\Actions;
-use Illuminate\Support\Facades\DB;
-
-use Filament\Schemas\Concerns\InteractsWithSchemas; // SESUAI DOKU 4.X
-use Filament\Schemas\Contracts\HasSchemas;         // SESUAI DOKU 4.X
 use App\Filament\Resources\ReturnPenjualans\ReturnPenjualanResource;
 use App\Models\Penjualan;
-use App\Models\DetailPenjualan;
-use Filament\Actions\Action;
-use Filament\Actions\Concerns\InteractsWithActions;
-use Filament\Actions\Contracts\HasActions;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Infolists\Concerns\InteractsWithInfolists; // Tambahkan ini
-use Filament\Infolists\Contracts\HasInfolists; // Tambahkan ini
+use App\Models\ReturnPenjualan;
+use App\Models\ReturnPenjualanDetail;
+use App\Services\JurnalReturnPenjualanService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section as FormSection;
-use Filament\Schemas\Components\Grid;
-use Filament\Support\Enums\FontWeight;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\Url;
 
-// use Filament\Schemas\Infolist;
-use Filament\Schemas\Components\Section;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable; // PENTING: Harus di-implements
-use Filament\Tables\Table;
-
-
-// use Filament\Schemas\Schema;
-// use Filament\Schemas\Components\Section;
-// use Filament\Infolists\Components\TextEntry;
-
-class FormReturnPenjualan extends Page implements HasForms, HasInfolists, HasTable, HasActions, HasSchemas
+class FormReturnPenjualan extends Page
 {
-    /**
-     * 🔥 SOLUSI TOTAL BENTROK TRAIT
-     * Kita harus memenangkan InteractsWithSchemas untuk semua method yang tumpang tindih 
-     * karena di v4, Schemas adalah engine utamanya.
-     */
-    use InteractsWithForms, InteractsWithSchemas {
-        InteractsWithSchemas::getCachedSchemas insteadof InteractsWithForms;
-        InteractsWithSchemas::getDefaultTestingSchemaName insteadof InteractsWithForms;
-        InteractsWithSchemas::getSchema insteadof InteractsWithForms;
-    }
-
-    use InteractsWithInfolists;
-    use InteractsWithTable;
-    use InteractsWithActions;
     protected static string $resource = ReturnPenjualanResource::class;
+
     protected string $view = 'filament.resources.return-penjualans.pages.form-return-penjualan';
 
-    public ?array $data = [];
-    public $dataDetails = null;
-    public ?Penjualan $penjualanTerpilih = null;
-    public array $barangReturSementaras = [];
+    protected static ?string $title = 'Form Retur Penjualan';
+
+    // ── STATE FORM ──────────────────────────────────────────────────────────
+
+    /**
+     * Kata kunci pencarian nota. Disimpan di query string (?cari=...) supaya
+     * hasil pencarian tetap sama walau halaman di-refresh.
+     */
+    #[Url(as: 'cari', keep: false)]
+    public string $searchNota = '';
+
+    /**
+     * ID Penjualan yang sedang diproses retur. Disimpan di query string
+     * (?nota=ID) agar link bisa dibagikan/dibookmark dan tetap berada di
+     * Step 2 (pilih barang) walau halaman direfresh.
+     */
+    #[Url(as: 'nota', keep: false)]
+    public ?int $selectedPenjualanId = null;
+
+    public ?Penjualan $selectedNota = null;
+
+    /**
+     * Item barang dari nota terpilih yang siap diretur.
+     * array<int, array{
+     *    detail_id: int,
+     *    barang_id: int,
+     *    nama_barang: string,
+     *    satuan: string,
+     *    harga_jual: float,
+     *    harga_beli: float,
+     *    qty_beli: float,
+     *    qty_teretur: float,
+     *    sisa_qty: float,
+     *    qty_retur: float,
+     *    potongan: float,
+     *    subtotal: float,
+     *    keterangan_item: string,
+     *    selected: bool
+     * }>
+     */
+    public array $items = [];
+
+    // Pilihan akun pengembalian (default Kas Bu Mut 1101.1)
+    public string $akun_pengembalian = '1101.1';
+
+    public string $keterangan_retur = '';
+
+    public string $tanggal = '';
 
     public function mount(): void
     {
-        $this->form->fill();
-    }
+        $this->tanggal = now()->format('Y-m-d\TH:i');
 
-    // --- FORM UNTUK PENCARIAN ---
-    public function form(Schema $schema): Schema
-    {
-        return $schema
-            ->components([
-                FormSection::make('Pencarian Data')
-                    ->components([
-                        TextInput::make('nomor_nota')
-                            ->label('Cari Nomor Nota')
-                            ->placeholder('Ketik minimal 3 karakter...')
-                            ->datalist(function ($get) {
-                                $search = $get('nomor_nota');
-
-                                if (strlen($search) < 3) {
-                                    return [];
-                                }
-
-                                // Ambil daftar nota untuk saran autocomplete
-                                return Penjualan::where('no_nota', 'like', "%{$search}%")
-                                    ->whereNotNull("validated_by")
-                                    ->whereIn('status_transaksi', ['LUNAS', 'COD'])
-                                    ->limit(10)
-                                    ->pluck('no_nota')
-                                    ->toArray();
-                            })
-                            ->extraInputAttributes([
-                                'class' => 'hide-datalist-arrow'
-
-                            ])
-                            ->live(debounce: 200)
-
-                            ->afterStateUpdated(fn($state) => $this->pilihNota($state))
-                            ->required(),
-                    ]),
-            ])
-            ->statePath('data');
-    }
-
-    // --- INFOLIST UNTUK MENAMPILKAN DATA ---
-    public function infoNota(Schema $scheme): Schema
-    {
-        return $scheme
-            ->record($this->penjualanTerpilih) // 🔥 HUBUNGKAN DATA DISINI
-            ->schema([
-                Section::make('Detail Penjualan')
-                    ->description('Informasi lengkap mengenai transaksi')
-                    ->icon('heroicon-m-information-circle')
-                    ->iconColor('info')
-                    // ->collapsed()
-                    ->components([
-                        // --- SUB SECTION 1: INFORMASI NOTA ---
-                        Section::make('Informasi Nota')
-                            ->columns(2)
-                            ->compact() // Membuat padding lebih tipis agar tidak terlalu besar
-                            ->components([
-                                TextEntry::make('no_nota')
-                                    ->label('No Nota')
-                                    ->weight(FontWeight::Bold)
-                                    ->copyable(),
-                                TextEntry::make('tanggal')
-                                    ->label('Tanggal')
-                                    ->dateTime('d M Y H:i'),
-                                TextEntry::make('nama_customer')
-                                    ->label('Customer'),
-                                TextEntry::make('is_member')
-                                    ->label('Status Pelanggan')
-                                    ->formatStateUsing(fn(bool $state) => $state ? 'Dia Member' : 'Reguler'),
-                                TextEntry::make('keterangan')
-                                    ->placeholder('Tidak Ada Catatan')
-                                    ->label('Keterangan Nota')
-                                    ->columnSpanFull(),
-                            ]),
-
-                        // Gunakan Grid untuk membagi baris jika ingin Pembayaran & Pengiriman berdampingan
-                        Grid::make(2)
-                            // Tambahkan ini agar semua item di dalamnya ditarik sama tinggi
-                            ->extraAttributes(['class' => 'items-stretch'])
-                            ->components([
-                                // --- SUB SECTION 2: PEMBAYARAN ---
-                                Section::make('Pembayaran')
-                                    // Tambahkan h-full agar section mengikuti tinggi grid
-                                    ->extraAttributes(['class' => 'h-full'])
-                                    ->columns(2)
-                                    ->components([
-                                        TextEntry::make('metode_pembayaran')
-                                            ->label('Metode')
-                                            ->badge()
-                                            ->color(fn($state) => $state === 'TUNAI' ? 'success' : 'warning'),
-                                        TextEntry::make('status_transaksi')
-                                            ->label('STATUS'),
-                                        TextEntry::make('total')
-                                            ->money('IDR', locale: 'id_ID')
-                                            ->weight(FontWeight::Bold),
-                                        TextEntry::make('bayar')
-                                            ->money('IDR', locale: 'id_ID'),
-                                        TextEntry::make('kembalian')
-                                            ->money('IDR', locale: 'id_ID')
-                                            ->color(fn($state) => $state < 0 ? 'danger' : 'success'),
-                                    ]),
-
-                                // --- SUB SECTION 3: PENGIRIMAN ---
-                                Section::make('Pengiriman')
-                                    // Tambahkan h-full juga di sini
-                                    ->extraAttributes(['class' => 'h-full'])
-                                    ->columns(1)
-                                    ->components([
-                                        TextEntry::make('kendaraan')
-                                            ->label('Kendaraan'),
-                                        TextEntry::make('nama_sopir')
-                                            ->label('Nama Sopir'),
-                                        TextEntry::make('plat_kendaraan')
-                                            ->placeholder('Belum Input NoPol')
-                                            ->label('No. Polisi'),
-                                    ]),
-                            ]),
-                        // --- SUB SECTION 4: METADATA ---
-                        Section::make('Metadata')
-                            ->columns(2)
-                            // ->collapsed() // Tetap bisa di-collapse meskipun di dalam section
-                            ->components([
-                                TextEntry::make('user.name')->label('Kasir'),
-                                // ->value($this->penjualanTerpilih->user?->name),
-                                TextEntry::make('validator.name')->label('Validasi')->placeholder('Belum Divalidasi'),
-                                TextEntry::make('created_at')->label('Dibuat')->dateTime('d M Y H:i'),
-                                TextEntry::make('updated_at')->label('Diubah')->dateTime('d M Y H:i'),
-                            ]),
-                    ]),
-            ]);
-    }
-    public function submit(): void
-    {
-        // Untuk saat ini kita biarkan kosong atau berikan notifikasi
-        // Fungsi ini wajib ada karena di blade ada wire:submit="submit"
-        if (!$this->penjualanTerpilih) {
-            $this->addError('data.nomor_nota', 'Silakan pilih nota yang valid terlebih dahulu.');
+        // Rehidrasi state dari URL (?nota=ID). Jika ada dan valid, langsung
+        // bawa user ke Step 2 dengan data nota yang sama seperti sebelum refresh.
+        if ($this->selectedPenjualanId) {
+            $this->loadNota($this->selectedPenjualanId, silent: true);
         }
     }
-    public function pilihNota($nota)
+
+    /**
+     * Daftar nota penjualan yang valid untuk diretur (hanya yang sudah LUNAS dan tervalidasi).
+     */
+    #[Computed]
+    public function notaResults(): Collection
     {
-        $this->resetErrorBag('data.nomor_nota');
-        $this->penjualanTerpilih = null;
-        $this->dataDetails = null;
-        $this->barangReturSementaras = []; // Reset retur jika ganti nota
-        $this->resetTable();
-
-        if (strlen($nota) < 3)
-            return;
-
-        $penjualan = Penjualan::where('no_nota', $nota)
-            ->whereNotNull("validated_by")
-            ->whereIn('status_transaksi', ['LUNAS', 'COD'])
-            // Memastikan nota ini belum ada di tabel penjualan_return
-            // ? ->whereDoesntHave('returns')
-            ->first();
-
-        if ($penjualan) {
-            $this->penjualanTerpilih = $penjualan;
-            $this->resetTable();
-            $this->getSchema('infoNota')->record($penjualan);
-            // Contoh di Parent Component (FormReturnPenjualan)
-            $this->dispatch('past-return-penjualan-updated', no_nota: $penjualan->no_nota);
-        } else {
-            $this->addError('data.nomor_nota', 'Silakan pilih nota yang valid terlebih dahulu.');
-            $this->barangReturSementaras = [];
-        }
-
-    }
-
-    public function table(Table $table): Table
-    {
-        return $table
-            ->queryStringIdentifier('nota_items')
-            ->header(
-                // Kita gunakan view sederhana untuk judul
-                fn() => view('filament.components.table-header', [
-                    'title' => 'Detail Penjualan',
-                    'description' => 'Berikut ini merupakan barang yang kamu pesan.',
-                ])
-            )
-            ->query(function () {
-                if (!$this->penjualanTerpilih) {
-                    return DetailPenjualan::query()->whereRaw('1 = 0');
-                }
-                return DetailPenjualan::query()
-                    ->where('penjualan_id', $this->penjualanTerpilih->id);
+        $notas = Penjualan::query()
+            ->whereNotNull('validated_by')
+            ->where('status_transaksi', 'LUNAS')
+            ->with(['details'])
+            ->when($this->searchNota, function ($q) {
+                $q->where(function ($sub) {
+                    $sub->where('no_nota', 'like', "%{$this->searchNota}%")
+                        ->orWhere('nama_customer', 'like', "%{$this->searchNota}%");
+                });
             })
-            ->columns([
+            ->orderByDesc('tanggal')
+            ->limit(20)
+            ->get();
 
-                TextColumn::make('barang.nama_barang')
-                    ->label('Barang')
-                    // ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('qty')
-                    ->label('Qty')
-                    ->numeric()
-                    ->alignCenter(),
-
-                TextColumn::make('satuan')
-                    ->label('Satuan')
-                    ->alignCenter(),
-
-
-                TextColumn::make('harga_awal')
-                    ->label('Harga Awal')
-                    ->money('IDR', locale: 'id')
-                    ->alignRight(),
-
-                TextColumn::make('harga_jual')
-                    ->label('Harga Jual')
-                    ->money('IDR', locale: 'id')
-                    ->alignRight(),
-
-                TextColumn::make('potongan')
-                    ->label('Potongan')
-                    ->money('IDR', locale: 'id')
-                    ->placeholder('0')
-                    ->alignRight(),
-
-                TextColumn::make('subtotal')
-                    ->label('Subtotal')
-                    ->money('IDR', locale: 'id')
-                    ->alignRight()
-                    ->weight('bold'),
-
-            ])
-            ->actions([
-                Action::make('tambahKeRetur')
-                    ->label('Retur')
-                    ->icon('heroicon-m-arrow-uturn-left')
-                    ->color('warning')
-                    // 🔥 LOGIKA DISABLE: Jika ID ada di array, maka tombol mati
-                    ->disabled(function (DetailPenjualan $record) {
-                        // 1. Ambil ID Return berdasarkan nota
-                        $returnIds = ReturnPenjualan::where('no_nota', $this->data['nomor_nota'])->pluck('id');
-
-                        // 2. Hitung total qty yang sudah diretur untuk barang ini secara spesifik
-                        $totalTeretur = ReturnPenjualanDetail::whereIn('id_return', $returnIds)
-                            ->where('id_barang', $record->barang_id) // Sesuaikan: barang_id sesuai Model Anda
-                            ->sum('qty'); // Langsung sum lebih aman daripada get()->first()
-            
-                        // 3. Logika: Disable jika (Total teretur >= Qty beli) ATAU sudah masuk list sementara
-                        $isLunasRetur = $totalTeretur >= $record->qty;
-                        $isDalamKeranjang = $this->isSudahAdaDiRetur($record->id);
-
-                        return $isLunasRetur || $isDalamKeranjang;
-                    })
-                    ->modalHeading('Input Detail Retur Barang')
-                    ->modalWidth('2xl') // Kita buat agak lebar karena fieldnya banyak
-                    ->form(fn(DetailPenjualan $record) => [
-                        // --- INFORMASI BARANG (DISABLED & DEHYDRATED) ---
-                        Grid::make(2) // Bagi dua kolom agar tidak kepanjangan kebawah
-                            ->schema([
-                                TextInput::make('barang_nama')
-                                    ->label('Nama Barang')
-                                    ->default($record->barang->nama_barang)
-                                    ->disabled()
-                                    ->dehydrated(),
-
-                                TextInput::make('satuan')
-                                    ->label('Satuan')
-                                    ->default($record->satuan)
-                                    ->disabled()
-                                    ->dehydrated(),
-
-                                TextInput::make('harga_jual')
-                                    ->label('Harga Jual')
-                                    ->default(number_format((float) $record->harga_jual, 0, ',', '.'))
-                                    ->prefix('IDR')
-                                    ->disabled()
-                                    ->dehydrated(),
-
-                                TextInput::make('qty_beli')
-                                    ->label('Jumlah Beli (Maksimal Retur)')
-                                    ->default($record->qty)
-                                    ->suffix($record->satuan)
-                                    ->disabled()
-                                    ->dehydrated(),
-
-                                TextInput::make('subtotal')
-                                    ->label('Total Bayar Item')
-                                    ->default(number_format((float) $record->subtotal, 0, ',', '.'))
-                                    ->prefix('IDR')
-                                    ->disabled()
-                                    ->dehydrated(),
-
-                                TextInput::make('potongan')
-                                    ->label('Potongan Harga')
-                                    ->default(number_format($record->potongan ?? 0, 0, ',', '.'))
-                                    ->disabled()
-                                    ->dehydrated(),
-                            ]),
-
-                        Section::make('Input Data Retur')
-                            ->description('Tentukan jumlah dan alasan pengembalian barang')
-                            ->schema([
-                                TextInput::make('qty_retur')
-                                    ->label('Jumlah Yang Diretur')
-                                    ->numeric()
-                                    ->default(1)
-                                    ->maxValue(
-                                        function ($get) use ($record) {
-                                            // 1. Ambil ID Return berdasarkan nota
-                                            $returnIds = ReturnPenjualan::where('no_nota', $this->data['nomor_nota'])->pluck('id');
-
-                                            // 2. Hitung total qty yang sudah diretur untuk barang ini secara spesifik
-                                            $totalTeretur = (int) ReturnPenjualanDetail::whereIn('id_return', $returnIds)
-                                                ->where('id_barang', $record->barang_id) // Sesuaikan: barang_id sesuai Model Anda
-                                                ->sum('qty'); // Langsung sum lebih aman daripada get()->first()
-                                
-                                            // 3. Hitung sisa maksimal yang bisa diretur
-                                            $sisaBisaDiretur = $record->qty - ($totalTeretur ?? 0);
-                                            return $sisaBisaDiretur;
-                                        }
-                                    ) // Validasi tidak boleh lebih dari beli
-                                    ->minValue(1)
-                                    ->required()
-                                    ->reactive()
-                                    // ->afterStateUpdated(function ($state) use ($record) {
-                                    //     $this->resetErrorBag('qty_retur');
-                                    //     $returnIds = ReturnPenjualan::where('no_nota', $this->data['nomor_nota'])->pluck('id');
-
-                                    //     // 2. Hitung total qty yang sudah diretur untuk barang ini secara spesifik
-                                    //     $totalTeretur = (int) ReturnPenjualanDetail::whereIn('id_return', $returnIds)
-                                    //         ->where('id_barang', $record->barang_id) // Sesuaikan: barang_id sesuai Model Anda
-                                    //         ->sum('qty'); // Langsung sum lebih aman daripada get()->first()
-
-
-                                    //     if ($state == 0) {
-                                    //         $this->addError('data.qty_retur', 'Jumlah retur tidak boleh nol.');
-                                    //     } else if ($state > ($record->qty - $totalTeretur - $state)) {
-                                    //         $this->addError('data.qty_retur', 'Jumlah retur tidak boleh melebihi jumlah beli yang tersisa.');
-                                    //     }
-                                    // })
-
-                                    ->hint(function ($state) use ($record) {
-                                        $returnIds = ReturnPenjualan::where('no_nota', $this->data['nomor_nota'])->pluck('id');
-                                        $totalTeretur = (int) ReturnPenjualanDetail::whereIn('id_return', $returnIds)
-                                            ->where('id_barang', $record->barang_id)
-                                            ->sum('qty');
-
-                                        // dd($state, $record->barang_id, $record->qty, $totalTeretur, $returnIds->toArray());
-                            
-                                        $sisaBisaDiretur = $record->qty - ($totalTeretur ?? 0) - ($state ?? 0);
-                                        return "Sisa bisa diretur: {$sisaBisaDiretur} {$record->satuan}";
-                                    }),
-                                Textarea::make('keterangan_retur')
-                                    ->label('Alasan Retur (Reason)')
-                                    ->placeholder('Contoh: Barang cacat produksi / expired')
-                                    ->maxLength(255)
-                                    ->required() // Biasanya retur wajib ada alasan
-                                    ->rows(3),
-                            ]),
-                    ])
-                    ->action(function (array $data, DetailPenjualan $record) {
-                        $idUnik = $record->id;
-
-                        // Simpan ke state array
-                        // 1. Simpan ke state lokal agar tombol langsung ter-disable
-                        $this->barangReturSementaras[$idUnik] = true;
-                        // Kirim event ke tabel sementara (TemporaryReturnCart)
-                        // Di file Parent (FormReturnPenjualan / Resource)
-                        $this->dispatch(
-                            'tambah-ke-keranjang-retur',
-                            id: $record->id,
-                            barang_id: $record->barang_id,
-                            qty: $data['qty_retur'],
-                            keterangan_retur: $data['keterangan_retur'],
-                            nama_barang: $record->barang->nama_barang,
-                            satuan: $record->satuan,
-                            harga_jual: $record->harga_jual,
-                            subtotal: $record->subtotal,
-                            potongan: $record->potongan ?? 0,
-                            qty_beli: $record->qty
-                        );
-
-                        Notification::make()
-                            ->title('Berhasil ditambahkan')
-                            ->body("{$record->barang->nama_barang} sebanyak {$data['qty_retur']} unit masuk daftar retur.")
-                            ->success()
-                            ->send();
-
-                        $this->resetTable();
-                    })
-            ]);
-    }
-
-    public function isSudahAdaDiRetur($id): bool
-    {
-        return array_key_exists($id, $this->barangReturSementaras);
-    }
-
-
-    protected $listeners = [
-        'hapus-dari-keranjang-parent' => 'handleBarangDihapus',
-        'proses-submit-final' => 'submitRetur' // Menghubungkan event ke method submitRetur
-    ];
-    public function handleBarangDihapus($id)
-    {
-        if (isset($this->barangReturSementaras[$id])) {
-            unset($this->barangReturSementaras[$id]);
+        if ($notas->isEmpty()) {
+            return collect();
         }
-    }
-    public function booted()
-    {
-        // Memastikan setiap request Livewire tahu record mana yang dipakai Schema
-        if ($this->penjualanTerpilih) {
-            $this->getSchema('infoNota')->record($this->penjualanTerpilih);
+
+        $noNotas = $notas->pluck('no_nota')->toArray();
+
+        // Ambil akumulasi retur per no_nota
+        $returTotals = DB::table('penjualan_return')
+            ->join('penjualan_return_detail', 'penjualan_return.id', '=', 'penjualan_return_detail.id_return')
+            ->whereIn('penjualan_return.no_nota', $noNotas)
+            ->whereIn('penjualan_return.status_return', ['DIPROSES', 'DITERIMA', 'SELESAI'])
+            ->groupBy('penjualan_return.no_nota')
+            ->select('penjualan_return.no_nota', DB::raw('SUM(penjualan_return_detail.qty) as total_qty_retur'))
+            ->pluck('total_qty_retur', 'no_nota')
+            ->toArray();
+
+        foreach ($notas as $nota) {
+            $totalQtyBeli = (float) $nota->details->sum('qty');
+            $totalQtyRetur = (float) ($returTotals[$nota->no_nota] ?? 0);
+            $nota->total_qty_beli = $totalQtyBeli;
+            $nota->total_qty_retur = $totalQtyRetur;
+            $nota->sisa_qty_retur = max(0, $totalQtyBeli - $totalQtyRetur);
+            $nota->is_retur_habis = ($nota->sisa_qty_retur <= 0 && $totalQtyBeli > 0);
+            $nota->pernah_diretur = ($totalQtyRetur > 0 && ! $nota->is_retur_habis);
         }
+
+        return $notas;
     }
 
-    public function resetKeranjangOnly()
+    /**
+     * Dipanggil dari UI ketika user mengetuk sebuah nota di Step 1.
+     */
+    public function pilihNota(int $id): void
     {
-        $this->barangReturSementaras = []; // Menghapus tanda 'disabled' di tabel atas
-        $this->dispatch('reset-keranjang'); // Mengosongkan tabel bawah
-        Notification::make()->title('Keranjang dikosongkan')->info()->send();
+        $this->loadNota($id, silent: false);
     }
-    public function submitRetur($keranjangItems)
+
+    /**
+     * Ambil data nota + detail item, dan siapkan state $items untuk Step 2.
+     * Dipakai baik dari klik user (pilihNota) maupun dari rehidrasi URL saat mount().
+     *
+     * @param  bool  $silent  Jika true, notifikasi kegagalan tidak "berisik" (mis. saat refresh
+     *                        halaman dan nota sudah tidak valid lagi) — cukup kembali ke Step 1.
+     */
+    private function loadNota(int $id, bool $silent = false): void
     {
-        try {
-            if (empty($keranjangItems)) {
-                Notification::make()->title('Keranjang Kosong')->danger()->send();
-                return;
+        $nota = Penjualan::with(['details.barang'])->find($id);
+
+        if (! $nota) {
+            if (! $silent) {
+                Notification::make()->title('Nota tidak ditemukan.')->danger()->send();
             }
+            $this->resetSelection();
 
-            Notification::make()->title('Proses Menyimpan Retur')
-            ->body('Sedang menyimpan data retur, mohon tunggu sebentar...')
-            ->warning()
-            ->send();
+            return;
+        }
 
+        if ($nota->status_transaksi !== 'LUNAS') {
+            if (! $silent) {
+                Notification::make()
+                    ->title('Nota Belum Lunas')
+                    ->body('Hanya nota penjualan dengan status LUNAS yang dapat diretur.')
+                    ->danger()
+                    ->send();
+            }
+            $this->resetSelection();
 
+            return;
+        }
 
-            DB::transaction(function () use ($keranjangItems) {
+        // Ambil histori retur sebelumnya untuk nota ini
+        $historiRetur = DB::table('penjualan_return')
+            ->join('penjualan_return_detail', 'penjualan_return.id', '=', 'penjualan_return_detail.id_return')
+            ->where('penjualan_return.no_nota', $nota->no_nota)
+            ->whereIn('penjualan_return.status_return', ['DIPROSES', 'DITERIMA', 'SELESAI'])
+            ->select('penjualan_return_detail.id_barang', DB::raw('SUM(penjualan_return_detail.qty) as total_retur'))
+            ->groupBy('penjualan_return_detail.id_barang')
+            ->pluck('total_retur', 'id_barang')
+            ->toArray();
+
+        $totalQtyBeli = (float) $nota->details->sum('qty');
+        $totalQtyTeretur = (float) array_sum($historiRetur);
+        if ($totalQtyBeli > 0 && $totalQtyTeretur >= $totalQtyBeli) {
+            if (! $silent) {
+                Notification::make()
+                    ->title('Semua Barang Sudah Diretur')
+                    ->body("Semua barang pada nota {$nota->no_nota} sudah diretur seluruhnya ({$totalQtyTeretur} unit). Tidak dapat diretur lagi.")
+                    ->warning()
+                    ->send();
+            }
+            $this->resetSelection();
+
+            return;
+        }
+
+        $this->selectedPenjualanId = $nota->id;
+        $this->selectedNota = $nota;
+        $this->items = [];
+
+        foreach ($nota->details as $d) {
+            $qtyBeli = (float) $d->qty;
+            $qtyTeretur = (float) ($historiRetur[$d->barang_id] ?? 0);
+            $sisaQty = max(0, $qtyBeli - $qtyTeretur);
+            $hargaBeli = (float) ($d->barang->harga_beli ?? 0);
+            $hargaJual = (float) $d->harga_jual;
+
+            $this->items[] = [
+                'detail_id' => $d->id,
+                'barang_id' => $d->barang_id,
+                'nama_barang' => $d->barang->nama_barang ?? ($d->nama_barang ?? 'Barang'),
+                'satuan' => $d->satuan ?? 'unit',
+                'harga_jual' => $hargaJual,
+                'harga_beli' => $hargaBeli,
+                'qty_beli' => $qtyBeli,
+                'qty_teretur' => $qtyTeretur,
+                'sisa_qty' => $sisaQty,
+                'qty_retur' => 0,
+                'potongan' => 0,
+                'subtotal' => 0,
+                'keterangan_item' => '',
+                'selected' => false,
+            ];
+        }
+
+        // Default: jika nota asal transfer dan ada rekening, sesuaikan default akun pengembalian
+        if ($nota->metode_pembayaran === 'TRANSFER' && $nota->rekeningPerusahaan?->subAnakAkun) {
+            $kodeAkunRek = $nota->rekeningPerusahaan->subAnakAkun->kode_sub_anak_akun;
+            if (array_key_exists($kodeAkunRek, JurnalReturnPenjualanService::getAkunRefund())) {
+                $this->akun_pengembalian = $kodeAkunRek;
+            }
+        }
+    }
+
+    /**
+     * Batalkan pilihan nota (dipanggil dari tombol "Ganti Transaksi" di UI).
+     */
+    public function batalPilihNota(): void
+    {
+        $this->resetSelection();
+    }
+
+    /**
+     * Reset seluruh state Step 2 kembali ke Step 1, termasuk menghapus
+     * parameter ?nota= dari URL.
+     */
+    private function resetSelection(): void
+    {
+        $this->selectedPenjualanId = null;
+        $this->selectedNota = null;
+        $this->items = [];
+        $this->akun_pengembalian = JurnalReturnPenjualanService::getDefaultAkunPengembalian();
+        $this->keterangan_retur = '';
+    }
+
+    /**
+     * Tombol cepat: Retur Semua atau Kosongkan Semua.
+     */
+    public function toggleReturSemua(bool $setSemua = true): void
+    {
+        foreach ($this->items as $idx => $item) {
+            if ($setSemua) {
+                if (($item['sisa_qty'] ?? 0) > 0) {
+                    $this->items[$idx]['selected'] = true;
+                    $this->items[$idx]['qty_retur'] = $item['sisa_qty'];
+                    $this->items[$idx]['subtotal'] = $item['sisa_qty'] * $item['harga_jual'];
+                } else {
+                    $this->items[$idx]['selected'] = false;
+                    $this->items[$idx]['qty_retur'] = 0;
+                    $this->items[$idx]['subtotal'] = 0;
+                }
+            } else {
+                $this->items[$idx]['selected'] = false;
+                $this->items[$idx]['qty_retur'] = 0;
+                $this->items[$idx]['subtotal'] = 0;
+            }
+        }
+    }
+
+    /**
+     * Cek apakah masih ada barang dalam nota yang memiliki sisa untuk diretur.
+     */
+    #[Computed]
+    public function hasSisaBarang(): bool
+    {
+        return collect($this->items)->contains(fn ($it) => ($it['sisa_qty'] ?? 0) > 0);
+    }
+
+    /**
+     * Toggle status pilihan item.
+     */
+    public function toggleItem(int $index): void
+    {
+        if (! isset($this->items[$index])) {
+            return;
+        }
+
+        // Jangan ubah status barang yang sisa_qty-nya sudah habis
+        if (($this->items[$index]['sisa_qty'] ?? 0) <= 0) {
+            $this->items[$index]['selected'] = false;
+            $this->items[$index]['qty_retur'] = 0;
+
+            return;
+        }
+
+        $current = $this->items[$index]['selected'];
+        $this->items[$index]['selected'] = ! $current;
+
+        if ($this->items[$index]['selected']) {
+            if ($this->items[$index]['qty_retur'] <= 0 && $this->items[$index]['sisa_qty'] > 0) {
+                $this->items[$index]['qty_retur'] = $this->items[$index]['sisa_qty'];
+            }
+        } else {
+            $this->items[$index]['qty_retur'] = 0;
+        }
+
+        $this->recalculateItemSubtotal($index);
+    }
+
+    /**
+     * Update qty item retur.
+     */
+    public function updatedItems($value, $key): void
+    {
+        // Format key: "0.qty_retur"
+        $parts = explode('.', $key);
+        if (count($parts) === 2 && $parts[1] === 'qty_retur') {
+            $idx = (int) $parts[0];
+            $this->validateAndSyncItemQty($idx);
+        }
+    }
+
+    private function validateAndSyncItemQty(int $idx): void
+    {
+        if (! isset($this->items[$idx])) {
+            return;
+        }
+
+        $sisa = (float) ($this->items[$idx]['sisa_qty'] ?? 0);
+        if ($sisa <= 0) {
+            $this->items[$idx]['qty_retur'] = 0;
+            $this->items[$idx]['selected'] = false;
+            $this->items[$idx]['subtotal'] = 0;
+
+            return;
+        }
+
+        $qty = (float) ($this->items[$idx]['qty_retur'] ?? 0);
+
+        if ($qty > $sisa) {
+            $qty = $sisa;
+            $this->items[$idx]['qty_retur'] = $qty;
+            Notification::make()
+                ->title('Maksimal Qty')
+                ->body("Qty retur tidak boleh melebihi sisa yang tersedia ({$sisa}).")
+                ->warning()
+                ->send();
+        }
+
+        if ($qty < 0) {
+            $qty = 0;
+            $this->items[$idx]['qty_retur'] = 0;
+        }
+
+        $this->items[$idx]['selected'] = ($qty > 0);
+        $this->recalculateItemSubtotal($idx);
+    }
+
+    private function recalculateItemSubtotal(int $idx): void
+    {
+        if (isset($this->items[$idx])) {
+            $qty = (float) ($this->items[$idx]['qty_retur'] ?? 0);
+            $harga = (float) ($this->items[$idx]['harga_jual'] ?? 0);
+            $potongan = (float) ($this->items[$idx]['potongan'] ?? 0);
+            $this->items[$idx]['subtotal'] = max(0, ($qty * $harga) - $potongan);
+        }
+    }
+
+    /**
+     * Kalkulasi live rincian retur & Buku Kitab.
+     */
+    #[Computed]
+    public function kalkulasi(): array
+    {
+        if (! $this->selectedNota) {
+            $defaultAkun = JurnalReturnPenjualanService::getDefaultAkunPengembalian();
+            $defaultKitab = JurnalReturnPenjualanService::cariBukuKitab(false, $defaultAkun);
+
+            return [
+                'is_dp' => false,
+                'is_retur_penuh' => false,
+                'is_ppn' => false,
+                'jenis_retur' => 'NORMAL',
+                'kode_kitab' => $defaultKitab?->kode ?? 'retur_normal_kas_bu_mut',
+                'nama_kitab' => $defaultKitab?->nama ?? 'RETUR NORMAL (KAS BU MUT)',
+                'buku_kitab_id' => $defaultKitab?->id,
+                'akun_pengembalian' => $defaultAkun,
+                'subtotal_retur' => 0,
+                'ppn_nominal' => 0,
+                'total_retur' => 0,
+                'total_hpp' => 0,
+                'nomor_kitab' => $defaultKitab?->id ?? 1,
+                'preview_jurnal' => [],
+            ];
+        }
+
+        $selectedItems = collect($this->items)
+            ->filter(fn ($it) => ($it['selected'] ?? false) && ($it['qty_retur'] ?? 0) > 0)
+            ->map(fn ($it) => [
+                'id_barang' => $it['barang_id'],
+                'nama_barang' => $it['nama_barang'],
+                'qty' => (float) $it['qty_retur'],
+                'harga_jual' => (float) $it['harga_jual'],
+                'harga_beli' => (float) $it['harga_beli'],
+                'potongan' => (float) ($it['potongan'] ?? 0),
+            ])
+            ->values()
+            ->all();
+
+        $calc = app(JurnalReturnPenjualanService::class)->kalkulasi(
+            $this->selectedNota,
+            $selectedItems,
+            $this->akun_pengembalian
+        );
+
+        $calc['nomor_kitab'] = $calc['buku_kitab_id'] ?? $this->getNomorKitab($calc['kode_kitab']);
+
+        return $calc;
+    }
+
+    /**
+     * Nomor urut / ID template Buku Kitab Retur.
+     */
+    private function getNomorKitab(string $kodeKitab): int
+    {
+        $map = [
+            // RETUR NORMAL — PPN (1 - 8)
+            'retur_normal_kas_bu_mut' => 1,
+            'retur_normal_bank_99' => 2,
+            'retur_normal_bank_wahana' => 3,
+            'retur_normal_bank_wpi' => 4,
+            'retur_normal_bank_industri' => 5,
+            'retur_normal_bank_intan' => 6,
+            'retur_normal_bank_bu_eddy' => 7,
+            'retur_normal_liabilitas_jk_pendek' => 8,
+
+            // RETUR NORMAL — NON PPN (9 - 16)
+            'retur_normal_non_ppn_kas_bu_mut' => 9,
+            'retur_normal_non_ppn_bank_99' => 10,
+            'retur_normal_non_ppn_bank_wahana' => 11,
+            'retur_normal_non_ppn_bank_wpi' => 12,
+            'retur_normal_non_ppn_bank_industri' => 13,
+            'retur_normal_non_ppn_bank_intan' => 14,
+            'retur_normal_non_ppn_bank_bu_eddy' => 15,
+            'retur_normal_non_ppn_liabilitas_jk_pendek' => 16,
+        ];
+
+        return $map[$kodeKitab] ?? (int) (\App\Models\BukuKitab::where('kode', $kodeKitab)->value('id') ?? 0);
+    }
+
+    /**
+     * Simpan transaksi retur penjualan.
+     */
+    public function simpanRetur()
+    {
+        if (! $this->selectedNota) {
+            Notification::make()->title('Silakan pilih nota penjualan terlebih dahulu.')->danger()->send();
+
+            return;
+        }
+
+        if ($this->selectedNota->status_transaksi !== 'LUNAS') {
+            Notification::make()
+                ->title('Nota Belum Lunas')
+                ->body('Hanya nota penjualan dengan status LUNAS yang dapat diretur.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $itemsRetur = collect($this->items)->filter(fn ($it) => ($it['selected'] ?? false) && ($it['qty_retur'] ?? 0) > 0);
+
+        if ($itemsRetur->isEmpty()) {
+            Notification::make()
+                ->title('Pilih Barang')
+                ->body('Pilih minimal 1 barang dengan jumlah retur lebih dari 0.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->validate([
+            'keterangan_retur' => ['required', 'string', 'min:3'],
+        ], [
+            'keterangan_retur.required' => 'Alasan retur wajib diisi.',
+            'keterangan_retur.min' => 'Alasan retur terlalu singkat, mohon jelaskan lebih detail.',
+        ]);
+
+        $calc = $this->kalkulasi;
+
+        try {
+            $returnHeader = null;
+
+            DB::transaction(function () use ($itemsRetur, $calc, &$returnHeader) {
+                // Generate nomor retur unik
+                $todayPrefix = 'RET-'.date('Ymd');
+                $lastCount = ReturnPenjualan::where('no_retur', 'like', "{$todayPrefix}%")->count() + 1;
+                $noRetur = sprintf('%s-%04d', $todayPrefix, $lastCount);
+
+                $refundConfig = JurnalReturnPenjualanService::getAkunRefundConfig($this->akun_pengembalian);
+                $metode = $refundConfig['metode'];
+                $userId = auth()->id() ?: 1;
+
                 $returnHeader = ReturnPenjualan::create([
-                    // 'penjualan_id' => $this->penjualanTerpilih->id,
-                    'no_nota' => $this->penjualanTerpilih->no_nota,
-                    'nama_customer' => $this->penjualanTerpilih->nama_customer ?? 'Tidak Diketahui',
-                    'tanggal' => now(),
-                    'is_member' => $this->penjualanTerpilih->is_member ?? false,
-                    'alamat' => $this->penjualanTerpilih->alamat ?? null,
-                    'metode_pembayaran' => $this->penjualanTerpilih->metode_pembayaran ?? 'TUNAI',
-                    'bank' => $this->penjualanTerpilih->bank ?? null,
-                    'no_rekening' => $this->penjualanTerpilih->no_rekening ?? null,
-                    'kendaraan' => $this->penjualanTerpilih->kendaraan ?? null,
-                    'plat_kendaraan' => $this->penjualanTerpilih->plat_kendaraan ?? null,
-                    'nama_sopir' => $this->penjualanTerpilih->nama_sopir ?? null,
-                    'total' => collect($keranjangItems)->sum(fn($item) => $item['harga_jual'] * $item['qty']),
-                    'bayar' => collect($keranjangItems)->sum(fn($item) => $item['harga_jual'] * $item['qty']),
+                    'penjualan_id' => $this->selectedNota->id,
+                    'no_retur' => $noRetur,
+                    'no_nota' => $this->selectedNota->no_nota,
+                    'tanggal' => $this->tanggal ? date('Y-m-d H:i:s', strtotime($this->tanggal)) : now(),
+                    'nama_customer' => $this->selectedNota->nama_customer ?: 'Pelanggan',
+                    'is_member' => (bool) $this->selectedNota->is_member,
+                    'alamat' => $this->selectedNota->alamat,
+                    'metode_pembayaran' => $metode,
+                    'bank' => $refundConfig['nama'],
+                    'no_rekening' => $this->akun_pengembalian,
+                    'kendaraan' => $this->selectedNota->kendaraan,
+                    'plat_kendaraan' => $this->selectedNota->plat_kendaraan,
+                    'nama_sopir' => $this->selectedNota->nama_sopir,
+                    'sub_total' => $calc['subtotal_retur'],
+                    'ppn_nominal' => $calc['ppn_nominal'],
+                    'total' => $calc['total_retur'],
+                    'bayar' => $calc['total_retur'],
                     'kembalian' => 0,
-                    'created_by' => auth()->id(),
-                    'validate_by' => null,
-                    'status_return' => 'DIPROSES',
+                    'keterangan' => $this->keterangan_retur ?: "Retur Penjualan Ref: {$this->selectedNota->no_nota}",
+                    'status_return' => 'DITERIMA',
+                    'jenis_retur' => $calc['jenis_retur'],
+                    'kode_kitab' => $calc['kode_kitab'],
+                    'akun_pengembalian' => $this->akun_pengembalian,
+                    'created_by' => $userId,
+                    'validate_by' => $userId,
+                    'toko_id' => $this->selectedNota->toko_id,
                 ]);
 
-                foreach ($keranjangItems as $item) {
+                foreach ($itemsRetur as $item) {
                     ReturnPenjualanDetail::create([
                         'id_return' => $returnHeader->id,
-                        'id_barang' => $item['barang_id'] ?? null,
+                        'id_barang' => $item['barang_id'],
+                        'penjualan_detail_id' => $item['detail_id'],
                         'nama_barang' => $item['nama_barang'],
                         'satuan' => $item['satuan'],
-                        'harga_awal' => $item['harga_awal'] ?? 0,
+                        'harga_awal' => $item['harga_jual'],
+                        'harga_beli' => $item['harga_beli'],
                         'harga_jual' => $item['harga_jual'],
                         'potongan' => $item['potongan'] ?? 0,
-                        'qty' => $item['qty'],
-                        'subtotal' => $item['harga_jual'] * $item['qty'],
-                        'keterangan' => $item['keterangan'],
+                        'qty' => $item['qty_retur'],
+                        'subtotal' => $item['subtotal'],
+                        'keterangan' => $item['keterangan_item'] ?: $this->keterangan_retur,
                     ]);
                 }
+
+                // Masuk ke Jurnal Pembantu Header secara otomatis
+                app(JurnalReturnPenjualanService::class)->buatJurnalReturn($returnHeader, (int) $userId);
             });
-            Notification::make()->title('Retur Berhasil Disimpan')
-            ->body("Retur untuk nota {$this->penjualanTerpilih->no_nota} berhasil disimpan.")
-            ->success()->send();
+
+            $noJurnal = $returnHeader?->no_jurnal;
+            $infoJurnal = $noJurnal ? " dan masuk ke Jurnal Pembantu Header (No. Jurnal #{$noJurnal})" : '';
+
+            Notification::make()
+                ->title('Retur Berhasil Disimpan & Masuk Jurnal')
+                ->body("Retur {$returnHeader->no_retur} untuk nota {$this->selectedNota->no_nota} berhasil dicatat{$infoJurnal} dengan template: [{$calc['nomor_kitab']}] {$calc['nama_kitab']}.")
+                ->success()
+                ->send();
+
             return redirect()->to(ReturnPenjualanResource::getUrl('index'));
-        } catch (\Throwable $th) {
-            // dd($th);
-            Notification::make()->title('Retur Gagal Disimpan')->
-                body("Terjadi kesalahan saat menyimpan retur. Silahkan Hubungi Tim  IT")->
-                danger()->send();
-            // return redirect()->to(ReturnPenjualanResource::getUrl('index'));
-            //throw $th;
+
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal Menyimpan Retur')
+                ->body('Terjadi kesalahan: '.$e->getMessage())
+                ->danger()
+                ->send();
         }
-
-    }
-
-    public function resetNota()
-    {
-        $this->data['nomor_nota'] = '';
-        $this->penjualanTerpilih = null;
-        $this->barangReturSementaras = [];
-        $this->dispatch('reset-keranjang');
-        $this->dispatch('scroll-to-top');
-    }
-
-    public function footerActions(Schema $schema): Schema
-    {
-        return $schema
-            ->components([
-                Actions::make([
-                    Action::make('kembali')
-                        ->label('Kembali')
-                        ->color('gray')
-                        ->icon('heroicon-m-arrow-left')
-                        ->requiresConfirmation()
-                        ->url(fn() => ReturnPenjualanResource::getUrl('index')),
-
-                    Action::make('resetNota')
-                        ->label('Reset Nota')
-                        ->color('danger')
-                        ->icon('heroicon-m-no-symbol')
-                        ->outlined()
-                        ->requiresConfirmation()
-                        ->action(fn() => $this->resetNota()),
-
-                    Action::make('resetKeranjang')
-                        ->label('Reset Keranjang')
-                        ->color('warning')
-                        ->icon('heroicon-m-trash')
-                        ->outlined()
-                        ->requiresConfirmation()
-                        ->action(fn() => $this->resetKeranjangOnly()),
-
-                    Action::make('submitRetur')
-                        ->label('Simpan Return Penjualan')
-                        ->color('success')
-                        ->icon('heroicon-m-check-circle')
-                        ->requiresConfirmation()
-                        ->action(fn() => $this->dispatch('trigger-submit-pengembalian')->to('temporary-return-cart')),
-                ])
-                    ->extraAttributes([
-                        'class' => 'flex flex-wrap items-center justify-end gap-3 w-full',
-                    ])
-            ]);
     }
 }
-

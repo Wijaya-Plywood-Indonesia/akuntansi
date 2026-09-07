@@ -8,4 +8,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateReturnPenjualan extends CreateRecord
 {
     protected static string $resource = ReturnPenjualanResource::class;
+
+    public function mount(): void
+    {
+        redirect()->to(FormReturnPenjualan::getUrl());
+    }
 }
