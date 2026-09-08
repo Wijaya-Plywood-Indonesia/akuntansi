@@ -194,8 +194,7 @@
                                         class="js-qty-minus flex-1 h-11 flex items-center justify-center text-gray-500 active:bg-gray-100 dark:active:bg-gray-700">
                                         <x-heroicon-o-minus class="w-4 h-4" />
                                     </button>
-                                    <input type="number"
-                                        wire:model.live.debounce.300ms="items.{{ $index }}.qty_retur"
+                                    <input type="number" wire:model.blur="items.{{ $index }}.qty_retur"
                                         min="0" max="{{ $item['sisa_qty'] }}" step="any"
                                         class="js-qty-input w-16 text-center font-black text-base bg-transparent border-0 focus:ring-0 text-primary-600 dark:text-primary-400" />
                                     <button type="button"
@@ -239,22 +238,27 @@
                         </div>
                         <div
                             class="flex justify-between text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-200 dark:border-gray-700 mt-1">
-                            <span>Buku Kitab</span><span class="font-semibold text-gray-800 dark:text-gray-200">{{ $calc['nama_kitab'] }}</span>
+                            <span>Buku Kitab</span><span
+                                class="font-semibold text-gray-800 dark:text-gray-200">{{ $calc['nama_kitab'] }}</span>
                         </div>
-                        <div
-                            class="flex justify-between text-gray-500 dark:text-gray-400">
-                            <span>Kode Kitab</span><span class="font-mono text-[11px]">{{ $calc['kode_kitab'] }}</span>
+                        <div class="flex justify-between text-gray-500 dark:text-gray-400">
+                            <span>Kode Kitab</span><span
+                                class="font-mono text-[11px]">{{ $calc['kode_kitab'] }}</span>
                         </div>
 
                         @if (!empty($calc['preview_jurnal']))
                             <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Simulasi Jurnal (Buku Kitab):</div>
+                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                                    Simulasi Jurnal (Buku Kitab):</div>
                                 <div class="space-y-1">
                                     @foreach ($calc['preview_jurnal'] as $pj)
                                         @if ($pj['debit'] > 0 || $pj['kredit'] > 0)
-                                            <div class="flex justify-between items-center text-[11px] {{ $pj['posisi'] === 'K' ? 'pl-2.5 text-gray-500 dark:text-gray-400' : 'font-medium text-gray-800 dark:text-gray-200' }}">
-                                                <span>[{{ $pj['posisi'] }}] {{ $pj['no_akun'] }} - {{ $pj['nama_akun'] }}</span>
-                                                <span class="font-mono">Rp {{ number_format($pj['posisi'] === 'D' ? $pj['debit'] : $pj['kredit'], 0, ',', '.') }}</span>
+                                            <div
+                                                class="flex justify-between items-center text-[11px] {{ $pj['posisi'] === 'K' ? 'pl-2.5 text-gray-500 dark:text-gray-400' : 'font-medium text-gray-800 dark:text-gray-200' }}">
+                                                <span>[{{ $pj['posisi'] }}] {{ $pj['no_akun'] }} -
+                                                    {{ $pj['nama_akun'] }}</span>
+                                                <span class="font-mono">Rp
+                                                    {{ number_format($pj['posisi'] === 'D' ? $pj['debit'] : $pj['kredit'], 0, ',', '.') }}</span>
                                             </div>
                                         @endif
                                     @endforeach
