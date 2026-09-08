@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ReturnPenjualans\Pages;
 
 use App\Filament\Resources\ReturnPenjualans\ReturnPenjualanResource;
+use App\Models\BukuKitab;
 use App\Models\Penjualan;
 use App\Models\ReturnPenjualan;
 use App\Models\ReturnPenjualanDetail;
@@ -288,7 +289,7 @@ class FormReturnPenjualan extends Page
     }
 
     /**
-     * Toggle status pilihan item.
+     * Toggle status pilihan item (dari klik checkbox / klik baris).
      */
     public function toggleItem(int $index): void
     {
@@ -319,7 +320,10 @@ class FormReturnPenjualan extends Page
     }
 
     /**
-     * Update qty item retur.
+     * Hook otomatis Livewire tiap kali properti $items berubah lewat wire:model.
+     * Dipanggil TIAP keystroke (live+debounce) — jadi di sini kita HANYA clamp
+     * ke batas maksimum (sisa_qty), TIDAK pernah menyentuh status `selected`.
+     * Keputusan uncheck (qty < 1) ditunda sampai event blur -> finalizeQty().
      */
     public function updatedItems($value, $key): void
     {
@@ -327,28 +331,38 @@ class FormReturnPenjualan extends Page
         $parts = explode('.', $key);
         if (count($parts) === 2 && $parts[1] === 'qty_retur') {
             $idx = (int) $parts[0];
-            $this->validateAndSyncItemQty($idx);
+            $this->clampQtyLive($idx);
         }
     }
 
-    private function validateAndSyncItemQty(int $idx): void
+    /**
+     * LIVE (tiap keystroke, debounce 300ms dari blade).
+     * Hanya menahan qty agar tidak melebihi sisa_qty, dan menghitung ulang
+     * subtotal untuk kalkulasi real-time. Tidak pernah mengubah `selected`,
+     * termasuk saat qty kosong/null sementara user masih mengetik — supaya
+     * row tidak collapse dan fokus input tidak hilang.
+     */
+    private function clampQtyLive(int $idx): void
     {
         if (! isset($this->items[$idx])) {
             return;
         }
 
         $sisa = (float) ($this->items[$idx]['sisa_qty'] ?? 0);
-        if ($sisa <= 0) {
-            $this->items[$idx]['qty_retur'] = 0;
-            $this->items[$idx]['selected'] = false;
-            $this->items[$idx]['subtotal'] = 0;
+        $raw = $this->items[$idx]['qty_retur'];
+
+        // Biarkan kosong/null apa adanya selama masih fokus & belum blur.
+        // Tetap hitung subtotal sebagai 0 supaya kalkulasi ringkasan akurat,
+        // tanpa mengubah status selected.
+        if ($raw === null || $raw === '') {
+            $this->recalculateItemSubtotal($idx);
 
             return;
         }
 
-        $qty = (float) ($this->items[$idx]['qty_retur'] ?? 0);
+        $qty = (float) $raw;
 
-        if ($qty > $sisa) {
+        if ($sisa > 0 && $qty > $sisa) {
             $qty = $sisa;
             $this->items[$idx]['qty_retur'] = $qty;
             Notification::make()
@@ -363,7 +377,40 @@ class FormReturnPenjualan extends Page
             $this->items[$idx]['qty_retur'] = 0;
         }
 
-        $this->items[$idx]['selected'] = ($qty > 0);
+        $this->recalculateItemSubtotal($idx);
+    }
+
+    /**
+     * Dipanggil dari blade saat input qty kehilangan fokus (native blur,
+     * via x-on:blur="$wire.finalizeQty(...)"). Di sinilah baru diputuskan
+     * apakah item tetap selected atau di-uncheck karena qty < 1.
+     */
+    public function finalizeQty(int $idx): void
+    {
+        if (! isset($this->items[$idx])) {
+            return;
+        }
+
+        $sisa = (float) ($this->items[$idx]['sisa_qty'] ?? 0);
+        $raw = $this->items[$idx]['qty_retur'];
+        $qty = ($raw === null || $raw === '') ? 0 : (float) $raw;
+
+        // Kurang dari 1 (kosong, null, 0, atau negatif) -> uncheck & reset.
+        if ($sisa <= 0 || $qty < 1) {
+            $this->items[$idx]['qty_retur'] = 0;
+            $this->items[$idx]['selected'] = false;
+            $this->items[$idx]['subtotal'] = 0;
+
+            return;
+        }
+
+        // Jaga-jaga: clamp ulang ke max sisa_qty (harusnya sudah diclamp saat live).
+        if ($qty > $sisa) {
+            $qty = $sisa;
+        }
+
+        $this->items[$idx]['qty_retur'] = $qty;
+        $this->items[$idx]['selected'] = true;
         $this->recalculateItemSubtotal($idx);
     }
 
@@ -456,7 +503,7 @@ class FormReturnPenjualan extends Page
             'retur_normal_non_ppn_liabilitas_jk_pendek' => 16,
         ];
 
-        return $map[$kodeKitab] ?? (int) (\App\Models\BukuKitab::where('kode', $kodeKitab)->value('id') ?? 0);
+        return $map[$kodeKitab] ?? (int) (BukuKitab::where('kode', $kodeKitab)->value('id') ?? 0);
     }
 
     /**
@@ -478,6 +525,12 @@ class FormReturnPenjualan extends Page
                 ->send();
 
             return;
+        }
+
+        // Pastikan semua item sudah "final" sebelum disimpan, jaga-jaga jika
+        // user langsung klik "Simpan Retur" tanpa blur dari field qty terakhir.
+        foreach (array_keys($this->items) as $idx) {
+            $this->finalizeQty($idx);
         }
 
         $itemsRetur = collect($this->items)->filter(fn ($it) => ($it['selected'] ?? false) && ($it['qty_retur'] ?? 0) > 0);

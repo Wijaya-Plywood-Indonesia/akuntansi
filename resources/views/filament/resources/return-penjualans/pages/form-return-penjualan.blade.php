@@ -194,8 +194,10 @@
                                         class="js-qty-minus flex-1 h-11 flex items-center justify-center text-gray-500 active:bg-gray-100 dark:active:bg-gray-700">
                                         <x-heroicon-o-minus class="w-4 h-4" />
                                     </button>
-                                    <input type="number" wire:model.blur="items.{{ $index }}.qty_retur"
-                                        min="0" max="{{ $item['sisa_qty'] }}" step="any"
+                                    <input type="number"
+                                        wire:model.live.debounce.300ms="items.{{ $index }}.qty_retur"
+                                        x-on:blur="$wire.finalizeQty({{ $index }})" min="0"
+                                        max="{{ $item['sisa_qty'] }}" step="any"
                                         class="js-qty-input w-16 text-center font-black text-base bg-transparent border-0 focus:ring-0 text-primary-600 dark:text-primary-400" />
                                     <button type="button"
                                         class="js-qty-plus flex-1 h-11 flex items-center justify-center text-gray-500 active:bg-gray-100 dark:active:bg-gray-700">
