@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\AnakAkun;
 use App\Models\BukuKitab;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
+use App\Models\SubAnakAkun;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -17,6 +19,45 @@ use Illuminate\Support\Facades\DB;
  */
 class BukuKitabJurnalService
 {
+    /**
+     * Cache in-memory per request supaya nama akun yang sama tidak di-query
+     * berkali-kali kalau 1 transaksi menghasilkan banyak baris/header.
+     *
+     * @var array<string, string|null>
+     */
+    private array $namaAkunCache = [];
+
+    /**
+     * Ambil nama akun TERKINI dari Chart of Accounts berdasarkan no_akun,
+     * bukan dari snapshot lama yang tersimpan di buku_kitab_akuns.nama_akun.
+     *
+     * Kenapa perlu ini: dulu nama_akun di template Buku Kitab cuma "disalin
+     * dari master akun saat dipilih" (lihat komentar migration
+     * buku_kitab_akuns) — jadi kalau nama akun di COA diubah belakangan
+     * (mis. "Kas Bu Mut" -> "Kas Utama"), template lama tidak ikut ter-update
+     * dan jurnal baru tetap memakai nama lama. Method ini selalu cari nama
+     * akun yang berlaku SEKARANG dari tabel sub_anak_akuns / anak_akuns,
+     * dan baru fallback ke nama snapshot template kalau kode akunnya sudah
+     * tidak ditemukan di COA (supaya tidak tiba-tiba jadi kosong).
+     */
+    private function resolveNamaAkun(?string $noAkun, ?string $namaSnapshot): ?string
+    {
+        if (blank($noAkun)) {
+            return $namaSnapshot;
+        }
+
+        if (array_key_exists($noAkun, $this->namaAkunCache)) {
+            return $this->namaAkunCache[$noAkun] ?? $namaSnapshot;
+        }
+
+        $namaTerkini = SubAnakAkun::where('kode_sub_anak_akun', $noAkun)->value('nama_sub_anak_akun')
+            ?? AnakAkun::where('kode_anak_akun', $noAkun)->value('nama_anak_akun');
+
+        $this->namaAkunCache[$noAkun] = $namaTerkini;
+
+        return $namaTerkini ?? $namaSnapshot;
+    }
+
     /**
      * Bangun jurnal (JurnalPembantuHeader + Item) dari 1 template Buku Kitab.
      *
@@ -78,6 +119,7 @@ class BukuKitabJurnalService
         array $itemBreakdown = [],
         array $splitHeaderPerBarang = [],
         ?int $noJurnalOverride = null,
+        array $catatanPerVariabel = [],
     ) {
         $barisTemplate = BukuKitab::templateAkun($kodeKitab);
 
@@ -116,6 +158,7 @@ class BukuKitabJurnalService
             $itemBreakdown,
             $splitHeaderPerBarang,
             $noJurnalOverride,
+            $catatanPerVariabel,
         ) {
             $noJurnal = $noJurnalOverride ?? (JurnalPembantuHeader::lockForUpdate()->max('jurnal') + 1);
 
@@ -139,10 +182,21 @@ class BukuKitabJurnalService
                     && in_array($baris->variabel_nilai, $splitHeaderPerBarang, true);
 
                 if ($harusSplitHeader) {
-                    // ── HEADER TERPISAH PER BARANG ───────────────────────
-                    // Tiap barang di breakdown jadi 1 header + 1 item sendiri,
-                    // supaya saat diposting ke Jurnal Umum, tiap barang tetap
-                    // jadi baris sendiri (id_barang tidak hilang tertumpuk).
+                    // ── HEADER DIKELOMPOKKAN PER AKUN + PER BARANG ───────
+                    // Aturan gabung:
+                    //  1. Barang dengan id_barang BEDA selalu jadi header
+                    //     SENDIRI-SENDIRI, walau akunnya kebetulan sama —
+                    //     supaya breakdown stok per produk tidak tertukar.
+                    //  2. Komponen "generik" (tanpa id_barang, mis. "Alokasi
+                    //     Hutang Gaji") digabung ke header barang LAIN yang
+                    //     akunnya sama, TAPI cuma kalau di akun itu memang
+                    //     cuma ada SATU barang. Kalau ada 2+ barang berbeda
+                    //     di akun yang sama, komponen generik itu berdiri
+                    //     sendiri (tidak jelas mau digabung ke barang yang
+                    //     mana), dan barang-barang itu tetap terpisah.
+                    $itemBerId = [];    // kunci: no_akun|id_barang
+                    $itemGenerik = [];  // kunci: no_akun (tanpa id_barang)
+
                     foreach ($breakdown as $b) {
                         $banyakItem = (float) ($b['banyak'] ?? 0);
                         $hargaItem = (float) ($b['harga'] ?? 0);
@@ -159,7 +213,83 @@ class BukuKitabJurnalService
                         // tidak dikirim, fallback ke akun tetap dari template
                         // seperti biasa.
                         $noAkunDipakai = $b['no_akun'] ?? $baris->no_akun;
-                        $namaAkunDipakai = $b['nama_akun'] ?? $baris->nama_akun;
+                        $namaAkunSnapshot = $b['nama_akun'] ?? $baris->nama_akun;
+                        $namaAkunDipakai = $this->resolveNamaAkun($noAkunDipakai, $namaAkunSnapshot);
+                        $idBarang = $b['id_barang'] ?? null;
+
+                        $itemData = [
+                            'no_akun'      => $noAkunDipakai,
+                            'nama_akun'    => $namaAkunDipakai,
+                            'ket_item'     => $ketItem,
+                            'banyak'       => $banyakItem,
+                            'harga'        => $hargaItem,
+                            'nominal'      => $nominalItem,
+                            'nama_barang'  => $b['nama_barang'] ?? null,
+                            'id_barang'    => $idBarang,
+                        ];
+
+                        if (!empty($idBarang)) {
+                            $kunciBarang = ($noAkunDipakai ?: '__tanpa_akun__') . '|' . $idBarang;
+                            $itemBerId[$kunciBarang] ??= [
+                                'no_akun' => $noAkunDipakai, 'nama_akun' => $namaAkunDipakai, 'items' => [],
+                            ];
+                            $itemBerId[$kunciBarang]['items'][] = $itemData;
+                        } else {
+                            $kunciAkun = $noAkunDipakai ?: '__tanpa_akun__';
+                            $itemGenerik[$kunciAkun] ??= [
+                                'no_akun' => $noAkunDipakai, 'nama_akun' => $namaAkunDipakai, 'items' => [],
+                            ];
+                            $itemGenerik[$kunciAkun]['items'][] = $itemData;
+                        }
+                    }
+
+                    // Hitung berapa barang (id_barang unik) per akun, untuk
+                    // menentukan boleh/tidaknya komponen generik ikut digabung.
+                    $barangPerAkun = [];
+                    foreach ($itemBerId as $kunciBarang => $grup) {
+                        $akunKey = $grup['no_akun'] ?: '__tanpa_akun__';
+                        $barangPerAkun[$akunKey] = ($barangPerAkun[$akunKey] ?? 0) + 1;
+                    }
+
+                    $grupFinal = []; // list of ['no_akun','nama_akun','items']
+
+                    foreach ($itemBerId as $kunciBarang => $grup) {
+                        $grupFinal[] = $grup;
+                    }
+
+                    foreach ($itemGenerik as $akunKey => $grupGenerik) {
+                        if (($barangPerAkun[$akunKey] ?? 0) === 1) {
+                            // Cuma ada 1 barang di akun ini → gabung ke situ.
+                            foreach ($grupFinal as &$g) {
+                                if (($g['no_akun'] ?: '__tanpa_akun__') === $akunKey) {
+                                    array_push($g['items'], ...$grupGenerik['items']);
+                                    continue 2;
+                                }
+                            }
+                            unset($g);
+                        }
+                        // 0 barang, atau 2+ barang berbeda di akun ini →
+                        // komponen generik berdiri sendiri.
+                        $grupFinal[] = $grupGenerik;
+                    }
+
+                    $catatanBaris = trim((string) ($catatanPerVariabel[$baris->variabel_nilai] ?? ''));
+
+                    foreach ($grupFinal as $grup) {
+                        $items = $grup['items'];
+                        if (empty($items)) {
+                            continue;
+                        }
+                        $totalNominalGrup = round(array_sum(array_column($items, 'nominal')), 4);
+
+                        if (count($items) === 1) {
+                            $ketHeader = $items[0]['ket_item'];
+                        } else {
+                            $namaUnik = collect($items)->pluck('nama_barang')->filter()->unique()->values();
+                            $ketHeader = $namaUnik->isNotEmpty()
+                                ? ($baris->keterangan ?: $keteranganDefault ?: $kodeKitab) . ' ' . $namaUnik->implode(', ')
+                                : ($baris->keterangan ?: $keteranganDefault ?: $kodeKitab);
+                        }
 
                         $headerBarang = JurnalPembantuHeader::create([
                             'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
@@ -167,37 +297,40 @@ class BukuKitabJurnalService
                             'jenis_transaksi'    => $jenisTransaksi,
                             'modul_asal'         => $modulAsal,
                             'jurnal'             => $noJurnal,
-                            'no_akun'            => $noAkunDipakai,
-                            'nama_akun'          => $namaAkunDipakai,
+                            'no_akun'            => $grup['no_akun'],
+                            'nama_akun'          => $grup['nama_akun'],
                             'map'                => $baris->posisi,
-                            'keterangan'         => "{$ketItem} | Nota: {$noDokumen}",
+                            'keterangan'         => "{$ketHeader} | Nota: {$noDokumen}" . ($catatanBaris !== '' ? " ({$catatanBaris})" : ''),
                             'no_dokumen'         => $noDokumen,
-                            'total_nilai'        => $nominalItem,
+                            'total_nilai'        => $totalNominalGrup,
                             'status'             => JurnalPembantuHeader::STATUS_DRAFT,
                             'dibuat_oleh'        => $userId,
                         ]);
 
-                        $dataItem = [
-                            'jurnal_pembantu_header_id' => $headerBarang->id,
-                            'urut'         => 1,
-                            'jenis_pihak'  => $jenisPihak,
-                            'nama_pihak'   => $namaPihak,
-                            'nama_barang'  => $b['nama_barang'] ?? null,
-                            'no_dokumen'   => $noDokumen,
-                            'keterangan'   => $ketItem,
-                            'banyak'       => $banyakItem,
-                            'm3'           => 0,
-                            'harga'        => $hargaItem,
-                            'hit_kbk'      => 'b',
-                            'status'       => true,
-                            'created_by'   => $userId,
-                        ];
+                        $urutItem = 1;
+                        foreach ($items as $it) {
+                            $dataItem = [
+                                'jurnal_pembantu_header_id' => $headerBarang->id,
+                                'urut'         => $urutItem++,
+                                'jenis_pihak'  => $jenisPihak,
+                                'nama_pihak'   => $namaPihak,
+                                'nama_barang'  => $it['nama_barang'],
+                                'no_dokumen'   => $noDokumen,
+                                'keterangan'   => $it['ket_item'],
+                                'banyak'       => $it['banyak'],
+                                'm3'           => 0,
+                                'harga'        => $it['harga'],
+                                'hit_kbk'      => 'b',
+                                'status'       => true,
+                                'created_by'   => $userId,
+                            ];
 
-                        if (!empty($b['id_barang'])) {
-                            $dataItem['id_barang'] = $b['id_barang'];
+                            if (!empty($it['id_barang'])) {
+                                $dataItem['id_barang'] = $it['id_barang'];
+                            }
+
+                            JurnalPembantuItem::create($dataItem);
                         }
-
-                        JurnalPembantuItem::create($dataItem);
 
                         $headersDibuat->push($headerBarang);
                     }
@@ -227,6 +360,8 @@ class BukuKitabJurnalService
                     $ketBaris .= ' ' . $labelBarang;
                 }
 
+                $catatanBaris = trim((string) ($catatanPerVariabel[$baris->variabel_nilai] ?? ''));
+
                 $header = JurnalPembantuHeader::create([
                     'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
                     'tgl_transaksi'      => $tglTransaksi,
@@ -234,9 +369,9 @@ class BukuKitabJurnalService
                     'modul_asal'         => $modulAsal,
                     'jurnal'             => $noJurnal,
                     'no_akun'            => $baris->no_akun,
-                    'nama_akun'          => $baris->nama_akun,
+                    'nama_akun'          => $this->resolveNamaAkun($baris->no_akun, $baris->nama_akun),
                     'map'                => $baris->posisi,
-                    'keterangan'         => "{$ketBaris} | Nota: {$noDokumen}",
+                    'keterangan'         => "{$ketBaris} | Nota: {$noDokumen}" . ($catatanBaris !== '' ? " ({$catatanBaris})" : ''),
                     'no_dokumen'         => $noDokumen,
                     'total_nilai'        => $nominal,
                     'status'             => JurnalPembantuHeader::STATUS_DRAFT,

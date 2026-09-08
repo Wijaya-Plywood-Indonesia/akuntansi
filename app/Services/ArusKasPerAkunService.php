@@ -229,14 +229,26 @@ class ArusKasPerAkunService
         $noNota = optional($barisNota)->no_dokumen;
         $namaPihak = optional($barisNama)->nama;
 
+        // Catatan (mis. "beli lem") yang diinput user disisipkan di ujung
+        // keterangan baris kas dalam kurung, contoh:
+        // "KAS TUNAI | Nota: sj-9218 | DOVER CHEMICAL (beli lem)".
+        // Ambil catatan itu supaya ikut tampil di kolom Ket rekap arus kas,
+        // bukan cuma "No. Nota - Nama" saja.
+        $keteranganKasMentah = optional($barisKasDiJurnalIni->first())->keterangan ?? '';
+        $catatanUser = null;
+        if (preg_match('/\(([^()]+)\)\s*$/', (string) $keteranganKasMentah, $m)) {
+            $catatanUser = trim($m[1]);
+        }
+
         if ($noNota || $namaPihak) {
             return collect([
                 $noNota,
                 $namaPihak,
+                $catatanUser,
             ])->filter()->implode(' - ');
         }
 
-        $keteranganKas = optional($barisKasDiJurnalIni->first())->keterangan;
+        $keteranganKas = $keteranganKasMentah ?: null;
         $namaAkunLawan = optional(
             $semuaBaris->first(fn($b) => !in_array($b->no_akun, $kodeAkunTerpilih, true))
         )->nama_akun;

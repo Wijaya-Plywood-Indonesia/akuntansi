@@ -148,6 +148,9 @@ class JurnalPembelianTriplekService
                     namaPihak: $pembelian->supplier_name ?: 'Supplier',
                     keteranganDefault: 'Pelunasan Hutang (Langsung Saat Pembelian)',
                     noJurnalOverride: $noJurnal,
+                    catatanPerVariabel: [
+                        'nominal_kas' => $this->gabungCatatan($pembelian, $bayar),
+                    ],
                 );
             }
         });
@@ -279,6 +282,9 @@ class JurnalPembelianTriplekService
                 ],
                 splitHeaderPerBarang: ['nilai_persediaan_dinamis'],
                 noJurnalOverride: $noJurnal,
+                catatanPerVariabel: [
+                    'nominal_kas' => $this->gabungCatatan($pembelian, $bayarSisa),
+                ],
             );
         });
     }
@@ -319,6 +325,9 @@ class JurnalPembelianTriplekService
                 namaPihak: $pembelian->supplier_name ?: 'Supplier',
                 keteranganDefault: 'Pelunasan Hutang Pembelian (Jatuh Tempo)',
                 noJurnalOverride: $noJurnal,
+                catatanPerVariabel: [
+                    'nominal_kas' => $this->gabungCatatan($pembelian, $bayar),
+                ],
             );
         });
     }
@@ -381,7 +390,7 @@ class JurnalPembelianTriplekService
             'no_akun'            => $barisUangMuka->no_akun,
             'nama_akun'          => $barisUangMuka->nama_akun,
             'map'                => 'd',
-            'keterangan'         => "{$keteranganDefault} | Nota: {$nota}",
+            'keterangan'         => "{$keteranganDefault} | Nota: {$nota}" . $this->suffixCatatan(trim((string) ($pembelian->catatan ?? ''))),
             'no_dokumen'         => $nota,
             'total_nilai'        => $totalUangMuka,
             'status'             => JurnalPembantuHeader::STATUS_DRAFT,
@@ -423,7 +432,7 @@ class JurnalPembelianTriplekService
                 'no_akun'            => $barisKas->no_akun,
                 'nama_akun'          => $barisKas->nama_akun,
                 'map'                => 'k',
-                'keterangan'         => "{$barisKas->keterangan} | Nota: {$nota}",
+                'keterangan'         => "{$barisKas->keterangan} | Nota: {$nota}" . $this->suffixCatatan($this->gabungCatatan($pembelian, $bayar)),
                 'no_dokumen'         => $nota,
                 'total_nilai'        => (float) $bayar->amount,
                 'status'             => JurnalPembantuHeader::STATUS_DRAFT,
@@ -460,6 +469,29 @@ class JurnalPembelianTriplekService
      * $context (bukan cuma itemBreakdown) supaya baris itu lolos pengecekan
      * nominal > 0 tadi.
      */
+    /**
+     * Gabungkan catatan dari baris pembayaran (PembelianMetodePembayaran)
+     * dan catatan pembelian itu sendiri (Pembelian::catatan) supaya apapun
+     * kolom yang diisi user, tetap muncul di keterangan baris kas jurnal.
+     * Kalau dua-duanya diisi & berbeda, tampilkan keduanya.
+     */
+    private function gabungCatatan(Pembelian $pembelian, ?PembelianMetodePembayaran $bayar): string
+    {
+        $catatanPembayaran = trim((string) ($bayar?->catatan ?? ''));
+        $catatanPembelian  = trim((string) ($pembelian->catatan ?? ''));
+
+        if ($catatanPembayaran !== '' && $catatanPembelian !== '' && $catatanPembayaran !== $catatanPembelian) {
+            return "{$catatanPembayaran} - {$catatanPembelian}";
+        }
+
+        return $catatanPembayaran !== '' ? $catatanPembayaran : $catatanPembelian;
+    }
+
+    private function suffixCatatan(string $catatan): string
+    {
+        return $catatan !== '' ? " ({$catatan})" : '';
+    }
+
     private function hitungTotalBreakdown(array $breakdown): float
     {
         return round(collect($breakdown)->sum(
