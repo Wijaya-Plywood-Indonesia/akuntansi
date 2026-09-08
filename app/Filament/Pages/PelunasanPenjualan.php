@@ -21,7 +21,7 @@ class PelunasanPenjualan extends Page
 
     protected string $view = 'filament.pages.pelunasan-penjualan';
 
-    protected static ?string $navigationLabel = 'Pelunasan';
+    protected static ?string $navigationLabel = 'Pelunasan Penjualan';
 
     protected static ?string $title = 'Pelunasan Penjualan';
 
