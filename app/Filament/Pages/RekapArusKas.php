@@ -7,22 +7,24 @@ use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Pages\Page;
 use UnitEnum;
+use Filament\Support\Enums\Width;
 
 class RekapArusKas extends Page
 {
     use HasPageShield;
 
-    // Slug '/' -> menjadikan halaman ini landing page panel (lihat AdminPanelProvider)
-    protected static ?string $slug = '/';
-
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
     protected static ?string $title = 'Rekap Arus Kas';
     protected static ?string $navigationLabel = 'Rekap Arus Kas';
-    protected static ?int $navigationSort = -10; // paling atas di menu
+    protected static ?int $navigationSort = -9;
 
     protected string $view = 'filament.pages.rekap-arus-kas';
 
     public const MAX_RENTANG_HARI = 365;
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     // ── Preset periode ──
     public string $periodeAktif = 'hari_ini';

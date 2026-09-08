@@ -7,20 +7,28 @@ use App\Services\ArusKasPerAkunService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Pages\Page;
+use Filament\Support\Enums\Width;
 use UnitEnum;
 
 class RekapArusKasV2 extends Page
 {
     use HasPageShield;
 
+    // Slug '/' -> menjadikan halaman ini landing page panel (lihat AdminPanelProvider)
+    protected static ?string $slug = '/';
+
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal & Akuntansi';
-    protected static ?string $title = 'Rekap Arus Kas (v2)';
-    protected static ?string $navigationLabel = 'Rekap Arus Kas (v2)';
-    protected static ?int $navigationSort = -9; // tepat di bawah versi 1
+    protected static ?string $title = 'Arus Kas';
+    protected static ?string $navigationLabel = 'Arus Kas';
+    protected static ?int $navigationSort = -10; // paling atas di menu
 
     protected string $view = 'filament.pages.rekap-arus-kas-v2';
 
     public const MAX_RENTANG_HARI = 365;
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     // ── Preset periode ── (default per hari, sesuai poin 1)
     public string $periodeAktif = 'hari_ini';
@@ -42,13 +50,29 @@ class RekapArusKasV2 extends Page
 
     public function mount(): void
     {
-        $this->daftarAkunKas = app(ArusKasPerAkunService::class)->getDaftarAkunKas();
+        $service = app(ArusKasPerAkunService::class);
+        $this->daftarAkunKas = $service->getDaftarAkunKas();
 
-        // Default: semua akun kas/bank tercentang, biar direksi tinggal
-        // uncheck yang tidak relevan (poin 3).
-        $this->akunTerpilih = array_keys($this->daftarAkunKas);
+        // Default: hanya akun yang "ada isinya" (saldo terkini tidak nol)
+        // yang tercentang, biar direksi tidak dipusingkan rekening yang
+        // memang belum/tidak dipakai. Kalau ternyata semua nol (data baru),
+        // fallback centang semua supaya halaman tidak kosong melompong.
+        $saldoSekarang = $service->hitungSaldoSekarang(array_keys($this->daftarAkunKas));
+        $akunBerisi = array_keys(array_filter($saldoSekarang, fn($s) => abs($s) > 0.01));
+
+        $this->akunTerpilih = !empty($akunBerisi) ? $akunBerisi : array_keys($this->daftarAkunKas);
 
         $this->terapkanPreset('hari_ini');
+    }
+
+    /**
+     * Dipanggil otomatis oleh Livewire tiap kali checkbox akun
+     * dicentang/dilepas (wire:model.live) — langsung terapkan tanpa
+     * perlu tombol "Tampilkan" lagi.
+     */
+    public function updatedAkunTerpilih(): void
+    {
+        $this->terapkanAkunTerpilih();
     }
 
     public function terapkanPreset(string $preset): void

@@ -25,7 +25,7 @@ class PelunasanPenjualan extends Page
 
     protected static ?string $title = 'Pelunasan Penjualan';
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
+    // protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
 
     public ?string $search = '';
 

@@ -44,11 +44,11 @@ class ArusKasService
             if ($r['kode_kategori'] === self::KATEGORI_TRANSFER_INTERNAL) {
                 continue; // dikecualikan dari total, hanya info
             }
-            if ($r['tipe'] === 'in') {
-                $totalMasuk += $r['nilai'];
-            } else {
-                $totalKeluar += $r['nilai'];
-            }
+            // Pakai nilai_masuk/nilai_keluar yang sudah dipisah per transaksi
+            // (bukan 'tipe' tunggal per kategori — kategori bisa berisi
+            // campuran transaksi masuk & keluar sekaligus).
+            $totalMasuk += $r['nilai_masuk'] ?? 0.0;
+            $totalKeluar += $r['nilai_keluar'] ?? 0.0;
         }
 
         $saldoAkhir = $saldoAwal + $totalMasuk - $totalKeluar;
@@ -244,13 +244,26 @@ class ArusKasService
                 $agregat[$kodeKategori] = [
                     'kode_kategori' => $kodeKategori,
                     'nama'          => $namaKategori,
-                    'tipe'          => $tipe,
-                    'nilai'         => 0.0,
+                    'nilai_masuk'   => 0.0,
+                    'nilai_keluar'  => 0.0,
                     'transaksi'     => [],
                 ];
             }
 
-            $agregat[$kodeKategori]['nilai'] += abs($netKas);
+            // PENTING: akumulasi masuk & keluar terpisah per transaksi.
+            // Jangan pakai satu "tipe" per kategori (bug lama: kategori yang
+            // berisi campuran transaksi masuk & keluar akan salah tanda,
+            // karena tipe kategori sempat dikunci dari transaksi PERTAMA
+            // saja, lalu semua nilai lain — termasuk yang arahnya
+            // berlawanan — ikut dijumlah pakai tanda yang sama).
+            if ($tipe === 'in') {
+                $agregat[$kodeKategori]['nilai_masuk'] += abs($netKas);
+            } elseif ($tipe === 'out') {
+                $agregat[$kodeKategori]['nilai_keluar'] += abs($netKas);
+            }
+            // 'netral' (transfer internal) sengaja tidak menambah masuk/keluar,
+            // konsisten dengan pengecualian dari total di hitung().
+
             $agregat[$kodeKategori]['transaksi'][] = [
                 'jurnal'     => $noJurnal,
                 'tgl'        => $tanggal,
@@ -262,8 +275,25 @@ class ArusKasService
             ];
         }
 
+        // Ubah agregat masuk/keluar per kategori jadi net (nilai + tipe)
+        // untuk ditampilkan sebagai satu baris ringkasan per kategori.
+        $hasil = [];
+        foreach ($agregat as $kodeKategori => $a) {
+            $net = $a['nilai_masuk'] - $a['nilai_keluar'];
+            $hasil[] = [
+                'kode_kategori' => $a['kode_kategori'],
+                'nama'          => $a['nama'],
+                'tipe'          => $kodeKategori === self::KATEGORI_TRANSFER_INTERNAL
+                    ? 'netral'
+                    : ($net >= 0 ? 'in' : 'out'),
+                'nilai'         => abs($net),
+                'nilai_masuk'   => $a['nilai_masuk'],
+                'nilai_keluar'  => $a['nilai_keluar'],
+                'transaksi'     => $a['transaksi'],
+            ];
+        }
+
         // Urutkan: kategori kas masuk dulu, lalu keluar, transfer internal di akhir.
-        $hasil = array_values($agregat);
         usort($hasil, function ($a, $b) {
             $urutanTipe = ['in' => 0, 'out' => 1, 'netral' => 2];
             return $urutanTipe[$a['tipe']] <=> $urutanTipe[$b['tipe']];
