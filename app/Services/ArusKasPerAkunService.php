@@ -44,6 +44,26 @@ class ArusKasPerAkunService
     }
 
     /**
+     * Saldo TERKINI (sampai hari ini) untuk sekumpulan akun kas/bank.
+     * Dipakai untuk menentukan default checkbox: akun yang "ada isinya"
+     * (saldo tidak nol) yang otomatis tercentang saat halaman dibuka.
+     *
+     * @param  string[]  $kodeAkunList
+     * @return array<string,float>  kode_sub_anak_akun => saldo
+     */
+    public function hitungSaldoSekarang(array $kodeAkunList): array
+    {
+        $besok = Carbon::now()->addDay()->startOfDay();
+
+        $saldo = [];
+        foreach ($kodeAkunList as $kode) {
+            $saldo[$kode] = $this->getSaldoAkunSebelum($besok, $kode);
+        }
+
+        return $saldo;
+    }
+
+    /**
      * Hitung rekap arus kas per akun (kolom sejajar), untuk satu rentang
      * tanggal dan satu set kode akun kas/bank yang dipilih user.
      *
@@ -211,7 +231,7 @@ class ArusKasPerAkunService
 
         if ($noNota || $namaPihak) {
             return collect([
-                $noNota ? 'No. ' . $noNota : null,
+                $noNota,
                 $namaPihak,
             ])->filter()->implode(' - ');
         }

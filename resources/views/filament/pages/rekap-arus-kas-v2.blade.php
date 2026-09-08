@@ -84,17 +84,12 @@
                 @foreach($daftarAkunKas as $kode => $nama)
                 <label class="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-800 cursor-pointer text-sm
                     {{ in_array($kode, $akunTerpilih) ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800' : 'bg-gray-50 dark:bg-gray-800' }}">
-                    <input type="checkbox" wire:model="akunTerpilih" value="{{ $kode }}"
+                    <input type="checkbox" wire:model.live="akunTerpilih" value="{{ $kode }}"
                         class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
                     <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{{ $nama }}</span>
                 </label>
                 @endforeach
             </div>
-
-            <button type="button" wire:click="terapkanAkunTerpilih"
-                class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-none">
-                Tampilkan
-            </button>
             @endif
         </div>
 
@@ -134,6 +129,15 @@
             Tidak ada transaksi kas pada periode ini untuk akun yang dipilih.
         </div>
         @else
+        @php
+            // Akun yang tidak ada mutasi sama sekali di periode ini
+            // diringkas jadi 1 kolom Saldo saja (bukan D/K/Saldo penuh),
+            // supaya kolom akun yang aktif transaksinya dapat ruang lebih
+            // lega untuk nominalnya.
+            $akunAktif = collect($kodeAkun)->mapWithKeys(fn($kode) => [
+                $kode => (($hasil['total_masuk'][$kode] ?? 0) != 0 || ($hasil['total_keluar'][$kode] ?? 0) != 0),
+            ]);
+        @endphp
         <div class="rak2-table-wrap bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl">
             <table class="rak2-table text-xs">
                 <thead>
@@ -141,15 +145,19 @@
                         <th rowspan="2" class="rak2-sticky-col bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left border-b border-r border-gray-200 dark:border-gray-800" style="min-width:90px;">Tgl</th>
                         <th rowspan="2" class="rak2-sticky-col-2 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left border-b border-r border-gray-200 dark:border-gray-800" style="min-width:220px;">Keterangan</th>
                         @foreach($kodeAkun as $kode)
-                        <th colspan="3" class="px-3 py-2 text-center border-b border-l border-gray-200 dark:border-gray-800">{{ $namaAkun[$kode] ?? $kode }}</th>
+                        <th colspan="{{ $akunAktif[$kode] ? 3 : 1 }}" class="px-3 py-2 text-center border-b border-l border-gray-200 dark:border-gray-800">{{ $namaAkun[$kode] ?? $kode }}</th>
                         @endforeach
                         <th rowspan="2" class="px-3 py-2 border-b border-l border-gray-200 dark:border-gray-800" style="min-width:60px;"></th>
                     </tr>
                     <tr class="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 uppercase font-bold">
                         @foreach($kodeAkun as $kode)
-                        <th class="px-2 py-1.5 text-right border-l border-gray-200 dark:border-gray-800">D</th>
-                        <th class="px-2 py-1.5 text-right">K</th>
-                        <th class="px-2 py-1.5 text-right border-r border-gray-200 dark:border-gray-800">Saldo</th>
+                        @if($akunAktif[$kode])
+                        <th class="px-2 py-1.5 text-right border-l border-gray-200 dark:border-gray-800" style="min-width:105px;">D</th>
+                        <th class="px-2 py-1.5 text-right" style="min-width:105px;">K</th>
+                        <th class="px-2 py-1.5 text-right border-r border-gray-200 dark:border-gray-800" style="min-width:110px;">Saldo</th>
+                        @else
+                        <th class="px-2 py-1.5 text-right border-l border-r border-gray-200 dark:border-gray-800" style="min-width:90px;">Saldo</th>
+                        @endif
                         @endforeach
                     </tr>
                 </thead>
@@ -159,9 +167,13 @@
                         <td class="rak2-sticky-col bg-gray-50 dark:bg-gray-800 px-3 py-2 border-r border-gray-200 dark:border-gray-800">Awal</td>
                         <td class="rak2-sticky-col-2 bg-gray-50 dark:bg-gray-800 px-3 py-2 border-r border-gray-200 dark:border-gray-800">Saldo awal periode</td>
                         @foreach($kodeAkun as $kode)
+                        @if($akunAktif[$kode])
                         <td class="px-2 py-2 border-l border-gray-200 dark:border-gray-800"></td>
                         <td class="px-2 py-2"></td>
                         <td class="px-2 py-2 text-right border-r border-gray-200 dark:border-gray-800">{{ number_format($hasil['saldo_awal'][$kode] ?? 0, 0, ',', '.') }}</td>
+                        @else
+                        <td class="px-2 py-2 text-right border-l border-r border-gray-200 dark:border-gray-800">{{ number_format($hasil['saldo_awal'][$kode] ?? 0, 0, ',', '.') }}</td>
+                        @endif
                         @endforeach
                         <td class="px-2 py-2"></td>
                     </tr>
@@ -176,15 +188,21 @@
                         </td>
                         @foreach($kodeAkun as $kode)
                         @php $k = $b['kolom'][$kode] ?? ['debit'=>null,'kredit'=>null]; @endphp
-                        <td class="px-2 py-2 text-right border-l border-gray-100 dark:border-gray-800 {{ $k['debit'] ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-gray-300 dark:text-gray-700' }}">
+                        @if($akunAktif[$kode])
+                        <td class="px-2 py-2 text-right border-l border-gray-100 dark:border-gray-800 {{ $k['debit'] ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-gray-700 dark:text-gray-200' }}">
                             {{ $k['debit'] ? number_format($k['debit'], 0, ',', '.') : '—' }}
                         </td>
-                        <td class="px-2 py-2 text-right {{ $k['kredit'] ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-gray-300 dark:text-gray-700' }}">
+                        <td class="px-2 py-2 text-right {{ $k['kredit'] ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-gray-700 dark:text-gray-200' }}">
                             {{ $k['kredit'] ? number_format($k['kredit'], 0, ',', '.') : '—' }}
                         </td>
-                        <td class="px-2 py-2 text-right border-r border-gray-100 dark:border-gray-800 text-gray-600 dark:text-gray-300">
+                        <td class="px-2 py-2 text-right border-r border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-100">
                             {{ number_format($b['saldo'][$kode] ?? 0, 0, ',', '.') }}
                         </td>
+                        @else
+                        <td class="px-2 py-2 text-right border-l border-r border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-100">
+                            {{ number_format($b['saldo'][$kode] ?? 0, 0, ',', '.') }}
+                        </td>
+                        @endif
                         @endforeach
                         <td class="px-2 py-2 text-center">
                             <a href="{{ $this->urlJurnal($b['jurnal']) }}"
@@ -199,9 +217,13 @@
                     <tr class="bg-gray-50 dark:bg-gray-800 font-black text-gray-800 dark:text-gray-100">
                         <td colspan="2" class="rak2-sticky-col bg-gray-50 dark:bg-gray-800 px-3 py-2 border-t border-r border-gray-200 dark:border-gray-800">Total</td>
                         @foreach($kodeAkun as $kode)
+                        @if($akunAktif[$kode])
                         <td class="px-2 py-2 text-right border-l border-t border-gray-200 dark:border-gray-800 text-emerald-600 dark:text-emerald-400">{{ number_format($hasil['total_masuk'][$kode] ?? 0, 0, ',', '.') }}</td>
                         <td class="px-2 py-2 text-right border-t border-gray-200 dark:border-gray-800 text-rose-600 dark:text-rose-400">{{ number_format($hasil['total_keluar'][$kode] ?? 0, 0, ',', '.') }}</td>
                         <td class="px-2 py-2 text-right border-r border-t border-gray-200 dark:border-gray-800">{{ number_format($hasil['saldo_akhir'][$kode] ?? 0, 0, ',', '.') }}</td>
+                        @else
+                        <td class="px-2 py-2 text-right border-l border-r border-t border-gray-200 dark:border-gray-800">{{ number_format($hasil['saldo_akhir'][$kode] ?? 0, 0, ',', '.') }}</td>
+                        @endif
                         @endforeach
                         <td class="px-2 py-2 border-t border-gray-200 dark:border-gray-800"></td>
                     </tr>

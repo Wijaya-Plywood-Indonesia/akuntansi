@@ -29,7 +29,7 @@ class KedatanganBarangPembelian extends Page
 
     protected static ?string $title = 'Kedatangan Barang & Pelunasan Hutang';
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-truck';
+    // protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-truck';
 
     public ?string $search = '';
 
