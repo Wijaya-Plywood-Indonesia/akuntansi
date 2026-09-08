@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\JurnalPembantuHeader;
 use App\Models\Penjualan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Jurnal Penjualan Triplek & Turunannya — berbasis template Buku Kitab.
@@ -36,13 +37,39 @@ class JurnalPenjualanTriplekService
 {
     private const HUTANG_GAJI_TETAP = 300000.0;
 
+    /**
+     * Tempel "Keterangan Nota" (field di form Penjualan, kolom
+     * penjualans.keterangan) ke keterangan default suatu baris jurnal.
+     * Dipakai untuk baris yang mewakili pengakuan PENJUALAN itu sendiri
+     * (piutang/penjualan/hpp/stok) — bukan baris kas.
+     */
+    private function tambahKeteranganNota(string $default, Penjualan $penjualan): string
+    {
+        return filled($penjualan->keterangan)
+            ? "{$default} — {$penjualan->keterangan}"
+            : $default;
+    }
+
+    /**
+     * Tempel "Keterangan Pembayaran" (field di form Penjualan, kolom
+     * penjualans.keterangan_pembayaran) ke keterangan default suatu baris
+     * jurnal. Dipakai khusus untuk baris KAS/pembayaran (lewat
+     * postingSplitKas), karena field ini memang tentang cara/catatan bayar.
+     */
+    private function tambahKeteranganBayar(string $default, Penjualan $penjualan): string
+    {
+        return filled($penjualan->keterangan_pembayaran)
+            ? "{$default} — {$penjualan->keterangan_pembayaran}"
+            : $default;
+    }
+
     public function __construct(
         private readonly BukuKitabJurnalService $engine,
     ) {}
 
     public function buatJurnalPenjualan(Penjualan $penjualan, int $userId): void
     {
-        $penjualan->loadMissing(['details.barang', 'rekeningPerusahaan.subAnakAkun']);
+        $penjualan->loadMissing(['details.barang.subAnakAkun', 'rekeningPerusahaan.subAnakAkun']);
 
         $totalBayar = $this->totalBayar($penjualan);
         $data = $this->siapkanDataBarang($penjualan);
@@ -68,13 +95,16 @@ class JurnalPenjualanTriplekService
                         'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
                         'hutang_gaji'            => $data['hutang_gaji'],
                     ],
-                    keteranganDefault: 'Penerimaan DP — Penjualan Diakui Penuh',
+                    keteranganDefault: $this->tambahKeteranganBayar(
+                        $this->tambahKeteranganNota('Penerimaan DP — Penjualan Diakui Penuh', $penjualan),
+                        $penjualan,
+                    ),
                     itemBreakdown: [
                         'persediaan_barang_jadi' => $data['breakdown_persediaan'],
                         'hpp'                    => $data['breakdown_hpp'],
                         'nilai_penjualan'        => $data['breakdown_penjualan'],
                     ],
-                    splitHeaderPerBarang: ['persediaan_barang_jadi'],
+                    splitHeaderPerBarang: ['persediaan_barang_jadi', 'hpp', 'nilai_penjualan'],
                 );
 
                 return;
@@ -89,7 +119,7 @@ class JurnalPenjualanTriplekService
                         userId: $userId,
                         noJurnal: $noJurnal,
                         contextFull: ['dp_penjualan' => $totalBayar],
-                        keteranganDefault: 'Penerimaan Bayar Dimuka',
+                        keteranganDefault: $this->tambahKeteranganBayar('Penerimaan Bayar Dimuka', $penjualan),
                     );
                 }
 
@@ -110,13 +140,13 @@ class JurnalPenjualanTriplekService
                     userId: $userId,
                     jenisPihak: 'pelanggan',
                     namaPihak: $penjualan->nama_customer ?: 'Pelanggan',
-                    keteranganDefault: 'Pengiriman Barang (Bayar Dimuka)',
+                    keteranganDefault: $this->tambahKeteranganNota('Pengiriman Barang (Bayar Dimuka)', $penjualan),
                     itemBreakdown: [
                         'persediaan_barang_jadi' => $data['breakdown_persediaan'],
                         'hpp'                    => $data['breakdown_hpp'],
                         'nilai_penjualan'        => $data['breakdown_penjualan'],
                     ],
-                    splitHeaderPerBarang: ['persediaan_barang_jadi'],
+                    splitHeaderPerBarang: ['persediaan_barang_jadi', 'hpp', 'nilai_penjualan'],
                     noJurnalOverride: $noJurnal,
                 );
 
@@ -143,13 +173,13 @@ class JurnalPenjualanTriplekService
                 userId: $userId,
                 jenisPihak: 'pelanggan',
                 namaPihak: $penjualan->nama_customer ?: 'Pelanggan',
-                keteranganDefault: 'Penjualan Triplek',
+                keteranganDefault: $this->tambahKeteranganNota('Penjualan Triplek', $penjualan),
                 itemBreakdown: [
                     'persediaan_barang_jadi' => $data['breakdown_persediaan'],
                     'hpp'                    => $data['breakdown_hpp'],
                     'nilai_penjualan'        => $data['breakdown_penjualan'],
                 ],
-                splitHeaderPerBarang: ['persediaan_barang_jadi'],
+                splitHeaderPerBarang: ['persediaan_barang_jadi', 'hpp', 'nilai_penjualan'],
                 noJurnalOverride: $noJurnal,
             );
         });
@@ -184,7 +214,7 @@ class JurnalPenjualanTriplekService
                     'dp_penjualan'  => $dpSudahDiterima,
                     'piutang_usaha' => (float) $penjualan->total,
                 ],
-                keteranganDefault: 'Pelunasan Sisa Piutang DP',
+                keteranganDefault: $this->tambahKeteranganBayar('Pelunasan Sisa Piutang DP', $penjualan),
                 nominalKasOverride: $nominalDibayarSekarang,
             );
         });
@@ -193,6 +223,8 @@ class JurnalPenjualanTriplekService
     /* =====================================================================
      * INTERNAL
      * ===================================================================== */
+
+    private const KODE_PERSEDIAAN_FALLBACK = '1404.0';
 
     private function siapkanDataBarang(Penjualan $penjualan): array
     {
@@ -212,7 +244,25 @@ class JurnalPenjualanTriplekService
 
             $nilaiPokokBarang += $nominal;
 
+            // FIX: sebelumnya baris ini SELALU numpuk ke 1 akun Persediaan
+            // tetap dari template Buku Kitab (mis. "1404.2 Persediaan
+            // Triplek Siap Jual"), apapun kategori barangnya — jadi kalau 1
+            // nota jual campur Triplek + Veneer, Veneer ikut salah tercatat
+            // ke akun Persediaan Triplek. Sekarang akun diambil per barang
+            // dari Barang::subAnakAkun, sama seperti pola di
+            // JurnalPembelianTriplekService::siapkanBreakdownPersediaan().
+            $kodeAkun = $detail->barang?->subAnakAkun?->kode_sub_anak_akun;
+            $namaAkun = $detail->barang?->subAnakAkun?->nama_sub_anak_akun;
+
+            if (! $kodeAkun) {
+                Log::warning("[JurnalPenjualanTriplek] Barang '{$detail->nama_barang}' belum di-set akun persediaannya. Menggunakan fallback '".self::KODE_PERSEDIAAN_FALLBACK."'.");
+                $kodeAkun = self::KODE_PERSEDIAAN_FALLBACK;
+                $namaAkun = '⚠ Akun persediaan belum di-set: '.$detail->nama_barang;
+            }
+
             $breakdownPersediaan[] = [
+                'no_akun'     => $kodeAkun,
+                'nama_akun'   => $namaAkun,
                 'id_barang'   => $detail->barang_id,
                 'nama_barang' => $detail->nama_barang,
                 'banyak'      => $qty,
@@ -220,7 +270,27 @@ class JurnalPenjualanTriplekService
                 'keterangan'  => 'Keluar stok '.$detail->nama_barang,
             ];
 
+            // FIX: sama seperti Persediaan di atas — akun HPP & akun
+            // Pendapatan juga bisa beda-beda PER BARANG (lihat master
+            // Barang: kolom "Akun Pendapatan" & "Akun HPP"), bukan cuma
+            // akun Persediaan. Sebelumnya kedua breakdown ini tidak bawa
+            // no_akun/nama_akun sendiri, jadi selalu numpuk ke akun tetap
+            // dari template Buku Kitab (mis. semua barang tercatat ke
+            // "4002.0 Penjualan Domestik" walau di master Barang sudah
+            // di-set akun pendapatan lain, mis. "4199.0 Pendapatan Usaha
+            // Lainnya" untuk Lem Dover). Kalau barang tidak di-set akun
+            // khusus (null), otomatis fallback ke akun tetap template
+            // seperti biasa — jadi aman untuk barang yang memang belum
+            // di-mapping.
+            $kodeAkunHpp = $detail->barang?->akunHpp?->kode_sub_anak_akun;
+            $namaAkunHpp = $detail->barang?->akunHpp?->nama_sub_anak_akun;
+
+            $kodeAkunPendapatan = $detail->barang?->akunPendapatan?->kode_sub_anak_akun;
+            $namaAkunPendapatan = $detail->barang?->akunPendapatan?->nama_sub_anak_akun;
+
             $breakdownHpp[] = [
+                'no_akun'     => $kodeAkunHpp,
+                'nama_akun'   => $namaAkunHpp,
                 'nama_barang' => $detail->nama_barang,
                 'banyak'      => $qty,
                 'harga'       => $hargaBeli,
@@ -229,6 +299,8 @@ class JurnalPenjualanTriplekService
 
             $hargaJualBersih = $qty > 0 ? round((float) $detail->subtotal / $qty, 4) : 0;
             $breakdownPenjualan[] = [
+                'no_akun'     => $kodeAkunPendapatan,
+                'nama_akun'   => $namaAkunPendapatan,
                 'nama_barang' => $detail->nama_barang,
                 'banyak'      => $qty,
                 'harga'       => $hargaJualBersih,
@@ -316,6 +388,9 @@ class JurnalPenjualanTriplekService
                 itemBreakdown: $itemBreakdown,
                 splitHeaderPerBarang: $splitHeaderPerBarang,
                 noJurnalOverride: $noJurnal,
+                catatanPerVariabel: [
+                    'nominal_kas' => trim((string) ($penjualan->keterangan_pembayaran ?? '')),
+                ],
             );
 
             $sudahAdaLeg = true;

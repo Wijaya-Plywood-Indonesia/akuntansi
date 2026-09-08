@@ -1,12 +1,19 @@
 <x-filament-panels::page>
 
     <style>
-        .rak2-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .rak2-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+        .rak2-table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .rak2-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: max-content;
+            min-width: 100%;
+        }
         .rak2-table th, .rak2-table td { white-space: nowrap; }
-        .rak2-sticky-col { position: sticky; left: 0; z-index: 2; }
-        .rak2-sticky-col-2 { position: sticky; left: 90px; z-index: 2; }
     </style>
+
 
     <div class="w-full mx-auto">
 
@@ -142,8 +149,8 @@
             <table class="rak2-table text-xs">
                 <thead>
                     <tr class="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 uppercase tracking-wider font-bold">
-                        <th rowspan="2" class="rak2-sticky-col bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left border-b border-r border-gray-200 dark:border-gray-800" style="min-width:90px;">Tgl</th>
-                        <th rowspan="2" class="rak2-sticky-col-2 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left border-b border-r border-gray-200 dark:border-gray-800" style="min-width:220px;">Keterangan</th>
+                        <th rowspan="2" class="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left border-b border-r border-gray-200 dark:border-gray-800" style="min-width:90px;">Tgl</th>
+                        <th rowspan="2" class="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left border-b border-r border-gray-200 dark:border-gray-800" style="min-width:220px;">Keterangan</th>
                         @foreach($kodeAkun as $kode)
                         <th colspan="{{ $akunAktif[$kode] ? 3 : 1 }}" class="px-3 py-2 text-center border-b border-l border-gray-200 dark:border-gray-800">{{ $namaAkun[$kode] ?? $kode }}</th>
                         @endforeach
@@ -164,8 +171,8 @@
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                     {{-- Baris saldo awal --}}
                     <tr class="bg-gray-50/60 dark:bg-gray-800/40 font-bold text-gray-700 dark:text-gray-200">
-                        <td class="rak2-sticky-col bg-gray-50 dark:bg-gray-800 px-3 py-2 border-r border-gray-200 dark:border-gray-800">Awal</td>
-                        <td class="rak2-sticky-col-2 bg-gray-50 dark:bg-gray-800 px-3 py-2 border-r border-gray-200 dark:border-gray-800">Saldo awal periode</td>
+                        <td class="bg-gray-50 dark:bg-gray-800 px-3 py-2 border-r border-gray-200 dark:border-gray-800">Awal</td>
+                        <td class="bg-gray-50 dark:bg-gray-800 px-3 py-2 border-r border-gray-200 dark:border-gray-800">Saldo awal periode</td>
                         @foreach($kodeAkun as $kode)
                         @if($akunAktif[$kode])
                         <td class="px-2 py-2 border-l border-gray-200 dark:border-gray-800"></td>
@@ -180,10 +187,10 @@
 
                     @foreach($hasil['baris'] as $b)
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                        <td class="rak2-sticky-col bg-white dark:bg-gray-900 px-3 py-2 border-r border-gray-100 dark:border-gray-800 font-semibold text-gray-700 dark:text-gray-200">
+                        <td class="bg-white dark:bg-gray-900 px-3 py-2 border-r border-gray-100 dark:border-gray-800 font-semibold text-gray-700 dark:text-gray-200">
                             {{ \Carbon\Carbon::parse($b['tgl'])->format('d/m/y') }}
                         </td>
-                        <td class="rak2-sticky-col-2 bg-white dark:bg-gray-900 px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-100 truncate" style="max-width:260px;" title="{{ $b['deskripsi'] }}">
+                        <td class="bg-white dark:bg-gray-900 px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-100 truncate" style="max-width:260px;" title="{{ $b['deskripsi'] }}">
                             {{ $b['deskripsi'] }}
                         </td>
                         @foreach($kodeAkun as $kode)
@@ -215,7 +222,7 @@
                 </tbody>
                 <tfoot>
                     <tr class="bg-gray-50 dark:bg-gray-800 font-black text-gray-800 dark:text-gray-100">
-                        <td colspan="2" class="rak2-sticky-col bg-gray-50 dark:bg-gray-800 px-3 py-2 border-t border-r border-gray-200 dark:border-gray-800">Total</td>
+                        <td colspan="2" class="bg-gray-50 dark:bg-gray-800 px-3 py-2 border-t border-r border-gray-200 dark:border-gray-800">Total</td>
                         @foreach($kodeAkun as $kode)
                         @if($akunAktif[$kode])
                         <td class="px-2 py-2 text-right border-l border-t border-gray-200 dark:border-gray-800 text-emerald-600 dark:text-emerald-400">{{ number_format($hasil['total_masuk'][$kode] ?? 0, 0, ',', '.') }}</td>
