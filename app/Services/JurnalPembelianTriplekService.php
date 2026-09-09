@@ -228,6 +228,119 @@ class JurnalPembelianTriplekService
     }
 
     /**
+     * TAHAP "KEDATANGAN BARANG" untuk DP — kasus barang datang DULUAN,
+     * sisa tagihan BELUM dibayar sama sekali di titik ini (akan dicicil
+     * belakangan lewat buatJurnalBayarHutangDp()). Dipanggil dari menu
+     * "Kedatangan Barang" -> aksi "Konfirmasi Barang Datang" ketika nominal
+     * pelunasan yang diisi user TIDAK menutup penuh sisa tagihan.
+     *
+     * Beda dari buatJurnalKedatanganBarangDp(): di sini Uang Muka Pembelian
+     * yang sudah terkumpul TIDAK dibalik/disentuh sama sekali — Utang Usaha
+     * diakui PENUH sebesar grand_total (kitab
+     * 'pembelian_down_payment_barang_datang_belum_lunas' tidak punya baris
+     * 'dp_pembelian'). Baru nanti di cicilan TERAKHIR
+     * (buatJurnalBayarHutangDp()), Uang Muka Pembelian ini dibalik sekaligus
+     * untuk menutup Utang Usaha ke 0.
+     */
+    public function buatJurnalKedatanganBarangDpBelumLunas(Pembelian $pembelian, int $userId): void
+    {
+        $pembelian->loadMissing(['detailPembelians.barang.subAnakAkun']);
+
+        $breakdownPersediaan = $this->siapkanBreakdownPersediaan($pembelian);
+        $nilaiPersediaanTotal = $this->hitungTotalBreakdown($breakdownPersediaan);
+        $ppnMasukan = (float) $pembelian->total_ppn;
+        $hutangUsahaPenuh = (float) $pembelian->grand_total;
+
+        DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $hutangUsahaPenuh) {
+            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            $this->engine->buatJurnalDariKitab(
+                kodeKitab: 'pembelian_down_payment_barang_datang_belum_lunas',
+                context: [
+                    'nilai_persediaan_dinamis' => $nilaiPersediaanTotal,
+                    'ppn_masukan'  => $ppnMasukan,
+                    'hutang_usaha' => $hutangUsahaPenuh,
+                ],
+                noDokumen: $pembelian->nomor_nota,
+                tglTransaksi: $pembelian->tanggal,
+                modulAsal: 'pembelian_barang',
+                jenisTransaksi: 'bm',
+                userId: $userId,
+                jenisPihak: 'supplier',
+                namaPihak: $pembelian->supplier_name ?: 'Supplier',
+                keteranganDefault: 'Kedatangan Barang (DP, Belum Lunas — Sisa Dicicil Belakangan)',
+                itemBreakdown: [
+                    'nilai_persediaan_dinamis' => $breakdownPersediaan,
+                ],
+                splitHeaderPerBarang: ['nilai_persediaan_dinamis'],
+                noJurnalOverride: $noJurnal,
+            );
+        });
+    }
+
+    /**
+     * Pelunasan hutang untuk Pembelian jenis DP yang barangnya SUDAH datang
+     * (via buatJurnalKedatanganBarangDpBelumLunas()) tapi masih ada sisa
+     * tagihan — dipanggil dari menu "Kedatangan Barang" -> aksi "Bayar
+     * Hutang" khusus nota DP yang sudah menerima barang. Boleh dicicil
+     * berkali-kali seperti buatJurnalBayarHutang() punya NORMAL, TAPI di
+     * cicilan TERAKHIR (begitu sisaTagihan() jadi 0 setelah baris
+     * pembayaran $bayar ini disimpan) turut membalik SELURUH Uang Muka
+     * Pembelian yang sudah terkumpul ($pembelian->
+     * dp_terkumpul_saat_barang_datang) supaya Utang Usaha benar-benar
+     * tertutup ke 0 — bukan cuma tertutup sebesar kas yang dibayar.
+     *
+     * $bayar WAJIB sudah ter-save ke DB sebelum method ini dipanggil, supaya
+     * $pembelian->sisaTagihan() (query fresh ke metodePembayarans) sudah
+     * memperhitungkan pembayaran ini saat menentukan "apakah ini cicilan
+     * terakhir".
+     */
+    public function buatJurnalBayarHutangDp(Pembelian $pembelian, PembelianMetodePembayaran $bayar, int $userId): void
+    {
+        if ((float) $bayar->amount <= 0) {
+            return;
+        }
+
+        $bayar->loadMissing('rekeningPerusahaan.subAnakAkun');
+
+        DB::transaction(function () use ($pembelian, $bayar, $userId) {
+            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            $sisaSetelahBayar = $pembelian->sisaTagihan();
+            $iniCicilanTerakhir = $sisaSetelahBayar <= 0.0001;
+            $dpNetting = $iniCicilanTerakhir ? (float) ($pembelian->dp_terkumpul_saat_barang_datang ?? 0) : 0.0;
+            $nominalBayar = (float) $bayar->amount;
+
+            $kodeKitab = $this->resolveKodePembayaran($bayar, 'pembelian_down_payment_pelunasan');
+
+            $this->engine->buatJurnalDariKitab(
+                kodeKitab: $kodeKitab,
+                context: [
+                    // D: Utang Usaha wajib = jumlah SEMUA sisi K (kas + DP
+                    // yang dibalik), supaya jurnal tetap balance.
+                    'hutang_usaha' => $nominalBayar + $dpNetting,
+                    'nominal_kas'  => $nominalBayar,
+                    'dp_pembelian' => $dpNetting, // auto-skip kalau 0 (bukan cicilan terakhir)
+                ],
+                noDokumen: $pembelian->nomor_nota,
+                tglTransaksi: now(),
+                modulAsal: 'pembelian_barang',
+                jenisTransaksi: 'bm',
+                userId: $userId,
+                jenisPihak: 'supplier',
+                namaPihak: $pembelian->supplier_name ?: 'Supplier',
+                keteranganDefault: $iniCicilanTerakhir
+                    ? 'Pelunasan Hutang Pembelian (DP, Cicilan Terakhir — Tutup Uang Muka)'
+                    : 'Pelunasan Hutang Pembelian (DP, Cicilan)',
+                noJurnalOverride: $noJurnal,
+                catatanPerVariabel: [
+                    'nominal_kas' => $this->gabungCatatan($pembelian, $bayar),
+                ],
+            );
+        });
+    }
+
+    /**
      * TAHAP "KEDATANGAN BARANG" untuk DP — dipanggil dari menu "Kedatangan
      * Barang" -> aksi "Konfirmasi Barang Datang" khusus nota jenis DP.
      *

@@ -216,10 +216,13 @@ class ArusKasPerAkunService
      * Susun deskripsi ringkas untuk kolom "Ket".
      *
      * Untuk transaksi yang berasal dari penjualan/pembelian (punya nomor
-     * dokumen/nota dan nama pihak terkait), tampilkan cukup "No. Nota -
-     * Nama" saja — bukan keterangan teknis yang panjang. Kalau kedua
-     * kolom itu kosong (mis. jurnal manual seperti "Modal Awal"), baru
-     * pakai keterangan asli / nama akun lawan sebagai fallback.
+     * dokumen/nota dan nama pihak terkait), tampilkan "Catatan | No. Nota |
+     * Nama" (catatan di depan supaya langsung kebaca apa transaksinya;
+     * dipisah "|" bukan "-" karena nomor nota sendiri sudah mengandung "-",
+     * mis. "sj-9217", jadi kalau dipisah "-" jadi susah dibedakan). Kalau
+     * kedua kolom (nota & nama) itu kosong (mis. jurnal manual seperti
+     * "Modal Awal"), baru pakai keterangan asli / nama akun lawan sebagai
+     * fallback.
      */
     private function buatDeskripsi(int|string $noJurnal, $barisKasDiJurnalIni, $semuaBaris, array $kodeAkunTerpilih): string
     {
@@ -233,7 +236,7 @@ class ArusKasPerAkunService
         // keterangan baris kas dalam kurung, contoh:
         // "KAS TUNAI | Nota: sj-9218 | DOVER CHEMICAL (beli lem)".
         // Ambil catatan itu supaya ikut tampil di kolom Ket rekap arus kas,
-        // bukan cuma "No. Nota - Nama" saja.
+        // ditaruh paling depan (mis. "beli lem | sj-9218 | DOVER CHEMICAL").
         $keteranganKasMentah = optional($barisKasDiJurnalIni->first())->keterangan ?? '';
         $catatanUser = null;
         if (preg_match('/\(([^()]+)\)\s*$/', (string) $keteranganKasMentah, $m)) {
@@ -242,10 +245,10 @@ class ArusKasPerAkunService
 
         if ($noNota || $namaPihak) {
             return collect([
+                $catatanUser,
                 $noNota,
                 $namaPihak,
-                $catatanUser,
-            ])->filter()->implode(' - ');
+            ])->filter()->implode(' | ');
         }
 
         $keteranganKas = $keteranganKasMentah ?: null;
