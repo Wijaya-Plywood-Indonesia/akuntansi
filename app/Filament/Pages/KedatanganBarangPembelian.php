@@ -37,6 +37,15 @@ class KedatanganBarangPembelian extends Page
 
     public ?Pembelian $selectedNota = null;
 
+    /**
+     * Tab aktif di panel kanan untuk nota DP yang barangnya BELUM datang:
+     * 'dp' (Tambah DP) atau 'datang' (Konfirmasi Barang Datang). Dipisah
+     * jadi tab supaya admin tidak salah isi kolom nominal antara dua aksi
+     * yang beda konsekuensi (DP hanya nambah cicilan, Barang Datang
+     * mengubah Persediaan & Utang Usaha).
+     */
+    public string $panelTab = 'dp';
+
     // ── Form "Tambah DP" ─────────────────────────────────────────────────
     public string $dp_nominal = '';
 
@@ -67,6 +76,18 @@ class KedatanganBarangPembelian extends Page
     public ?string $hutang_reference_number = null;
 
     public ?string $hutang_catatan = null;
+
+    // ── Form "Bayar Hutang DP" (khusus DP yang barangnya SUDAH datang
+    //    tapi masih ada sisa tagihan) ────────────────────────────────────
+    public string $hutangdp_nominal = '';
+
+    public string $hutangdp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
+
+    public ?int $hutangdp_rekening_perusahaan_id = null;
+
+    public ?string $hutangdp_reference_number = null;
+
+    public ?string $hutangdp_catatan = null;
 
     /** @var Collection<int, RekeningPerusahaan> */
     public Collection $rekeningPerusahaan;
@@ -109,8 +130,9 @@ class KedatanganBarangPembelian extends Page
 
         $bisaKonfirmasiBarang = $service->bisaDikonfirmasi($nota);
         $bisaBayarHutang = $service->bisaBayarHutang($nota);
+        $bisaBayarHutangDp = $service->bisaBayarHutangDp($nota);
 
-        if (! $bisaKonfirmasiBarang && ! $bisaBayarHutang) {
+        if (! $bisaKonfirmasiBarang && ! $bisaBayarHutang && ! $bisaBayarHutangDp) {
             Notification::make()
                 ->title('Tidak Bisa Diproses')
                 ->body('Nota ini tidak menunggu kedatangan barang maupun pelunasan hutang, atau sudah selesai diproses sebelumnya.')
@@ -123,12 +145,6 @@ class KedatanganBarangPembelian extends Page
         $this->pembelian_id = $id;
         $this->selectedNota = $nota;
         $this->resetFormFields();
-
-        // Prefill nominal sisa untuk DP supaya user tinggal cek "Bayar Pas"
-        // (tapi tetap wajib pas menutup sisa, tidak bisa diubah jadi kurang).
-        if ($nota->jenis_pembayaran === Pembelian::JENIS_DP) {
-            $this->sisa_nominal = $nota->sisaTagihan() > 0 ? (string) (int) $nota->sisaTagihan() : '0';
-        }
     }
 
     public function batalPilihNota(): void
@@ -140,6 +156,8 @@ class KedatanganBarangPembelian extends Page
 
     private function resetFormFields(): void
     {
+        $this->panelTab = 'dp';
+
         $this->dp_nominal = '';
         $this->dp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->dp_rekening_perusahaan_id = null;
@@ -156,6 +174,12 @@ class KedatanganBarangPembelian extends Page
         $this->hutang_rekening_perusahaan_id = null;
         $this->hutang_reference_number = null;
         $this->hutang_catatan = null;
+
+        $this->hutangdp_nominal = '';
+        $this->hutangdp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
+        $this->hutangdp_rekening_perusahaan_id = null;
+        $this->hutangdp_reference_number = null;
+        $this->hutangdp_catatan = null;
     }
 
     private function parseNumber(string $value): float
@@ -204,7 +228,6 @@ class KedatanganBarangPembelian extends Page
             $this->dp_nominal = '';
             $this->dp_reference_number = null;
             $this->dp_catatan = null;
-            $this->sisa_nominal = $updated->sisaTagihan() > 0 ? (string) (int) $updated->sisaTagihan() : '0';
             unset($this->notaResults);
         } catch (InvalidArgumentException|RuntimeException $e) {
             Notification::make()
@@ -258,6 +281,63 @@ class KedatanganBarangPembelian extends Page
                 $this->hutang_nominal = '';
                 $this->hutang_reference_number = null;
                 $this->hutang_catatan = null;
+            }
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            Notification::make()
+                ->title('Gagal Membayar Hutang')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    /**
+     * Aksi "Bayar Hutang DP" — khusus nota jenis DP yang barangnya SUDAH
+     * dikonfirmasi datang (lewat "Konfirmasi Barang Datang" versi belum
+     * lunas) tapi masih ada sisa tagihan. Boleh dipanggil berkali-kali
+     * (cicilan), nominal bebas. Di cicilan yang menutup sisa ke 0, jurnal
+     * service otomatis ikut membalik Uang Muka Pembelian yang sudah
+     * terkumpul sejak awal.
+     */
+    public function bayarHutangDp(): void
+    {
+        if (! $this->selectedNota) {
+            Notification::make()
+                ->title('Error')
+                ->body('Silakan pilih nota pembelian terlebih dahulu.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $service = app(PembelianKedatanganService::class);
+
+        try {
+            $updated = $service->bayarHutangDp($this->selectedNota, [
+                'nominal'                => $this->parseNumber($this->hutangdp_nominal),
+                'payment_method'         => $this->hutangdp_payment_method,
+                'rekening_perusahaan_id' => $this->hutangdp_rekening_perusahaan_id,
+                'reference_number'       => $this->hutangdp_reference_number,
+                'catatan'                => $this->hutangdp_catatan,
+            ], auth()->id());
+
+            Notification::make()
+                ->title('Pembayaran Berhasil')
+                ->body('Jurnal pelunasan sudah tercatat. Sisa tagihan sekarang: Rp '.number_format($updated->sisaTagihan()).'.')
+                ->success()
+                ->send();
+
+            unset($this->notaResults);
+
+            if ($updated->sisaTagihan() <= 0) {
+                // Sudah lunas total -> keluar dari panel, nota hilang dari daftar.
+                $this->batalPilihNota();
+            } else {
+                $this->selectedNota = $updated->load('detailPembelians');
+                $this->hutangdp_nominal = '';
+                $this->hutangdp_reference_number = null;
+                $this->hutangdp_catatan = null;
             }
         } catch (InvalidArgumentException|RuntimeException $e) {
             Notification::make()

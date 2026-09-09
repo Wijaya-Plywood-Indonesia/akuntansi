@@ -49,6 +49,13 @@ class PembelianKedatanganService
                     ->orWhere(function (Builder $q) {
                         $q->where('jenis_pembayaran', Pembelian::JENIS_NORMAL)
                             ->whereIn('status', [Pembelian::STATUS_HUTANG, Pembelian::STATUS_CICILAN]);
+                    })
+                    // DP: barang SUDAH datang (lewat konfirmasi "belum
+                    // lunas") tapi sisa tagihan masih perlu dicicil.
+                    ->orWhere(function (Builder $q) {
+                        $q->where('jenis_pembayaran', Pembelian::JENIS_DP)
+                            ->whereNotNull('barang_diterima_at')
+                            ->whereIn('status', [Pembelian::STATUS_HUTANG, Pembelian::STATUS_CICILAN]);
                     });
             })
             ->when($search, function (Builder $query) use ($search) {
@@ -83,6 +90,11 @@ class PembelianKedatanganService
     public function bisaBayarHutang(Pembelian $pembelian): bool
     {
         return $pembelian->bisaBayarHutang();
+    }
+
+    public function bisaBayarHutangDp(Pembelian $pembelian): bool
+    {
+        return $pembelian->bisaBayarHutangDp();
     }
 
     /**
@@ -142,6 +154,81 @@ class PembelianKedatanganService
             ]);
 
             $this->jurnalService->buatJurnalBayarHutang($data, $bayar, $userId);
+
+            $totalDibayar = $data->totalSudahDibayar();
+            $data->update([
+                'status' => $totalDibayar >= (float) $data->grand_total
+                    ? Pembelian::STATUS_LUNAS
+                    : Pembelian::STATUS_CICILAN,
+            ]);
+
+            return $data->fresh();
+        });
+    }
+
+    /**
+     * Aksi "Bayar Hutang" — khusus DP yang barangnya SUDAH datang (lewat
+     * "Konfirmasi Barang Datang" versi belum-lunas), nominal BEBAS (boleh
+     * dicicil). Di cicilan yang bikin sisaTagihan() jadi 0, jurnal service
+     * otomatis ikut membalik Uang Muka Pembelian yang sudah terkumpul —
+     * lihat JurnalPembelianTriplekService::buatJurnalBayarHutangDp().
+     *
+     * @param  array{nominal: int|float, payment_method: string, rekening_perusahaan_id?: int|null, reference_number?: string|null, catatan?: string|null}  $payload
+     *
+     * @throws InvalidArgumentException Jika input tidak valid.
+     * @throws RuntimeException Jika nota tidak memenuhi syarat.
+     */
+    public function bayarHutangDp(Pembelian $pembelian, array $payload, int $userId): Pembelian
+    {
+        $nominal = (float) ($payload['nominal'] ?? 0);
+        $metode = $payload['payment_method'] ?? PembelianMetodePembayaran::METODE_TUNAI;
+
+        return DB::transaction(function () use ($pembelian, $payload, $nominal, $metode, $userId) {
+            /** @var Pembelian $data */
+            $data = Pembelian::query()->lockForUpdate()->findOrFail($pembelian->id);
+
+            if (! $data->bisaBayarHutangDp()) {
+                throw new RuntimeException(
+                    'Nota ini bukan jenis DP yang barangnya sudah datang dan masih punya sisa hutang, '.
+                    'atau sudah dibatalkan.'
+                );
+            }
+
+            if ($nominal <= 0) {
+                throw new InvalidArgumentException('Nominal pembayaran harus lebih dari 0.');
+            }
+
+            $sisa = $data->sisaTagihan();
+
+            if ($nominal > $sisa) {
+                throw new InvalidArgumentException(
+                    'Nominal pembayaran tidak boleh melebihi sisa hutang (sisa: Rp '.number_format($sisa).').'
+                );
+            }
+
+            if ($metode === PembelianMetodePembayaran::METODE_TRANSFER && empty($payload['rekening_perusahaan_id'])) {
+                throw new InvalidArgumentException('Rekening perusahaan wajib dipilih untuk pembayaran transfer.');
+            }
+
+            $rekening = ! empty($payload['rekening_perusahaan_id'])
+                ? RekeningPerusahaan::find($payload['rekening_perusahaan_id'])
+                : null;
+
+            $bayar = PembelianMetodePembayaran::create([
+                'pembelian_id'           => $data->id,
+                'created_by'             => $userId,
+                'tanggal_bayar'          => now(),
+                'amount'                 => $nominal,
+                'payment_method'         => $metode,
+                'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
+                'reference_number'       => $payload['reference_number'] ?? null,
+                'catatan'                => $payload['catatan'] ?? 'Pelunasan hutang (DP, setelah barang datang)',
+            ]);
+
+            // $bayar sudah tersimpan -> sisaTagihan() di dalam service jurnal
+            // sudah mencerminkan pembayaran ini, jadi bisa dipakai untuk
+            // deteksi "apakah ini cicilan terakhir".
+            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayar, $userId);
 
             $totalDibayar = $data->totalSudahDibayar();
             $data->update([
@@ -276,10 +363,20 @@ class PembelianKedatanganService
                 $this->jurnalService->buatJurnalKedatanganBarangDimuka($data, $userId);
             }
 
+            // Untuk DP, barang datang TIDAK selalu berarti lunas lagi
+            // (bisa "barang datang belum lunas" / "barang datang + bayar
+            // sebagian") — status akhir mengikuti sisaTagihan() yang FRESH
+            // (query ke metodePembayarans, sudah termasuk baris pembayaran
+            // yang baru saja dibuat di konfirmasiBarangDatangDp() kalau
+            // ada). Untuk BAYAR_DIMUKA tetap selalu LUNAS seperti semula.
             $data->update([
                 'barang_diterima_at' => now(),
                 'barang_diterima_by' => $userId,
-                'status'             => Pembelian::STATUS_LUNAS,
+                'status'             => match (true) {
+                    $data->sisaTagihan() <= 0 => Pembelian::STATUS_LUNAS,
+                    $data->totalSudahDibayar() > 0 => Pembelian::STATUS_CICILAN,
+                    default => Pembelian::STATUS_HUTANG,
+                },
             ]);
 
             return $data->fresh();
@@ -287,10 +384,27 @@ class PembelianKedatanganService
     }
 
     /**
-     * Sub-alur DP dari konfirmasiBarangDatang(): validasi nominal pelunasan
-     * sisa WAJIB pas, catat sebagai PembelianMetodePembayaran baru, lalu
-     * posting jurnal kedatangan barang + pelunasan sisa (yang juga sekaligus
-     * membalik SELURUH Uang Muka Pembelian yang terkumpul sebelumnya).
+     * Sub-alur DP dari konfirmasiBarangDatang(). Sekarang mendukung 3
+     * kondisi nyata di lapangan, dibedakan dari nominal yang diisi user:
+     *
+     *   1. nominal = 0 (atau kosong)         -> "barang datang duluan,
+     *      belum bayar apa-apa". Cuma akui Persediaan + PPN + Utang Usaha
+     *      PENUH (kitab 'pembelian_down_payment_barang_datang_belum_lunas').
+     *      Uang Muka Pembelian yang sudah terkumpul TIDAK disentuh, disimpan
+     *      utuh untuk dipakai nanti di cicilan terakhir (lihat
+     *      bayarHutangDp()).
+     *
+     *   2. 0 < nominal < sisa                -> "barang datang + bayar
+     *      sebagian sekarang". Sama seperti kondisi 1, PLUS langsung
+     *      posting 1 cicilan pelunasan (lewat
+     *      JurnalPembelianTriplekService::buatJurnalBayarHutangDp(), method
+     *      yang sama dipakai menu "Bayar Hutang" belakangan) untuk nominal
+     *      yang dibayar sekarang.
+     *
+     *   3. nominal >= sisa (atau sisa sudah 0)  -> "barang datang SEKALIGUS
+     *      lunas" (kasus lama, tidak berubah). Pakai kitab gabungan
+     *      'pembelian_down_payment_barang_datang_*' yang langsung menutup
+     *      semuanya (persediaan + PPN + kas + Uang Muka) dalam 1 jurnal.
      */
     private function konfirmasiBarangDatangDp(Pembelian $data, array $payload, int $userId): void
     {
@@ -298,56 +412,86 @@ class PembelianKedatanganService
         $nominal = (float) ($payload['nominal'] ?? 0);
         $metode = $payload['payment_method'] ?? PembelianMetodePembayaran::METODE_TUNAI;
 
-        // DP yang SUDAH terkumpul sebelum pelunasan sisa ini — dihitung
-        // SEBELUM baris PembelianMetodePembayaran baru dibuat, karena inilah
-        // nominal yang harus dibalik (dihabiskan) dari akun Uang Muka
-        // Pembelian di jurnal kedatangan barang.
-        $dpSudahDibayar = $data->totalSudahDibayar();
-
-        if ($sisa > 0) {
-            // Masih ada sisa tagihan -> WAJIB dilunasi PAS sekarang (tidak
-            // boleh dicicil lagi di titik konfirmasi barang datang).
-            if ($nominal <= 0) {
-                throw new InvalidArgumentException(
-                    'Nota DP ini masih punya sisa tagihan Rp '.number_format($sisa).
-                    '. Isi nominal pelunasan sisa untuk melanjutkan.'
-                );
-            }
-
-            if (round($nominal, 2) !== round($sisa, 2)) {
-                throw new InvalidArgumentException(
-                    'Nominal pelunasan sisa harus PAS menutup sisa tagihan (sisa: Rp '.number_format($sisa).
-                    '), tidak bisa dicicil lagi di titik ini.'
-                );
-            }
-
-            if ($metode === PembelianMetodePembayaran::METODE_TRANSFER && empty($payload['rekening_perusahaan_id'])) {
-                throw new InvalidArgumentException('Rekening perusahaan wajib dipilih untuk pembayaran transfer.');
-            }
-        } else {
-            // Sisa tagihan sudah 0 (DP sebelumnya sudah menutup 100% grand
-            // total) -> tidak perlu pelunasan sisa apapun.
-            $nominal = 0;
+        if ($nominal < 0) {
+            throw new InvalidArgumentException('Nominal pembayaran tidak boleh negatif.');
         }
 
-        $rekening = ! empty($payload['rekening_perusahaan_id'])
-            ? RekeningPerusahaan::find($payload['rekening_perusahaan_id'])
-            : null;
+        if ($nominal > $sisa) {
+            throw new InvalidArgumentException(
+                'Nominal pembayaran tidak boleh melebihi sisa tagihan (sisa: Rp '.number_format($sisa).').'
+            );
+        }
 
-        // Tetap buat 1 baris PembelianMetodePembayaran (walau nominal 0)
-        // supaya JurnalPembelianTriplekService::buatJurnalKedatanganBarangDp()
-        // punya rekening/metode pembayaran untuk resolve kode kitabnya.
-        $bayarSisa = PembelianMetodePembayaran::create([
-            'pembelian_id'           => $data->id,
-            'created_by'             => $userId,
-            'tanggal_bayar'          => now(),
-            'amount'                 => $nominal,
-            'payment_method'         => $metode,
-            'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
-            'reference_number'       => $payload['reference_number'] ?? null,
-            'catatan'                => $payload['catatan'] ?? 'Pelunasan sisa saat barang datang (DP)',
-        ]);
+        if ($nominal > 0 && $metode === PembelianMetodePembayaran::METODE_TRANSFER && empty($payload['rekening_perusahaan_id'])) {
+            throw new InvalidArgumentException('Rekening perusahaan wajib dipilih untuk pembayaran transfer.');
+        }
 
-        $this->jurnalService->buatJurnalKedatanganBarangDp($data, $dpSudahDibayar, $bayarSisa, $userId);
+        $iniLangsungLunas = $sisa <= 0 || round($nominal, 2) === round($sisa, 2);
+
+        if ($iniLangsungLunas) {
+            // ── Kondisi 3: barang datang sekaligus lunas (kasus lama) ────
+            // DP yang SUDAH terkumpul sebelum pelunasan sisa ini — dihitung
+            // SEBELUM baris PembelianMetodePembayaran baru dibuat, karena
+            // inilah nominal yang harus dibalik dari Uang Muka Pembelian.
+            $dpSudahDibayar = $data->totalSudahDibayar();
+
+            $rekening = ! empty($payload['rekening_perusahaan_id'])
+                ? RekeningPerusahaan::find($payload['rekening_perusahaan_id'])
+                : null;
+
+            // Tetap buat 1 baris PembelianMetodePembayaran (walau nominal 0,
+            // kalau DP sebelumnya sudah menutup 100%) supaya jurnal service
+            // punya rekening/metode pembayaran untuk resolve kode kitabnya.
+            $bayarSisa = PembelianMetodePembayaran::create([
+                'pembelian_id'           => $data->id,
+                'created_by'             => $userId,
+                'tanggal_bayar'          => now(),
+                'amount'                 => $nominal,
+                'payment_method'         => $metode,
+                'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
+                'reference_number'       => $payload['reference_number'] ?? null,
+                'catatan'                => $payload['catatan'] ?? 'Pelunasan sisa saat barang datang (DP)',
+            ]);
+
+            $this->jurnalService->buatJurnalKedatanganBarangDp($data, $dpSudahDibayar, $bayarSisa, $userId);
+
+            return;
+        }
+
+        // ── Kondisi 1 & 2: barang datang duluan, belum lunas (nominal bisa
+        //    0, atau sebagian) ──────────────────────────────────────────
+        // Snapshot DP yang sudah terkumpul SAAT INI (sebelum baris
+        // pembayaran sebagian di bawah, kalau ada, ditambahkan) — inilah
+        // yang dibaca lagi nanti di cicilan terakhir untuk menutup Uang
+        // Muka Pembelian.
+        $dpTerkumpul = $data->totalSudahDibayar();
+
+        $this->jurnalService->buatJurnalKedatanganBarangDpBelumLunas($data, $userId);
+        $data->dp_terkumpul_saat_barang_datang = $dpTerkumpul;
+
+        if ($nominal > 0) {
+            // Kondisi 2: sekalian bayar sebagian saat ini juga.
+            $rekening = ! empty($payload['rekening_perusahaan_id'])
+                ? RekeningPerusahaan::find($payload['rekening_perusahaan_id'])
+                : null;
+
+            $bayarSebagian = PembelianMetodePembayaran::create([
+                'pembelian_id'           => $data->id,
+                'created_by'             => $userId,
+                'tanggal_bayar'          => now(),
+                'amount'                 => $nominal,
+                'payment_method'         => $metode,
+                'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
+                'reference_number'       => $payload['reference_number'] ?? null,
+                'catatan'                => $payload['catatan'] ?? 'Bayar sebagian saat barang datang (DP)',
+            ]);
+
+            // $sisa awal > $nominal (bukan pelunasan penuh, sudah dicek di
+            // atas) -> setelah baris ini, sisaTagihan() masih > 0, jadi
+            // buatJurnalBayarHutangDp() otomatis TIDAK membalik Uang Muka
+            // Pembelian di sini (baru nanti di cicilan yang benar-benar
+            // menutup sisa ke 0).
+            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayarSebagian, $userId);
+        }
     }
 }
