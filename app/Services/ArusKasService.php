@@ -209,25 +209,11 @@ class ArusKasService
             $isTransferInternal = $barisNonKas->isEmpty()
                 || $barisNonKas->every(fn($b) => in_array($b->no_akun, $kodeKas));
 
-            $kodeKategori = $isTransferInternal
-                ? self::KATEGORI_TRANSFER_INTERNAL
-                : $this->tentukanKategori($barisNonKas, $kategoriMap);
-
-            $namaKategori = $isTransferInternal
-                ? 'Transfer Kas Internal'
-                : ($labelKategori[$kodeKategori] ?? 'Lainnya');
-
-            // Prioritaskan nama akun lawan transaksi (lebih ringkas & konkret,
-            // mis. "Piutang Usaha", "Kas Bu Mut") sebagai judul utama.
-            // Keterangan (sering berisi istilah teknis akuntansi yang diketik
-            // staff, mis. "Pembalikan DP yang sudah diterima") ditampilkan
-            // terpisah sebagai info tambahan, bukan judul utama, supaya tidak
-            // membingungkan pembaca non-akuntan.
-            $namaAkunLawan = optional($barisNonKas->first())->nama_akun;
-            $keteranganAsli = optional($barisNonKas->first())->keterangan
+            // Label fallback untuk transaksi tanpa split (1 kategori saja)
+            // atau transfer internal: pakai baris lawan pertama.
+            $namaAkunLawanUtama = optional($barisNonKas->first())->nama_akun;
+            $keteranganUtama = optional($barisNonKas->first())->keterangan
                 ?: optional($barisKasDiJurnalIni->first())->keterangan;
-
-            $deskripsi = $namaAkunLawan ?: ($keteranganAsli ?: 'Transaksi #' . $noJurnal);
 
             // ── Nama akun kas/bank yang kena mutasi pada transaksi ini ──
             // Biasanya 1 akun kas per transaksi, tapi kalau ada lebih dari 1
@@ -240,39 +226,74 @@ class ArusKasService
             $netKas = $nilaiMasuk - $nilaiKeluar;
             $tipe = $isTransferInternal ? 'netral' : ($netKas >= 0 ? 'in' : 'out');
 
-            if (!isset($agregat[$kodeKategori])) {
-                $agregat[$kodeKategori] = [
-                    'kode_kategori' => $kodeKategori,
-                    'nama'          => $namaKategori,
-                    'nilai_masuk'   => 0.0,
-                    'nilai_keluar'  => 0.0,
-                    'transaksi'     => [],
+            // ── Pecah 1 transaksi kas ke beberapa kategori sekaligus, kalau ──
+            // baris lawannya (barisNonKas) memang punya kategori berbeda-beda
+            // (mis. 1 kas keluar dipakai beli 3 barang beda kategori dalam 1
+            // jurnal). Proporsi tiap kategori dihitung dari besar nilai baris
+            // lawan masing-masing terhadap total nilai baris lawan, dan
+            // masing-masing kategori bawa label dari baris lawan yang
+            // benar-benar jadi sumbernya sendiri (bukan baris pertama di
+            // jurnal secara keseluruhan). Kalau hanya ada 1 lawan (kasus
+            // paling umum), hasilnya sama seperti sebelumnya: 1 kategori
+            // dengan proporsi 100%.
+            $splits = $isTransferInternal
+                ? [self::KATEGORI_TRANSFER_INTERNAL => ['proporsi' => 1.0, 'nama_akun' => $namaAkunLawanUtama, 'keterangan' => $keteranganUtama]]
+                : $this->splitKategori($barisNonKas, $kategoriMap);
+
+            $splitBerganda = count($splits) > 1;
+
+            foreach ($splits as $kodeKategori => $info) {
+                $proporsi = $info['proporsi'];
+                $namaKategori = $isTransferInternal
+                    ? 'Transfer Kas Internal'
+                    : ($labelKategori[$kodeKategori] ?? 'Lainnya');
+
+                if (!isset($agregat[$kodeKategori])) {
+                    $agregat[$kodeKategori] = [
+                        'kode_kategori' => $kodeKategori,
+                        'nama'          => $namaKategori,
+                        'nilai_masuk'   => 0.0,
+                        'nilai_keluar'  => 0.0,
+                        'transaksi'     => [],
+                    ];
+                }
+
+                $nilaiPorsi = abs($netKas) * $proporsi;
+
+                // PENTING: akumulasi masuk & keluar terpisah per transaksi.
+                // Jangan pakai satu "tipe" per kategori (bug lama: kategori
+                // yang berisi campuran transaksi masuk & keluar akan salah
+                // tanda, karena tipe kategori sempat dikunci dari transaksi
+                // PERTAMA saja, lalu semua nilai lain — termasuk yang
+                // arahnya berlawanan — ikut dijumlah pakai tanda yang sama).
+                if ($tipe === 'in') {
+                    $agregat[$kodeKategori]['nilai_masuk'] += $nilaiPorsi;
+                } elseif ($tipe === 'out') {
+                    $agregat[$kodeKategori]['nilai_keluar'] += $nilaiPorsi;
+                }
+                // 'netral' (transfer internal) sengaja tidak menambah masuk/keluar,
+                // konsisten dengan pengecualian dari total di hitung().
+
+                // Label khusus untuk baris kategori ini: nama akun lawan yang
+                // benar-benar menyumbang ke kategori ini (bukan baris pertama
+                // jurnal secara umum), dengan fallback ke label utama kalau
+                // baris tsb kebetulan tidak punya nama akun.
+                $namaAkunLawanPorsi = $info['nama_akun'] ?: $namaAkunLawanUtama;
+                $keteranganPorsi = $info['keterangan'] ?: $keteranganUtama;
+                $deskripsiPorsi = $namaAkunLawanPorsi ?: ($keteranganPorsi ?: 'Transaksi #' . $noJurnal);
+
+                $agregat[$kodeKategori]['transaksi'][] = [
+                    'jurnal'     => $noJurnal,
+                    'tgl'        => $tanggal,
+                    'deskripsi'  => $splitBerganda
+                        ? $deskripsiPorsi . ' (porsi ' . round($proporsi * 100) . '%)'
+                        : $deskripsiPorsi,
+                    'keterangan' => ($namaAkunLawanPorsi && $keteranganPorsi && $keteranganPorsi !== $namaAkunLawanPorsi) ? $keteranganPorsi : null,
+                    'kas'        => $namaKas,
+                    'nilai'      => $nilaiPorsi,
+                    'tipe'       => $tipe,
                 ];
             }
-
-            // PENTING: akumulasi masuk & keluar terpisah per transaksi.
-            // Jangan pakai satu "tipe" per kategori (bug lama: kategori yang
-            // berisi campuran transaksi masuk & keluar akan salah tanda,
-            // karena tipe kategori sempat dikunci dari transaksi PERTAMA
-            // saja, lalu semua nilai lain — termasuk yang arahnya
-            // berlawanan — ikut dijumlah pakai tanda yang sama).
-            if ($tipe === 'in') {
-                $agregat[$kodeKategori]['nilai_masuk'] += abs($netKas);
-            } elseif ($tipe === 'out') {
-                $agregat[$kodeKategori]['nilai_keluar'] += abs($netKas);
-            }
-            // 'netral' (transfer internal) sengaja tidak menambah masuk/keluar,
-            // konsisten dengan pengecualian dari total di hitung().
-
-            $agregat[$kodeKategori]['transaksi'][] = [
-                'jurnal'     => $noJurnal,
-                'tgl'        => $tanggal,
-                'deskripsi'  => $deskripsi,
-                'keterangan' => ($namaAkunLawan && $keteranganAsli && $keteranganAsli !== $namaAkunLawan) ? $keteranganAsli : null,
-                'kas'        => $namaKas,
-                'nilai'      => abs($netKas),
-                'tipe'       => $tipe,
-            ];
         }
 
         // Ubah agregat masuk/keluar per kategori jadi net (nilai + tipe)
@@ -311,14 +332,81 @@ class ArusKasService
         };
     }
 
-    private function tentukanKategori($barisNonKas, array $kategoriMap): string
+    /**
+     * Pecah proporsi kategori arus kas dari kumpulan baris lawan (non-kas)
+     * dalam 1 jurnal. Tiap baris disumbang nilainya (nilaiBaris) ke
+     * kategori akunnya masing-masing (fallback 'lainnya' kalau akun belum
+     * di-set kategori), lalu dinormalisasi jadi proporsi 0..1 yang totalnya
+     * 1.0 (100%).
+     *
+     * Kasus 1 lawan transaksi (paling umum): hasilnya [kode => 1.0].
+     * Kasus banyak lawan beda kategori: kategori dengan nilai lebih besar
+     * dapat proporsi lebih besar pula.
+     *
+     * @return array<string,float>  kode_kategori => proporsi (0..1)
+     */
+    /**
+     * Pecah proporsi kategori arus kas dari kumpulan baris lawan (non-kas)
+     * dalam 1 jurnal. Tiap baris disumbang nilainya (nilaiBaris) ke
+     * kategori akunnya masing-masing (fallback 'lainnya' kalau akun belum
+     * di-set kategori), lalu dinormalisasi jadi proporsi 0..1 yang totalnya
+     * 1.0 (100%). Untuk tiap kategori, disimpan juga baris "wakil" (nilai
+     * terbesar di kategori itu) supaya label yang ditampilkan sesuai dengan
+     * akun lawan yang benar-benar jadi sumber kategori tsb — bukan selalu
+     * baris pertama di jurnal (yang bisa jadi bukan bagian dari kategori itu).
+     *
+     * Kasus 1 lawan transaksi (paling umum): hasilnya 1 entri, proporsi 1.0.
+     * Kasus banyak lawan beda kategori: kategori dengan nilai lebih besar
+     * dapat proporsi lebih besar pula.
+     *
+     * @return array<string,array{proporsi:float,nama_akun:?string,keterangan:?string}>
+     */
+    private function splitKategori($barisNonKas, array $kategoriMap): array
     {
+        $nilaiPerKategori = [];
+        $wakilPerKategori = []; // kode => ['nilai'=>, 'nama_akun'=>, 'keterangan'=>]
+        $totalNilai = 0.0;
+
         foreach ($barisNonKas as $b) {
-            if (isset($kategoriMap[$b->no_akun])) {
-                return $kategoriMap[$b->no_akun];
+            $kode = $kategoriMap[$b->no_akun] ?? 'lainnya';
+            $nilai = $this->nilaiBaris($b);
+
+            $nilaiPerKategori[$kode] = ($nilaiPerKategori[$kode] ?? 0.0) + $nilai;
+            $totalNilai += $nilai;
+
+            // Baris dengan nilai terbesar di kategori ini dipakai sebagai
+            // wakil label (nama akun lawan + keterangan aslinya).
+            if (!isset($wakilPerKategori[$kode]) || $nilai > $wakilPerKategori[$kode]['nilai']) {
+                $wakilPerKategori[$kode] = [
+                    'nilai'      => $nilai,
+                    'nama_akun'  => $b->nama_akun,
+                    'keterangan' => $b->keterangan,
+                ];
             }
         }
 
-        return 'lainnya';
+        if ($totalNilai <= 0.0) {
+            // Tidak ada nilai yang bisa dijadikan dasar proporsi (mis. semua
+            // baris lawan nol) — fallback ke kategori baris lawan pertama
+            // dengan proporsi penuh, supaya transaksi tetap tercatat.
+            $kodeFallback = collect($nilaiPerKategori)->keys()->first() ?? 'lainnya';
+            $wakil = $wakilPerKategori[$kodeFallback] ?? ['nama_akun' => null, 'keterangan' => null];
+            return [$kodeFallback => [
+                'proporsi'   => 1.0,
+                'nama_akun'  => $wakil['nama_akun'],
+                'keterangan' => $wakil['keterangan'],
+            ]];
+        }
+
+        $hasil = [];
+        foreach ($nilaiPerKategori as $kode => $nilai) {
+            $hasil[$kode] = [
+                'proporsi'   => $nilai / $totalNilai,
+                'nama_akun'  => $wakilPerKategori[$kode]['nama_akun'] ?? null,
+                'keterangan' => $wakilPerKategori[$kode]['keterangan'] ?? null,
+            ];
+        }
+
+        return $hasil;
     }
 }
