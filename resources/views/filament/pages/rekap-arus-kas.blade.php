@@ -208,6 +208,11 @@
     @if(!empty($tx['keterangan']))
     <div class="text-xs text-gray-600 dark:text-gray-300 truncate mt-0.5">{{ $tx['keterangan'] }}</div>
     @endif
+    @if(!empty($tx['cara_hitung']))
+    <div class="text-[11px] text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5" title="Cara hitung porsi ini">
+        {{ $tx['cara_hitung'] }}
+    </div>
+    @endif
 </div>
 <div class="hidden sm:block min-w-[100px] text-right">
     <div class="font-bold whitespace-nowrap

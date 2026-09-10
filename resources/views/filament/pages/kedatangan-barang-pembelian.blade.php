@@ -236,6 +236,12 @@
                                     </p>
                                 </div>
 
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Tanggal Bayar</label>
+                                    <input type="date" wire:model="hutang_tanggal"
+                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
+                                </div>
+
                                 <div class="flex flex-col gap-1.5"
                                     x-data="{
                                         nominal: @entangle('hutang_nominal'),
@@ -316,6 +322,12 @@
                                         sekaligus. Cicilan yang menutup sisa ke 0 akan ikut membalik
                                         <strong>Uang Muka Pembelian</strong> yang sudah terkumpul.
                                     </p>
+                                </div>
+
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Tanggal Bayar</label>
+                                    <input type="date" wire:model="hutangdp_tanggal"
+                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
                                 </div>
 
                                 <div class="flex flex-col gap-1.5"
@@ -410,6 +422,12 @@
                                     ada barang fisik yang datang.
                                 </p>
 
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Tanggal Bayar DP</label>
+                                    <input type="date" wire:model="dp_tanggal"
+                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
+                                </div>
+
                                 <div class="flex flex-col gap-1.5"
                                     x-data="{
                                         nominal: @entangle('dp_nominal'),
@@ -480,6 +498,12 @@
                                         lewat tab ini lagi. Isi nominal kalau mau sekalian bayar sebagian atau pas
                                         (nominal pas otomatis membalik seluruh <strong>Uang Muka Pembelian</strong>).
                                     </p>
+                                </div>
+
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Tanggal Barang Datang</label>
+                                    <input type="date" wire:model="sisa_tanggal"
+                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
                                 </div>
 
                                 <div class="flex flex-col gap-1.5"
@@ -555,6 +579,12 @@
                                         membalik akun <strong>Uang Muka Pembelian</strong> — pastikan barang memang sudah
                                         benar-benar fisik diterima sebelum konfirmasi.
                                     </p>
+                                </div>
+
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Tanggal Barang Datang</label>
+                                    <input type="date" wire:model="sisa_tanggal"
+                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
                                 </div>
                             </div>
 

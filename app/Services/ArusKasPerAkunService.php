@@ -256,11 +256,15 @@ class ArusKasPerAkunService
         }
 
         if ($noNota || $namaPihak) {
-            return collect([
-                $catatanUser,
-                $noNota,
-                $namaPihak,
-            ])->filter()->implode(' | ');
+            // Nota & nama digabung dengan " - " (satu kesatuan info dokumen),
+            // dipisah dari catatan user dengan " | ". Mis.
+            // "beli selang | sj-2984 - dian utama", bukan
+            // "beli selang | sj-2984 | dian utama" — supaya jelas nota dan
+            // nama itu satu kelompok info yang sama, beda level dengan
+            // catatan bebas yang diketik user.
+            $notaDanNama = collect([$noNota, $namaPihak])->filter()->implode(' - ');
+
+            return collect([$catatanUser, $notaDanNama])->filter()->implode(' | ');
         }
 
         $keteranganKas = $keteranganKasMentah ?: null;

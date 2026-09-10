@@ -293,7 +293,18 @@
                                     placeholder="Cari barang untuk dibeli / barcode... (/)"
                                     id="pembelian-search-input"
                                     class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg !pl-8 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary-500/20 transition-all"
-                                    @keydown.slash.window.prevent="document.getElementById('pembelian-search-input').focus()"
+                                    x-on:keydown.slash.window="
+                                        // Shortcut '/' cuma untuk LOMPAT ke kolom pencarian dari
+                                        // luar (mis. lagi tidak fokus di input mana pun). Kalau
+                                        // fokus SUDAH di dalam input/textarea (termasuk kolom ini
+                                        // sendiri), biarkan '/' diketik apa adanya sebagai karakter
+                                        // biasa — jangan di-preventDefault, supaya nama/kode barang
+                                        // yang mengandung '/' bisa diketik normal.
+                                        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+                                            $event.preventDefault();
+                                            document.getElementById('pembelian-search-input').focus();
+                                        }
+                                    "
                                     wire:focus="openDropdown" />
 
                                 @if($showDropdown && !empty($searchResults))

@@ -47,6 +47,8 @@ class KedatanganBarangPembelian extends Page
     public string $panelTab = 'dp';
 
     // ── Form "Tambah DP" ─────────────────────────────────────────────────
+    public string $dp_tanggal = '';
+
     public string $dp_nominal = '';
 
     public string $dp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
@@ -58,6 +60,8 @@ class KedatanganBarangPembelian extends Page
     public ?string $dp_catatan = null;
 
     // ── Form "Konfirmasi Barang Datang" (khusus sisa DP) ────────────────
+    public string $sisa_tanggal = '';
+
     public string $sisa_nominal = '';
 
     public string $sisa_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
@@ -67,6 +71,8 @@ class KedatanganBarangPembelian extends Page
     public ?string $sisa_reference_number = null;
 
     // ── Form "Bayar Hutang" (khusus NORMAL) ─────────────────────────────
+    public string $hutang_tanggal = '';
+
     public string $hutang_nominal = '';
 
     public string $hutang_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
@@ -79,6 +85,8 @@ class KedatanganBarangPembelian extends Page
 
     // ── Form "Bayar Hutang DP" (khusus DP yang barangnya SUDAH datang
     //    tapi masih ada sisa tagihan) ────────────────────────────────────
+    public string $hutangdp_tanggal = '';
+
     public string $hutangdp_nominal = '';
 
     public string $hutangdp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
@@ -158,23 +166,29 @@ class KedatanganBarangPembelian extends Page
     {
         $this->panelTab = 'dp';
 
+        $hariIni = now()->format('Y-m-d');
+
+        $this->dp_tanggal = $hariIni;
         $this->dp_nominal = '';
         $this->dp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->dp_rekening_perusahaan_id = null;
         $this->dp_reference_number = null;
         $this->dp_catatan = null;
 
+        $this->sisa_tanggal = $hariIni;
         $this->sisa_nominal = '';
         $this->sisa_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->sisa_rekening_perusahaan_id = null;
         $this->sisa_reference_number = null;
 
+        $this->hutang_tanggal = $hariIni;
         $this->hutang_nominal = '';
         $this->hutang_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->hutang_rekening_perusahaan_id = null;
         $this->hutang_reference_number = null;
         $this->hutang_catatan = null;
 
+        $this->hutangdp_tanggal = $hariIni;
         $this->hutangdp_nominal = '';
         $this->hutangdp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->hutangdp_rekening_perusahaan_id = null;
@@ -209,6 +223,7 @@ class KedatanganBarangPembelian extends Page
 
         try {
             $updated = $service->tambahDp($this->selectedNota, [
+                'tanggal'                => $this->dp_tanggal,
                 'nominal'                => $this->parseNumber($this->dp_nominal),
                 'payment_method'         => $this->dp_payment_method,
                 'rekening_perusahaan_id' => $this->dp_rekening_perusahaan_id,
@@ -258,6 +273,7 @@ class KedatanganBarangPembelian extends Page
 
         try {
             $updated = $service->bayarHutang($this->selectedNota, [
+                'tanggal'                => $this->hutang_tanggal,
                 'nominal'                => $this->parseNumber($this->hutang_nominal),
                 'payment_method'         => $this->hutang_payment_method,
                 'rekening_perusahaan_id' => $this->hutang_rekening_perusahaan_id,
@@ -315,6 +331,7 @@ class KedatanganBarangPembelian extends Page
 
         try {
             $updated = $service->bayarHutangDp($this->selectedNota, [
+                'tanggal'                => $this->hutangdp_tanggal,
                 'nominal'                => $this->parseNumber($this->hutangdp_nominal),
                 'payment_method'         => $this->hutangdp_payment_method,
                 'rekening_perusahaan_id' => $this->hutangdp_rekening_perusahaan_id,
@@ -362,10 +379,13 @@ class KedatanganBarangPembelian extends Page
 
         $service = app(PembelianKedatanganService::class);
 
-        $payload = [];
+        $payload = [
+            'tanggal' => $this->sisa_tanggal,
+        ];
 
         if ($this->selectedNota->jenis_pembayaran === Pembelian::JENIS_DP) {
             $payload = [
+                'tanggal'                => $this->sisa_tanggal,
                 'nominal'                => $this->parseNumber($this->sisa_nominal),
                 'payment_method'         => $this->sisa_payment_method,
                 'rekening_perusahaan_id' => $this->sisa_rekening_perusahaan_id,

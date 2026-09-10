@@ -209,12 +209,6 @@ class ArusKasService
             $isTransferInternal = $barisNonKas->isEmpty()
                 || $barisNonKas->every(fn($b) => in_array($b->no_akun, $kodeKas));
 
-            // Label fallback untuk transaksi tanpa split (1 kategori saja)
-            // atau transfer internal: pakai baris lawan pertama.
-            $namaAkunLawanUtama = optional($barisNonKas->first())->nama_akun;
-            $keteranganUtama = optional($barisNonKas->first())->keterangan
-                ?: optional($barisKasDiJurnalIni->first())->keterangan;
-
             // ── Nama akun kas/bank yang kena mutasi pada transaksi ini ──
             // Biasanya 1 akun kas per transaksi, tapi kalau ada lebih dari 1
             // (mis. jurnal yang menyentuh 2 rekening sekaligus / transfer
@@ -226,19 +220,58 @@ class ArusKasService
             $netKas = $nilaiMasuk - $nilaiKeluar;
             $tipe = $isTransferInternal ? 'netral' : ($netKas >= 0 ? 'in' : 'out');
 
+            // ── Sisi mana yang benar-benar jadi TUJUAN kas (bukan sekadar ──
+            // ikut membiayai bersama kas). Dalam double-entry, baris yang ada
+            // di sisi BERLAWANAN dengan kas itulah yang "menerima" nilai kas
+            // (mis. beli barang: kas kredit/keluar, akun barang didebit —
+            // itu tujuan sungguhan). Baris non-kas yang kebetulan ada di sisi
+            // SAMA dengan kas (sama-sama kredit, atau sama-sama debit) bukan
+            // tujuan pengeluaran baru — dia cuma "ikut membiayai" bersama kas
+            // untuk melunasi baris lawan lainnya. Kasus nyata: pelunasan
+            // utang yang dibayar sebagian pakai uang muka (dikredit, sisi
+            // sama dengan kas) + sebagian pakai kas baru — uang muka itu
+            // BUKAN kategori arus kas baru, dia cuma metode pembayaran co-
+            // funding, sehingga harus dikeluarkan dari dasar perhitungan
+            // rasio supaya tidak dihitung dobel dan tidak salah kategori.
+            $arahKas = $nilaiMasuk >= $nilaiKeluar ? 'd' : 'k';
+            $barisTujuan = $barisNonKas->filter(fn($b) => strtolower($b->map) !== $arahKas);
+            // Fallback: kalau ternyata semua baris lawan ada di sisi yang
+            // sama dengan kas (tidak ada baris "tujuan" sungguhan — jarang
+            // terjadi, tapi bisa saja), tetap pakai semua baris supaya
+            // transaksi tidak hilang begitu saja dari laporan.
+            if ($barisTujuan->isEmpty()) {
+                $barisTujuan = $barisNonKas;
+            }
+
+            // Label fallback untuk transaksi tanpa split (1 kategori saja)
+            // atau transfer internal: pakai baris TUJUAN pertama (bukan
+            // sekadar baris lawan pertama di jurnal), supaya tidak salah
+            // ambil baris co-funding seperti Uang Muka pada contoh di atas.
+            $namaAkunLawanUtama = optional($barisTujuan->first())->nama_akun;
+            $keteranganUtama = optional($barisTujuan->first())->keterangan
+                ?: optional($barisKasDiJurnalIni->first())->keterangan;
+
+
             // ── Pecah 1 transaksi kas ke beberapa kategori sekaligus, kalau ──
-            // baris lawannya (barisNonKas) memang punya kategori berbeda-beda
+            // baris lawannya (barisTujuan) memang punya kategori berbeda-beda
             // (mis. 1 kas keluar dipakai beli 3 barang beda kategori dalam 1
             // jurnal). Proporsi tiap kategori dihitung dari besar nilai baris
-            // lawan masing-masing terhadap total nilai baris lawan, dan
+            // tujuan masing-masing terhadap total nilai baris tujuan, dan
             // masing-masing kategori bawa label dari baris lawan yang
             // benar-benar jadi sumbernya sendiri (bukan baris pertama di
-            // jurnal secara keseluruhan). Kalau hanya ada 1 lawan (kasus
-            // paling umum), hasilnya sama seperti sebelumnya: 1 kategori
-            // dengan proporsi 100%.
+            // jurnal secara keseluruhan). Kalau hanya ada 1 baris tujuan
+            // (kasus paling umum), hasilnya sama seperti sebelumnya: 1
+            // kategori dengan proporsi 100%.
             $splits = $isTransferInternal
-                ? [self::KATEGORI_TRANSFER_INTERNAL => ['proporsi' => 1.0, 'nama_akun' => $namaAkunLawanUtama, 'keterangan' => $keteranganUtama]]
-                : $this->splitKategori($barisNonKas, $kategoriMap);
+                ? [self::KATEGORI_TRANSFER_INTERNAL => [
+                    'proporsi'       => 1.0,
+                    'nama_akun'      => $namaAkunLawanUtama,
+                    'keterangan'     => $keteranganUtama,
+                    'nilai_kategori' => abs($nilaiMasuk - $nilaiKeluar),
+                    'total_nilai'    => abs($nilaiMasuk - $nilaiKeluar),
+                ]]
+                : $this->splitKategori($barisTujuan, $kategoriMap);
+
 
             $splitBerganda = count($splits) > 1;
 
@@ -282,16 +315,29 @@ class ArusKasService
                 $keteranganPorsi = $info['keterangan'] ?: $keteranganUtama;
                 $deskripsiPorsi = $namaAkunLawanPorsi ?: ($keteranganPorsi ?: 'Transaksi #' . $noJurnal);
 
+                // Rumus perhitungan porsi ini, ditulis apa adanya (bukan cuma
+                // hasil akhir), supaya admin bisa langsung memverifikasi
+                // tanpa perlu menghitung ulang rasio dari nol. Cuma dibuat
+                // kalau memang di-split (>1 kategori); transaksi 1 lawan
+                // tidak perlu rumus karena nilainya sudah = nilai kas persis.
+                $caraHitung = $splitBerganda
+                    ? number_format($info['nilai_kategori'], 0, ',', '.')
+                        . ' / ' . number_format($info['total_nilai'], 0, ',', '.')
+                        . ' × Rp ' . number_format(abs($netKas), 0, ',', '.')
+                        . ' = Rp ' . number_format($nilaiPorsi, 0, ',', '.')
+                    : null;
+
                 $agregat[$kodeKategori]['transaksi'][] = [
-                    'jurnal'     => $noJurnal,
-                    'tgl'        => $tanggal,
-                    'deskripsi'  => $splitBerganda
+                    'jurnal'      => $noJurnal,
+                    'tgl'         => $tanggal,
+                    'deskripsi'   => $splitBerganda
                         ? $deskripsiPorsi . ' (porsi ' . round($proporsi * 100) . '%)'
                         : $deskripsiPorsi,
-                    'keterangan' => ($namaAkunLawanPorsi && $keteranganPorsi && $keteranganPorsi !== $namaAkunLawanPorsi) ? $keteranganPorsi : null,
-                    'kas'        => $namaKas,
-                    'nilai'      => $nilaiPorsi,
-                    'tipe'       => $tipe,
+                    'keterangan'  => ($namaAkunLawanPorsi && $keteranganPorsi && $keteranganPorsi !== $namaAkunLawanPorsi) ? $keteranganPorsi : null,
+                    'kas'         => $namaKas,
+                    'nilai'       => $nilaiPorsi,
+                    'tipe'        => $tipe,
+                    'cara_hitung' => $caraHitung,
                 ];
             }
         }
@@ -337,29 +383,21 @@ class ArusKasService
      * dalam 1 jurnal. Tiap baris disumbang nilainya (nilaiBaris) ke
      * kategori akunnya masing-masing (fallback 'lainnya' kalau akun belum
      * di-set kategori), lalu dinormalisasi jadi proporsi 0..1 yang totalnya
-     * 1.0 (100%).
-     *
-     * Kasus 1 lawan transaksi (paling umum): hasilnya [kode => 1.0].
-     * Kasus banyak lawan beda kategori: kategori dengan nilai lebih besar
-     * dapat proporsi lebih besar pula.
-     *
-     * @return array<string,float>  kode_kategori => proporsi (0..1)
-     */
-    /**
-     * Pecah proporsi kategori arus kas dari kumpulan baris lawan (non-kas)
-     * dalam 1 jurnal. Tiap baris disumbang nilainya (nilaiBaris) ke
-     * kategori akunnya masing-masing (fallback 'lainnya' kalau akun belum
-     * di-set kategori), lalu dinormalisasi jadi proporsi 0..1 yang totalnya
      * 1.0 (100%). Untuk tiap kategori, disimpan juga baris "wakil" (nilai
      * terbesar di kategori itu) supaya label yang ditampilkan sesuai dengan
      * akun lawan yang benar-benar jadi sumber kategori tsb — bukan selalu
      * baris pertama di jurnal (yang bisa jadi bukan bagian dari kategori itu).
+     * Nilai kategori (`nilai_kategori`) dan total baris lawan (`total_nilai`)
+     * juga disertakan supaya tampilan bisa menunjukkan rumus perhitungannya
+     * apa adanya (mis. "88.750 / 127.500 × Rp 50.000"), bukan cuma hasil
+     * akhirnya — supaya admin bisa memverifikasi tanpa menghitung ulang dari
+     * nol.
      *
      * Kasus 1 lawan transaksi (paling umum): hasilnya 1 entri, proporsi 1.0.
      * Kasus banyak lawan beda kategori: kategori dengan nilai lebih besar
      * dapat proporsi lebih besar pula.
      *
-     * @return array<string,array{proporsi:float,nama_akun:?string,keterangan:?string}>
+     * @return array<string,array{proporsi:float,nama_akun:?string,keterangan:?string,nilai_kategori:float,total_nilai:float}>
      */
     private function splitKategori($barisNonKas, array $kategoriMap): array
     {
@@ -392,18 +430,22 @@ class ArusKasService
             $kodeFallback = collect($nilaiPerKategori)->keys()->first() ?? 'lainnya';
             $wakil = $wakilPerKategori[$kodeFallback] ?? ['nama_akun' => null, 'keterangan' => null];
             return [$kodeFallback => [
-                'proporsi'   => 1.0,
-                'nama_akun'  => $wakil['nama_akun'],
-                'keterangan' => $wakil['keterangan'],
+                'proporsi'       => 1.0,
+                'nama_akun'      => $wakil['nama_akun'],
+                'keterangan'     => $wakil['keterangan'],
+                'nilai_kategori' => $nilaiPerKategori[$kodeFallback] ?? 0.0,
+                'total_nilai'    => $totalNilai,
             ]];
         }
 
         $hasil = [];
         foreach ($nilaiPerKategori as $kode => $nilai) {
             $hasil[$kode] = [
-                'proporsi'   => $nilai / $totalNilai,
-                'nama_akun'  => $wakilPerKategori[$kode]['nama_akun'] ?? null,
-                'keterangan' => $wakilPerKategori[$kode]['keterangan'] ?? null,
+                'proporsi'       => $nilai / $totalNilai,
+                'nama_akun'      => $wakilPerKategori[$kode]['nama_akun'] ?? null,
+                'keterangan'     => $wakilPerKategori[$kode]['keterangan'] ?? null,
+                'nilai_kategori' => $nilai,
+                'total_nilai'    => $totalNilai,
             ];
         }
 
