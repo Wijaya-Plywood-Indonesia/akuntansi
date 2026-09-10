@@ -61,7 +61,12 @@
                             <input type="text" wire:model.live.debounce.300ms="search"
                                 placeholder="Cari barang / barcode... (/)" id="pos-search-input"
                                 class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg !pl-8 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary-500/20 transition-all"
-                                @keydown.slash.window.prevent="document.getElementById('pos-search-input').focus()"
+                                x-on:keydown.slash.window="
+                                    if (!['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+                                        $event.preventDefault();
+                                        document.getElementById('pos-search-input').focus();
+                                    }
+                                "
                                 wire:focus="openDropdown" />
 
                             @if ($showDropdown)

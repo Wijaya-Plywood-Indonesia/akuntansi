@@ -53,15 +53,40 @@ class JurnalPembantuHeaderForm
 
                         Select::make('modul_asal')
                             ->label('Modul Asal')
-                            ->options([
-                                'penjualan' => 'Penjualan',
-                                'pembelian' => 'Pembelian',
-                                'produksi_kupasan' => 'Produksi — Kupasan',
-                                'produksi_dryer' => 'Produksi — Dryer',
-                                'produksi_hotpress' => 'Produksi — Hotpress',
-                                'penggajian' => 'Penggajian',
-                                'lain' => 'Lain-lain',
-                            ])
+                            ->options(function (?string $state) {
+                                // Daftar kode modul yang MEMANG dipakai oleh
+                                // sistem saat mencatat transaksi (lihat
+                                // JurnalPembelianTriplekService,
+                                // JurnalPenjualanTriplekService, dll).
+                                $options = [
+                                    'pembelian_barang' => 'Pembelian',
+                                    'penjualan_triplek' => 'Penjualan',
+                                    'penjualan_return' => 'Retur Penjualan',
+                                    'pelunasan_penjualan' => 'Pelunasan Penjualan',
+                                    'penjualan_telur' => 'Penjualan — Telur',
+                                    'produksi' => 'Produksi',
+                                    'produksi_dryer' => 'Produksi — Dryer',
+                                    'produksi_kupasan' => 'Produksi — Kupasan',
+                                    'produksi_hotpress' => 'Produksi — Hotpress',
+                                    'stock_opname' => 'Stock Opname',
+                                    'kayu_masuk' => 'Kayu Masuk',
+                                    'web_kayu' => 'Web Kayu',
+                                    'penggajian' => 'Penggajian',
+                                    'lain' => 'Lain-lain',
+                                ];
+
+                                // Jaring pengaman: kalau data yang tersimpan
+                                // (lama atau baru) ternyata pakai kode modul
+                                // yang belum terdaftar di atas, tetap
+                                // ditampilkan apa adanya — supaya form edit
+                                // tidak menolak simpan gara-gara "invalid"
+                                // padahal cuma daftar opsinya yang ketinggalan.
+                                if ($state && ! array_key_exists($state, $options)) {
+                                    $options[$state] = $state;
+                                }
+
+                                return $options;
+                            })
                             ->nullable()
                             ->columnSpan(1),
 

@@ -111,8 +111,9 @@ class PembelianKedatanganService
     {
         $nominal = (float) ($payload['nominal'] ?? 0);
         $metode = $payload['payment_method'] ?? PembelianMetodePembayaran::METODE_TUNAI;
+        $tanggal = $this->resolveTanggal($payload['tanggal'] ?? null);
 
-        return DB::transaction(function () use ($pembelian, $payload, $nominal, $metode, $userId) {
+        return DB::transaction(function () use ($pembelian, $payload, $nominal, $metode, $userId, $tanggal) {
             /** @var Pembelian $data */
             $data = Pembelian::query()->lockForUpdate()->findOrFail($pembelian->id);
 
@@ -145,7 +146,7 @@ class PembelianKedatanganService
             $bayar = PembelianMetodePembayaran::create([
                 'pembelian_id'           => $data->id,
                 'created_by'             => $userId,
-                'tanggal_bayar'          => now(),
+                'tanggal_bayar'          => $tanggal,
                 'amount'                 => $nominal,
                 'payment_method'         => $metode,
                 'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
@@ -153,7 +154,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? 'Pelunasan hutang (jatuh tempo)',
             ]);
 
-            $this->jurnalService->buatJurnalBayarHutang($data, $bayar, $userId);
+            $this->jurnalService->buatJurnalBayarHutang($data, $bayar, $userId, $tanggal->toDateString());
 
             $totalDibayar = $data->totalSudahDibayar();
             $data->update([
@@ -182,8 +183,9 @@ class PembelianKedatanganService
     {
         $nominal = (float) ($payload['nominal'] ?? 0);
         $metode = $payload['payment_method'] ?? PembelianMetodePembayaran::METODE_TUNAI;
+        $tanggal = $this->resolveTanggal($payload['tanggal'] ?? null);
 
-        return DB::transaction(function () use ($pembelian, $payload, $nominal, $metode, $userId) {
+        return DB::transaction(function () use ($pembelian, $payload, $nominal, $metode, $userId, $tanggal) {
             /** @var Pembelian $data */
             $data = Pembelian::query()->lockForUpdate()->findOrFail($pembelian->id);
 
@@ -217,7 +219,7 @@ class PembelianKedatanganService
             $bayar = PembelianMetodePembayaran::create([
                 'pembelian_id'           => $data->id,
                 'created_by'             => $userId,
-                'tanggal_bayar'          => now(),
+                'tanggal_bayar'          => $tanggal,
                 'amount'                 => $nominal,
                 'payment_method'         => $metode,
                 'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
@@ -228,7 +230,7 @@ class PembelianKedatanganService
             // $bayar sudah tersimpan -> sisaTagihan() di dalam service jurnal
             // sudah mencerminkan pembayaran ini, jadi bisa dipakai untuk
             // deteksi "apakah ini cicilan terakhir".
-            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayar, $userId);
+            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayar, $userId, $tanggal->toDateString());
 
             $totalDibayar = $data->totalSudahDibayar();
             $data->update([
@@ -261,8 +263,9 @@ class PembelianKedatanganService
     {
         $nominal = (float) ($payload['nominal'] ?? 0);
         $metode = $payload['payment_method'] ?? PembelianMetodePembayaran::METODE_TUNAI;
+        $tanggal = $this->resolveTanggal($payload['tanggal'] ?? null);
 
-        return DB::transaction(function () use ($pembelian, $payload, $nominal, $metode, $userId) {
+        return DB::transaction(function () use ($pembelian, $payload, $nominal, $metode, $userId, $tanggal) {
             /** @var Pembelian $data */
             $data = Pembelian::query()->lockForUpdate()->findOrFail($pembelian->id);
 
@@ -296,7 +299,7 @@ class PembelianKedatanganService
             $bayar = PembelianMetodePembayaran::create([
                 'pembelian_id'           => $data->id,
                 'created_by'             => $userId,
-                'tanggal_bayar'          => now(),
+                'tanggal_bayar'          => $tanggal,
                 'amount'                 => $nominal,
                 'payment_method'         => $metode,
                 'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
@@ -304,7 +307,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? null,
             ]);
 
-            $this->jurnalService->buatJurnalTambahDp($data, $bayar, $userId);
+            $this->jurnalService->buatJurnalTambahDp($data, $bayar, $userId, $tanggal->toDateString());
 
             // Status pembayaran ikut diperbarui (hutang/cicilan/lunas) supaya
             // konsisten dengan status di menu lain — walaupun untuk DP,
@@ -344,7 +347,9 @@ class PembelianKedatanganService
      */
     public function konfirmasiBarangDatang(Pembelian $pembelian, int $userId, array $payload = []): Pembelian
     {
-        return DB::transaction(function () use ($pembelian, $userId, $payload) {
+        $tanggal = $this->resolveTanggal($payload['tanggal'] ?? null);
+
+        return DB::transaction(function () use ($pembelian, $userId, $payload, $tanggal) {
             /** @var Pembelian $data */
             $data = Pembelian::query()->lockForUpdate()->findOrFail($pembelian->id);
 
@@ -356,11 +361,11 @@ class PembelianKedatanganService
             }
 
             if ($data->jenis_pembayaran === Pembelian::JENIS_DP) {
-                $this->konfirmasiBarangDatangDp($data, $payload, $userId);
+                $this->konfirmasiBarangDatangDp($data, $payload, $userId, $tanggal);
             } else {
                 // BAYAR_DIMUKA: sudah lunas 100% sejak awal, tidak perlu
                 // pelunasan sisa apapun.
-                $this->jurnalService->buatJurnalKedatanganBarangDimuka($data, $userId);
+                $this->jurnalService->buatJurnalKedatanganBarangDimuka($data, $userId, $tanggal->toDateString());
             }
 
             // Untuk DP, barang datang TIDAK selalu berarti lunas lagi
@@ -370,7 +375,7 @@ class PembelianKedatanganService
             // yang baru saja dibuat di konfirmasiBarangDatangDp() kalau
             // ada). Untuk BAYAR_DIMUKA tetap selalu LUNAS seperti semula.
             $data->update([
-                'barang_diterima_at' => now(),
+                'barang_diterima_at' => $tanggal,
                 'barang_diterima_by' => $userId,
                 'status'             => match (true) {
                     $data->sisaTagihan() <= 0 => Pembelian::STATUS_LUNAS,
@@ -406,7 +411,7 @@ class PembelianKedatanganService
      *      'pembelian_down_payment_barang_datang_*' yang langsung menutup
      *      semuanya (persediaan + PPN + kas + Uang Muka) dalam 1 jurnal.
      */
-    private function konfirmasiBarangDatangDp(Pembelian $data, array $payload, int $userId): void
+    private function konfirmasiBarangDatangDp(Pembelian $data, array $payload, int $userId, \Illuminate\Support\Carbon $tanggal): void
     {
         $sisa = $data->sisaTagihan();
         $nominal = (float) ($payload['nominal'] ?? 0);
@@ -445,7 +450,7 @@ class PembelianKedatanganService
             $bayarSisa = PembelianMetodePembayaran::create([
                 'pembelian_id'           => $data->id,
                 'created_by'             => $userId,
-                'tanggal_bayar'          => now(),
+                'tanggal_bayar'          => $tanggal,
                 'amount'                 => $nominal,
                 'payment_method'         => $metode,
                 'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
@@ -453,7 +458,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? 'Pelunasan sisa saat barang datang (DP)',
             ]);
 
-            $this->jurnalService->buatJurnalKedatanganBarangDp($data, $dpSudahDibayar, $bayarSisa, $userId);
+            $this->jurnalService->buatJurnalKedatanganBarangDp($data, $dpSudahDibayar, $bayarSisa, $userId, $tanggal->toDateString());
 
             return;
         }
@@ -466,7 +471,7 @@ class PembelianKedatanganService
         // Muka Pembelian.
         $dpTerkumpul = $data->totalSudahDibayar();
 
-        $this->jurnalService->buatJurnalKedatanganBarangDpBelumLunas($data, $userId);
+        $this->jurnalService->buatJurnalKedatanganBarangDpBelumLunas($data, $userId, $tanggal->toDateString());
         $data->dp_terkumpul_saat_barang_datang = $dpTerkumpul;
 
         if ($nominal > 0) {
@@ -478,7 +483,7 @@ class PembelianKedatanganService
             $bayarSebagian = PembelianMetodePembayaran::create([
                 'pembelian_id'           => $data->id,
                 'created_by'             => $userId,
-                'tanggal_bayar'          => now(),
+                'tanggal_bayar'          => $tanggal,
                 'amount'                 => $nominal,
                 'payment_method'         => $metode,
                 'rekening_perusahaan_id' => $metode === PembelianMetodePembayaran::METODE_TRANSFER ? $rekening?->id : null,
@@ -491,7 +496,26 @@ class PembelianKedatanganService
             // buatJurnalBayarHutangDp() otomatis TIDAK membalik Uang Muka
             // Pembelian di sini (baru nanti di cicilan yang benar-benar
             // menutup sisa ke 0).
-            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayarSebagian, $userId);
+            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayarSebagian, $userId, $tanggal->toDateString());
+        }
+    }
+
+    /**
+     * Ubah string tanggal dari form (mis. "2026-09-10") jadi Carbon yang
+     * aman dipakai. Kalau kosong/tidak valid, fallback ke sekarang — supaya
+     * form lama yang belum kirim tanggal (atau baru dipasang) tetap jalan
+     * seperti sebelumnya, bukan malah error.
+     */
+    private function resolveTanggal(?string $tanggal): \Illuminate\Support\Carbon
+    {
+        if (! $tanggal) {
+            return now();
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($tanggal)->startOfDay()->setTimeFromTimeString(now()->format('H:i:s'));
+        } catch (\Throwable) {
+            return now();
         }
     }
 }
