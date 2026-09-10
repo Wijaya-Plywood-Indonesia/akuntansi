@@ -46,6 +46,8 @@ class PelunasanPenjualan extends Page
 
     public ?string $keterangan = '';
 
+    public ?string $tanggal_pelunasan = null;
+
     protected $queryString = [
         'search' => ['except' => ''],
     ];
@@ -105,6 +107,7 @@ class PelunasanPenjualan extends Page
         $this->nominal_transfer = 0;
         $this->rekening_perusahaan_id = null;
         $this->keterangan = '';
+        $this->tanggal_pelunasan = now()->format('Y-m-d');
         $this->metode_pembayaran = self::_defaultMetode();
     }
 
@@ -117,6 +120,7 @@ class PelunasanPenjualan extends Page
         $this->nominal_transfer = 0;
         $this->rekening_perusahaan_id = null;
         $this->keterangan = '';
+        $this->tanggal_pelunasan = null;
         $this->metode_pembayaran = self::_defaultMetode();
     }
 
@@ -158,6 +162,7 @@ class PelunasanPenjualan extends Page
                 'nominal_transfer' => $this->nominal_transfer,
                 'rekening_perusahaan_id' => $this->rekening_perusahaan_id,
                 'keterangan' => $this->keterangan,
+                'tanggal_pelunasan' => $this->tanggal_pelunasan,
             ]);
 
             Notification::make()
