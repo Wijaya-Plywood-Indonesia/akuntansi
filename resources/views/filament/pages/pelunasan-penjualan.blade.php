@@ -266,6 +266,15 @@
                         </div>
 
                         <div class="p-4 lg:p-5 space-y-4">
+                            {{-- TANGGAL PELUNASAN --}}
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide block ml-1">
+                                    Tanggal Pelunasan
+                                </label>
+                                <input type="date" wire:model.live="tanggal_pelunasan"
+                                    class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer dark:text-white" />
+                            </div>
+
                             {{-- METODE PEMBAYARAN --}}
                             <div class="space-y-2">
                                 <label

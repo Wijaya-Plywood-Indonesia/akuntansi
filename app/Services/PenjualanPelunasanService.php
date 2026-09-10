@@ -190,12 +190,15 @@ class PenjualanPelunasanService
             $nota->validated_by = Auth::id();
             $nota->save();
 
+            $tglTransaksi = $payload['tanggal_pelunasan'] ?? now();
+
             match ($metode) {
                 self::METODE_TUNAI => $this->jurnalService->buatJurnalPelunasanTunai(
                     nota: $nota,
                     userId: (int) Auth::id(),
                     nominal: (float) $nominal,
                     dpAwal: $dpAwal,
+                    tglTransaksi: $tglTransaksi,
                 ),
                 self::METODE_TRANSFER => $this->jurnalService->buatJurnalPelunasanTransfer(
                     nota: $nota,
@@ -203,6 +206,7 @@ class PenjualanPelunasanService
                     nominal: (float) $nominal,
                     rekening: $rekening,
                     dpAwal: $dpAwal,
+                    tglTransaksi: $tglTransaksi,
                 ),
                 self::METODE_CAMPUR => $this->jurnalService->buatJurnalPelunasanCampur(
                     nota: $nota,
@@ -211,6 +215,7 @@ class PenjualanPelunasanService
                     nominalTransfer: (float) $nominalTransferCampur,
                     rekening: $rekening,
                     dpAwal: $dpAwal,
+                    tglTransaksi: $tglTransaksi,
                 ),
             };
 

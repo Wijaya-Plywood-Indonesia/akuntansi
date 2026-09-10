@@ -38,6 +38,27 @@ use RuntimeException;
  * mergeBarisPiutang()) jadi 1 baris gabungan supaya laporan jurnal tetap
  * rapi (1 baris Piutang per pelunasan, senilai total tunai + transfer +
  * DP yang direklas).
+ *
+ * === Catatan Pelunasan ===
+ * Field `keterangan_pembayaran` pada nota (diisi user lewat "Catatan
+ * Pelunasan" di halaman PelunasanPenjualan — lihat
+ * PenjualanPelunasanService::prosesPelunasan, yang meng-append catatan
+ * baru ke kolom ini SEBELUM memanggil service ini) ditempelkan ke tiap
+ * baris jurnal lewat parameter `catatanPerVariabel` milik
+ * BukuKitabJurnalService::buatJurnalDariKitab().
+ *
+ * PENTING: JANGAN pakai `keteranganDefault` untuk ini — di dalam engine,
+ * keterangan bawaan TEMPLATE kitab ($baris->keterangan) SELALU menang
+ * duluan atas `keteranganDefault` (lihat
+ * `$ketBaris = $baris->keterangan ?: $keteranganDefault ?: $kodeKitab;`
+ * di BukuKitabJurnalService::buatJurnalDariKitab()). Karena semua kitab
+ * pelunasan di sini sudah punya keterangan bawaan sendiri per baris
+ * (mis. "Penerimaan pelunasan tunai...", "Pengurangan piutang
+ * customer..."), `keteranganDefault` TIDAK PERNAH terpakai dan harus
+ * ditempelkan lewat `catatanPerVariabel` supaya benar-benar muncul,
+ * dirender sebagai " (catatan)" di belakang "| Nota: ...". Ini pola yang
+ * sama dipakai JurnalPenjualanTriplekService::postingSplitKas() untuk
+ * baris nominal_kas.
  */
 class JurnalPenjualanPelunasanService
 {
@@ -78,13 +99,39 @@ class JurnalPenjualanPelunasanService
     ) {}
 
     /**
+     * Bangun catatanPerVariabel yang menempelkan "Catatan Pelunasan"
+     * ($nota->keterangan_pembayaran) ke SEMUA variabel yang dipakai baris
+     * jurnal pada suatu pemanggilan kitab (kas, piutang, dan dp kalau ada).
+     * Baris bernilai 0 otomatis di-skip oleh engine sebelum sempat melihat
+     * catatan ini, jadi aman dikirim untuk semua variabel sekaligus.
+     *
+     * @return array<string, string>
+     */
+    private function catatanPelunasan(Penjualan $nota, bool $sertakanDp = false): array
+    {
+        $catatan = trim((string) ($nota->keterangan_pembayaran ?? ''));
+
+        if ($catatan === '') {
+            return [];
+        }
+
+        $variabel = ['nominal_kas', 'piutang_usaha'];
+
+        if ($sertakanDp) {
+            $variabel[] = 'dp_penjualan';
+        }
+
+        return array_fill_keys($variabel, $catatan);
+    }
+
+    /**
      * Bangun jurnal pelunasan untuk pembayaran TUNAI.
      *
      * @param  int|null  $dpAwal  DP awal yang harus direklas dari Uang Muka
      *                            Pelanggan ke Piutang Usaha. Null/0 kalau
      *                            nota bukan jenis DP.
      */
-    public function buatJurnalPelunasanTunai(Penjualan $nota, int $userId, float $nominal, ?int $dpAwal = null): void
+    public function buatJurnalPelunasanTunai(Penjualan $nota, int $userId, float $nominal, ?int $dpAwal = null, \Carbon\Carbon|string|null $tglTransaksi = null): void
     {
         if ($nominal <= 0) {
             return;
@@ -100,6 +147,7 @@ class JurnalPenjualanPelunasanService
             piutang: $nominal + (float) $dpAwal,
             dpAwal: $dpAwal,
             keteranganDefault: 'Pelunasan Piutang Penjualan (Tunai)'.($dpAwal ? ' + Reklas Uang Muka Pelanggan' : ''),
+            tglTransaksi: $tglTransaksi,
         );
     }
 
@@ -119,6 +167,7 @@ class JurnalPenjualanPelunasanService
         float $nominal,
         RekeningPerusahaan $rekening,
         ?int $dpAwal = null,
+        \Carbon\Carbon|string|null $tglTransaksi = null,
     ): void {
         if ($nominal <= 0) {
             return;
@@ -144,6 +193,7 @@ class JurnalPenjualanPelunasanService
             piutang: $nominal + (float) $dpAwal,
             dpAwal: $dpAwal,
             keteranganDefault: "Pelunasan Piutang Penjualan (Transfer {$rekening->namaAkun()})".($dpAwal ? ' + Reklas Uang Muka Pelanggan' : ''),
+            tglTransaksi: $tglTransaksi,
         );
     }
 
@@ -174,6 +224,7 @@ class JurnalPenjualanPelunasanService
         float $nominalTransfer,
         RekeningPerusahaan $rekening,
         ?int $dpAwal = null,
+        \Carbon\Carbon|string|null $tglTransaksi = null,
     ): void {
         if ($nominalTunai <= 0 && $nominalTransfer <= 0) {
             return;
@@ -208,6 +259,7 @@ class JurnalPenjualanPelunasanService
             $rekening,
             $dpUntukTunai,
             $dpUntukTransfer,
+            $tglTransaksi,
         ) {
             $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
 
@@ -225,7 +277,7 @@ class JurnalPenjualanPelunasanService
                     kodeKitab: $kodeKitabTunai,
                     context: $context,
                     noDokumen: $nota->no_nota,
-                    tglTransaksi: now(),
+                    tglTransaksi: $tglTransaksi ?? now(),
                     modulAsal: 'pelunasan_penjualan',
                     jenisTransaksi: 'bk',
                     userId: $userId,
@@ -233,6 +285,7 @@ class JurnalPenjualanPelunasanService
                     namaPihak: $nota->nama_customer ?: 'Pelanggan',
                     keteranganDefault: 'Pelunasan Piutang Penjualan (Tunai, split)'.($dpUntukTunai ? ' + Reklas Uang Muka Pelanggan' : ''),
                     noJurnalOverride: $noJurnal,
+                    catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpUntukTunai),
                 );
             }
 
@@ -250,7 +303,7 @@ class JurnalPenjualanPelunasanService
                     kodeKitab: $kodeKitabBank,
                     context: $context,
                     noDokumen: $nota->no_nota,
-                    tglTransaksi: now(),
+                    tglTransaksi: $tglTransaksi ?? now(),
                     modulAsal: 'pelunasan_penjualan',
                     jenisTransaksi: 'bk',
                     userId: $userId,
@@ -258,6 +311,7 @@ class JurnalPenjualanPelunasanService
                     namaPihak: $nota->nama_customer ?: 'Pelanggan',
                     keteranganDefault: "Pelunasan Piutang Penjualan (Transfer {$rekening->namaAkun()}, split)".($dpUntukTransfer ? ' + Reklas Uang Muka Pelanggan' : ''),
                     noJurnalOverride: $noJurnal,
+                    catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpUntukTransfer),
                 );
             }
 
@@ -273,6 +327,12 @@ class JurnalPenjualanPelunasanService
      * Setiap baris akun (Kas D / Piutang K / Uang Muka D) adalah 1 row di
      * JurnalPembantuHeader itu sendiri — tidak ada model detail terpisah.
      * Baris-baris dengan `jurnal` yang sama adalah 1 grup jurnal.
+     *
+     * Catatan Pelunasan sudah ikut ke masing-masing baris Piutang sebelum
+     * di-merge (lewat catatanPerVariabel di atas) — baris pertama yang
+     * dipertahankan otomatis sudah membawa catatan itu di keterangannya,
+     * jadi tidak perlu ditempel ulang di sini (kalau ditempel ulang bisa
+     * dobel kalau kedua leg sama-sama punya catatan).
      */
     private function mergeBarisPiutang(int $noJurnal, Penjualan $nota): void
     {
@@ -294,7 +354,6 @@ class JurnalPenjualanPelunasanService
 
         $barisPertama->update([
             'total_nilai' => $totalNilai,
-            'keterangan' => "Pengurangan piutang customer | Nota: {$nota->no_nota}",
         ]);
 
         $barisPiutang->skip(1)->each->delete();
@@ -317,8 +376,9 @@ class JurnalPenjualanPelunasanService
         float $piutang,
         ?int $dpAwal,
         string $keteranganDefault,
+        \Carbon\Carbon|string|null $tglTransaksi = null,
     ): void {
-        DB::transaction(function () use ($kodeKitab, $nota, $userId, $nominal, $piutang, $dpAwal, $keteranganDefault) {
+        DB::transaction(function () use ($kodeKitab, $nota, $userId, $nominal, $piutang, $dpAwal, $keteranganDefault, $tglTransaksi) {
             $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
 
             $context = [
@@ -334,7 +394,7 @@ class JurnalPenjualanPelunasanService
                 kodeKitab: $kodeKitab,
                 context: $context,
                 noDokumen: $nota->no_nota,
-                tglTransaksi: now(),
+                tglTransaksi: $tglTransaksi ?? now(),
                 modulAsal: 'pelunasan_penjualan',
                 jenisTransaksi: 'bk',
                 userId: $userId,
@@ -342,6 +402,7 @@ class JurnalPenjualanPelunasanService
                 namaPihak: $nota->nama_customer ?: 'Pelanggan',
                 keteranganDefault: $keteranganDefault,
                 noJurnalOverride: $noJurnal,
+                catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpAwal),
             );
         });
     }
