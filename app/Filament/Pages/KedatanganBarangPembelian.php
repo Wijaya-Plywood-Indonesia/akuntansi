@@ -11,15 +11,18 @@ use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Filament\Support\Enums\Width;
 use InvalidArgumentException;
 use Livewire\Attributes\Computed;
+use Livewire\WithFileUploads;
 use RuntimeException;
 use UnitEnum;
 
 class KedatanganBarangPembelian extends Page
 {
     use HasPageShield;
+    use WithFileUploads;
 
     protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
 
@@ -59,8 +62,18 @@ class KedatanganBarangPembelian extends Page
 
     public ?string $dp_catatan = null;
 
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $dp_foto = [];
+
     // ── Form "Konfirmasi Barang Datang" (khusus sisa DP) ────────────────
     public string $sisa_tanggal = '';
+
+    // Nota/surat jalan biasanya BELUM ada saat nota dibuat untuk transaksi
+    // BAYAR_DIMUKA/DP (baru dikirim setelah barang berangkat dari
+    // supplier). Field ini opsional diisi/direvisi begitu surat jalan
+    // fisik diterima saat barang datang — kalau diisi, akan menimpa
+    // nomor_nota Pembelian SEBELUM jurnal kedatangan barang dibuat.
+    public string $sisa_nomor_nota = '';
 
     public string $sisa_nominal = '';
 
@@ -69,6 +82,9 @@ class KedatanganBarangPembelian extends Page
     public ?int $sisa_rekening_perusahaan_id = null;
 
     public ?string $sisa_reference_number = null;
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $sisa_foto = [];
 
     // ── Form "Bayar Hutang" (khusus NORMAL) ─────────────────────────────
     public string $hutang_tanggal = '';
@@ -83,6 +99,9 @@ class KedatanganBarangPembelian extends Page
 
     public ?string $hutang_catatan = null;
 
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $hutang_foto = [];
+
     // ── Form "Bayar Hutang DP" (khusus DP yang barangnya SUDAH datang
     //    tapi masih ada sisa tagihan) ────────────────────────────────────
     public string $hutangdp_tanggal = '';
@@ -96,6 +115,9 @@ class KedatanganBarangPembelian extends Page
     public ?string $hutangdp_reference_number = null;
 
     public ?string $hutangdp_catatan = null;
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $hutangdp_foto = [];
 
     /** @var Collection<int, RekeningPerusahaan> */
     public Collection $rekeningPerusahaan;
@@ -174,12 +196,15 @@ class KedatanganBarangPembelian extends Page
         $this->dp_rekening_perusahaan_id = null;
         $this->dp_reference_number = null;
         $this->dp_catatan = null;
+        $this->dp_foto = [];
 
         $this->sisa_tanggal = $hariIni;
+        $this->sisa_nomor_nota = $this->selectedNota?->nomor_nota ?? '';
         $this->sisa_nominal = '';
         $this->sisa_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->sisa_rekening_perusahaan_id = null;
         $this->sisa_reference_number = null;
+        $this->sisa_foto = [];
 
         $this->hutang_tanggal = $hariIni;
         $this->hutang_nominal = '';
@@ -187,6 +212,7 @@ class KedatanganBarangPembelian extends Page
         $this->hutang_rekening_perusahaan_id = null;
         $this->hutang_reference_number = null;
         $this->hutang_catatan = null;
+        $this->hutang_foto = [];
 
         $this->hutangdp_tanggal = $hariIni;
         $this->hutangdp_nominal = '';
@@ -194,6 +220,51 @@ class KedatanganBarangPembelian extends Page
         $this->hutangdp_rekening_perusahaan_id = null;
         $this->hutangdp_reference_number = null;
         $this->hutangdp_catatan = null;
+        $this->hutangdp_foto = [];
+    }
+
+    /**
+     * Hapus satu foto dari preview SEBELUM disimpan, di salah satu dari 4
+     * form panel (dp_foto, sisa_foto, hutang_foto, hutangdp_foto). Dipakai
+     * oleh tombol "×" di setiap thumbnail foto pada form.
+     */
+    public function removeFoto(string $property, int $index): void
+    {
+        if (! in_array($property, ['dp_foto', 'sisa_foto', 'hutang_foto', 'hutangdp_foto'], true)) {
+            return;
+        }
+
+        $daftar = $this->{$property};
+
+        if (! isset($daftar[$index])) {
+            return;
+        }
+
+        unset($daftar[$index]);
+        $this->{$property} = array_values($daftar);
+    }
+
+    /**
+     * Simpan array TemporaryUploadedFile ke disk 'public' (folder
+     * jurnal-lampiran, sama seperti lampiran Jurnal Umum) dan kembalikan
+     * array path relatif-nya, siap dikirim ke service jurnal.
+     *
+     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $files
+     * @return array<int, string>
+     */
+    private function simpanFotoLampiran(array $files): array
+    {
+        $paths = [];
+
+        foreach ($files as $file) {
+            if (! $file) {
+                continue;
+            }
+
+            $paths[] = $file->store('jurnal-lampiran', 'public');
+        }
+
+        return $paths;
     }
 
     private function parseNumber(string $value): float
@@ -229,6 +300,7 @@ class KedatanganBarangPembelian extends Page
                 'rekening_perusahaan_id' => $this->dp_rekening_perusahaan_id,
                 'reference_number'       => $this->dp_reference_number,
                 'catatan'                => $this->dp_catatan,
+                'foto'                   => $this->simpanFotoLampiran($this->dp_foto),
             ], auth()->id());
 
             Notification::make()
@@ -243,6 +315,7 @@ class KedatanganBarangPembelian extends Page
             $this->dp_nominal = '';
             $this->dp_reference_number = null;
             $this->dp_catatan = null;
+            $this->dp_foto = [];
             unset($this->notaResults);
         } catch (InvalidArgumentException|RuntimeException $e) {
             Notification::make()
@@ -279,6 +352,7 @@ class KedatanganBarangPembelian extends Page
                 'rekening_perusahaan_id' => $this->hutang_rekening_perusahaan_id,
                 'reference_number'       => $this->hutang_reference_number,
                 'catatan'                => $this->hutang_catatan,
+                'foto'                   => $this->simpanFotoLampiran($this->hutang_foto),
             ], auth()->id());
 
             Notification::make()
@@ -297,6 +371,7 @@ class KedatanganBarangPembelian extends Page
                 $this->hutang_nominal = '';
                 $this->hutang_reference_number = null;
                 $this->hutang_catatan = null;
+                $this->hutang_foto = [];
             }
         } catch (InvalidArgumentException|RuntimeException $e) {
             Notification::make()
@@ -337,6 +412,7 @@ class KedatanganBarangPembelian extends Page
                 'rekening_perusahaan_id' => $this->hutangdp_rekening_perusahaan_id,
                 'reference_number'       => $this->hutangdp_reference_number,
                 'catatan'                => $this->hutangdp_catatan,
+                'foto'                   => $this->simpanFotoLampiran($this->hutangdp_foto),
             ], auth()->id());
 
             Notification::make()
@@ -355,6 +431,7 @@ class KedatanganBarangPembelian extends Page
                 $this->hutangdp_nominal = '';
                 $this->hutangdp_reference_number = null;
                 $this->hutangdp_catatan = null;
+                $this->hutangdp_foto = [];
             }
         } catch (InvalidArgumentException|RuntimeException $e) {
             Notification::make()
@@ -379,17 +456,23 @@ class KedatanganBarangPembelian extends Page
 
         $service = app(PembelianKedatanganService::class);
 
+        $fotoPaths = $this->simpanFotoLampiran($this->sisa_foto);
+
         $payload = [
-            'tanggal' => $this->sisa_tanggal,
+            'tanggal'    => $this->sisa_tanggal,
+            'nomor_nota' => $this->sisa_nomor_nota,
+            'foto'       => $fotoPaths,
         ];
 
         if ($this->selectedNota->jenis_pembayaran === Pembelian::JENIS_DP) {
             $payload = [
                 'tanggal'                => $this->sisa_tanggal,
+                'nomor_nota'             => $this->sisa_nomor_nota,
                 'nominal'                => $this->parseNumber($this->sisa_nominal),
                 'payment_method'         => $this->sisa_payment_method,
                 'rekening_perusahaan_id' => $this->sisa_rekening_perusahaan_id,
                 'reference_number'       => $this->sisa_reference_number,
+                'foto'                   => $fotoPaths,
             ];
         }
 

@@ -3,14 +3,17 @@
     <div x-data="{
         search: '',
         filterStatus: 'all',
+        filterKategori: 'all',
         items: @js($barangs->map(fn($barang) => [
             'id' => $barang->id,
             'nama' => $barang->nama_barang,
             'satuan' => $barang->satuan?->nama_satuan ?? 'pcs',
             'akun' => $barang->subAnakAkun?->kode_sub_anak_akun ?? '',
+            'kategori' => $barang->kategori?->nama_kategori ?? 'Tanpa Kategori',
             'qty' => $stok[$barang->id]->stok ?? 0.0,
             'm3' => $stok[$barang->id]->m3 ?? 0.0
         ])),
+        kategoriList: @js($kategoris->push('Tanpa Kategori')->unique()->sort()->values()),
         get filteredItems() {
             return this.items.filter(item => {
                 const matchesSearch = item.nama.toLowerCase().includes(this.search.toLowerCase()) || 
@@ -19,9 +22,14 @@
                 const matchesStatus = this.filterStatus === 'all' || 
                                       (this.filterStatus === 'available' && (item.qty > 0 || item.m3 > 0)) || 
                                       (this.filterStatus === 'empty' && item.qty <= 0 && item.m3 <= 0);
+
+                const matchesKategori = this.filterKategori === 'all' || item.kategori === this.filterKategori;
                                       
-                return matchesSearch && matchesStatus;
+                return matchesSearch && matchesStatus && matchesKategori;
             });
+        },
+        countByKategori(kat) {
+            return this.items.filter(i => i.kategori === kat).length;
         },
         formatQty(val) {
             return Number(val).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 6 });
@@ -88,6 +96,39 @@
 
         </div>
 
+        {{-- Category Filter Pills --}}
+        <div class="flex flex-wrap items-center gap-1.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-2.5 shadow-sm">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 pl-1 pr-1">Kategori</span>
+
+            <button
+                @click="filterKategori = 'all'"
+                :class="filterKategori === 'all' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 dark:bg-gray-950/40 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800'"
+                class="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1.5"
+            >
+                Semua
+                <span
+                    :class="filterKategori === 'all' ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300'"
+                    class="px-1.5 py-0.5 rounded text-[9px] font-mono"
+                    x-text="items.length"
+                ></span>
+            </button>
+
+            <template x-for="kat in kategoriList" :key="kat">
+                <button
+                    @click="filterKategori = kat"
+                    :class="filterKategori === kat ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 dark:bg-gray-950/40 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800'"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1.5"
+                >
+                    <span x-text="kat"></span>
+                    <span
+                        :class="filterKategori === kat ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300'"
+                        class="px-1.5 py-0.5 rounded text-[9px] font-mono"
+                        x-text="countByKategori(kat)"
+                    ></span>
+                </button>
+            </template>
+        </div>
+
         {{-- High Density Responsive Grid Table with Borders (Desktop: 5, Tablet: 4, Handphone: 3) --}}
         <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-0 border-t border-l border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden shadow-sm">
             <template x-for="item in filteredItems" :key="item.id">
@@ -96,7 +137,10 @@
                     {{-- Product Name and Account Code --}}
                     <div class="min-w-0 pr-2">
                         <span class="font-bold text-gray-800 dark:text-gray-200 block truncate text-xs" x-text="item.nama" :title="item.nama"></span>
-                        <span class="text-[10px] text-gray-400 dark:text-gray-500 font-mono" x-text="item.akun"></span>
+                        <div class="flex items-center gap-1 flex-wrap">
+                            <span class="text-[10px] text-gray-400 dark:text-gray-500 font-mono" x-text="item.akun"></span>
+                            <span class="text-[9px] font-semibold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1 rounded" x-text="item.kategori"></span>
+                        </div>
                     </div>
                     
                     {{-- Quantities and Units (Qty + M3) --}}

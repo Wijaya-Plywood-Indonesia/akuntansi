@@ -154,7 +154,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? 'Pelunasan hutang (jatuh tempo)',
             ]);
 
-            $this->jurnalService->buatJurnalBayarHutang($data, $bayar, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalBayarHutang($data, $bayar, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
 
             $totalDibayar = $data->totalSudahDibayar();
             $data->update([
@@ -230,7 +230,7 @@ class PembelianKedatanganService
             // $bayar sudah tersimpan -> sisaTagihan() di dalam service jurnal
             // sudah mencerminkan pembayaran ini, jadi bisa dipakai untuk
             // deteksi "apakah ini cicilan terakhir".
-            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayar, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayar, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
 
             $totalDibayar = $data->totalSudahDibayar();
             $data->update([
@@ -307,7 +307,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? null,
             ]);
 
-            $this->jurnalService->buatJurnalTambahDp($data, $bayar, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalTambahDp($data, $bayar, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
 
             // Status pembayaran ikut diperbarui (hutang/cicilan/lunas) supaya
             // konsisten dengan status di menu lain — walaupun untuk DP,
@@ -360,12 +360,45 @@ class PembelianKedatanganService
                 );
             }
 
+            // ── Revisi No. Nota / Surat Jalan saat barang datang ────────
+            // Untuk BAYAR_DIMUKA & DP, nota dibuat SEBELUM barang dikirim
+            // supplier — jadi nomor surat jalan aslinya belum ada saat itu
+            // (sering diisi placeholder). Begitu barang benar-benar datang
+            // dan surat jalan fisik diterima, nomor itu boleh diperbaiki di
+            // sini, dan SEMUA jurnal yang dibuat setelah titik ini (baik
+            // untuk BAYAR_DIMUKA maupun DP) otomatis memakai nomor yang
+            // sudah direvisi — karena $data (bukan $pembelian lama) yang
+            // diteruskan ke JurnalPembelianTriplekService di bawah.
+            $nomorNotaBaru = trim((string) ($payload['nomor_nota'] ?? ''));
+            if ($nomorNotaBaru !== '' && $nomorNotaBaru !== $data->nomor_nota) {
+                // Simpan nomor LAMA ke riwayat SEBELUM ditimpa, supaya nanti
+                // bisa disinkronkan ke jurnal-jurnal yang sudah lebih dulu
+                // terlanjur dibuat pakai nomor lama itu (lihat tombol
+                // "Sinkronkan No. Nota ke Jurnal" di halaman View Pembelian).
+                $riwayat = $data->nomor_nota_history ?? [];
+                if (filled($data->nomor_nota) && ! in_array($data->nomor_nota, $riwayat, true)) {
+                    $riwayat[] = $data->nomor_nota;
+                }
+
+                $data->nomor_nota_history = $riwayat;
+                $data->nomor_nota = $nomorNotaBaru;
+                $data->save();
+
+                // Langsung sinkronkan otomatis — ini cuma teks referensi
+                // (No. Dokumen), bukan angka keuangan, jadi aman dilakukan
+                // otomatis tanpa perlu konfirmasi manual terpisah. Riwayat
+                // TETAP disimpan (tidak dikosongkan) sebagai jejak audit,
+                // dan tombol manual di View Pembelian tetap ada sebagai
+                // cadangan (mis. untuk data lama sebelum fitur ini ada).
+                $this->sinkronkanNomorNotaKeJurnal($data);
+            }
+
             if ($data->jenis_pembayaran === Pembelian::JENIS_DP) {
                 $this->konfirmasiBarangDatangDp($data, $payload, $userId, $tanggal);
             } else {
                 // BAYAR_DIMUKA: sudah lunas 100% sejak awal, tidak perlu
                 // pelunasan sisa apapun.
-                $this->jurnalService->buatJurnalKedatanganBarangDimuka($data, $userId, $tanggal->toDateString());
+                $this->jurnalService->buatJurnalKedatanganBarangDimuka($data, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
             }
 
             // Untuk DP, barang datang TIDAK selalu berarti lunas lagi
@@ -458,7 +491,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? 'Pelunasan sisa saat barang datang (DP)',
             ]);
 
-            $this->jurnalService->buatJurnalKedatanganBarangDp($data, $dpSudahDibayar, $bayarSisa, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalKedatanganBarangDp($data, $dpSudahDibayar, $bayarSisa, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
 
             return;
         }
@@ -471,7 +504,7 @@ class PembelianKedatanganService
         // Muka Pembelian.
         $dpTerkumpul = $data->totalSudahDibayar();
 
-        $this->jurnalService->buatJurnalKedatanganBarangDpBelumLunas($data, $userId, $tanggal->toDateString());
+        $this->jurnalService->buatJurnalKedatanganBarangDpBelumLunas($data, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
         $data->dp_terkumpul_saat_barang_datang = $dpTerkumpul;
 
         if ($nominal > 0) {
@@ -496,7 +529,7 @@ class PembelianKedatanganService
             // buatJurnalBayarHutangDp() otomatis TIDAK membalik Uang Muka
             // Pembelian di sini (baru nanti di cicilan yang benar-benar
             // menutup sisa ke 0).
-            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayarSebagian, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayarSebagian, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
         }
     }
 
@@ -517,5 +550,61 @@ class PembelianKedatanganService
         } catch (\Throwable) {
             return now();
         }
+    }
+
+    /**
+     * Sinkronkan No. Nota yang sudah direvisi ke jurnal-jurnal LAMA yang
+     * masih memakai nomor sebelumnya (tersimpan di nomor_nota_history).
+     *
+     * Hanya menyentuh kolom referensi teks — no_dokumen di Jurnal Pembantu
+     * & Jurnal Umum, plus teks "Nota: ..." di keterangan — TIDAK PERNAH
+     * mengubah nominal/akun/tanggal apa pun. Dicocokkan lewat riwayat
+     * spesifik milik pembelian ini (bukan tebak-tebak teks generik), jadi
+     * tidak beresiko salah update jurnal pembelian lain yang kebetulan
+     * pernah pakai placeholder yang sama persis.
+     *
+     * Idempotent & aman dipanggil berkali-kali — kalau tidak ada nomor
+     * lama yang cocok lagi (mis. sudah pernah disinkronkan sebelumnya),
+     * tidak melakukan apa-apa.
+     *
+     * @return array{jp: int, ju: int} jumlah baris yang diperbarui
+     */
+    public function sinkronkanNomorNotaKeJurnal(Pembelian $pembelian): array
+    {
+        $riwayat = collect($pembelian->nomor_nota_history ?? [])
+            ->filter(fn ($n) => filled($n) && $n !== $pembelian->nomor_nota)
+            ->unique()
+            ->values();
+
+        if ($riwayat->isEmpty()) {
+            return ['jp' => 0, 'ju' => 0];
+        }
+
+        $totalJp = 0;
+        $totalJu = 0;
+
+        foreach ($riwayat as $nomorLama) {
+            $jpQuery = \App\Models\JurnalPembantuHeader::where('no_dokumen', $nomorLama)
+                ->where('modul_asal', 'pembelian_barang');
+
+            $totalJp += $jpQuery->count();
+
+            $jpQuery->get()->each(function ($h) use ($nomorLama, $pembelian) {
+                $h->no_dokumen = $pembelian->nomor_nota;
+                $h->keterangan = str_replace($nomorLama, $pembelian->nomor_nota, $h->keterangan ?? '');
+                $h->save();
+            });
+
+            $juQuery = \App\Models\JurnalUmum::where('no-dokumen', $nomorLama);
+            $totalJu += $juQuery->count();
+
+            $juQuery->get()->each(function ($j) use ($nomorLama, $pembelian) {
+                $j->no_dokumen = $pembelian->nomor_nota;
+                $j->keterangan = str_replace($nomorLama, $pembelian->nomor_nota, $j->keterangan ?? '');
+                $j->save();
+            });
+        }
+
+        return ['jp' => $totalJp, 'ju' => $totalJu];
     }
 }

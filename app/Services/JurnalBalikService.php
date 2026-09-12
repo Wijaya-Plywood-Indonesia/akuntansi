@@ -26,6 +26,20 @@ class JurnalBalikService
             foreach ($perNoJurnal as $noJurnalAsli => $headers) {
                 $noJurnalBalik = $this->nextNomorJurnal();
 
+                // Foto nota asli ikut disalin ke jurnal balik yang baru,
+                // supaya tetap kelihatan foto buktinya walau ini transaksi
+                // (jurnal) yang terpisah dari yang asli.
+                $lampiranAsli = \App\Models\JurnalLampiran::where('jurnal', (int) $noJurnalAsli)->first();
+                if ($lampiranAsli && filled($lampiranAsli->paths)) {
+                    \App\Models\JurnalLampiran::updateOrCreate(
+                        ['jurnal' => $noJurnalBalik],
+                        [
+                            'paths'       => $lampiranAsli->paths,
+                            'uploaded_by' => $userId,
+                        ]
+                    );
+                }
+
                 foreach ($headers as $headerAsli) {
                     $headerAsli->load('items');
 

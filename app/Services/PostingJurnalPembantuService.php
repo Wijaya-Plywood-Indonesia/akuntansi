@@ -68,6 +68,14 @@ class PostingJurnalPembantuService
                 JurnalPembantuHeader::query()
                     ->where('jurnal', $nomorJurnal)
                     ->update(['jurnal' => $nomorFinal]);
+
+                // Foto lampiran juga dikunci berdasarkan nomor jurnal — kalau
+                // nomornya di-renumber di atas tapi lampirannya tidak ikut
+                // dipindah, fotonya jadi "nyangkut" di nomor lama yang sudah
+                // tidak dipakai lagi (hilang dari Jurnal Umum). Method ini
+                // aman terhadap tabrakan (auto-merge kalau nomor tujuan
+                // kebetulan sudah punya lampiran sendiri).
+                \App\Models\JurnalLampiran::pindahkanKe((int) $nomorJurnal, $nomorFinal, $userId);
             }
 
             $namaGlobal = null;

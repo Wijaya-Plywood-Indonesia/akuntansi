@@ -110,6 +110,12 @@ class StokMatrix extends Page
             'totalStokKosongCount' => $totalStokKosongCount,
             'totalAkumulasiStok' => $totalAkumulasiStok,
             'totalAkumulasiM3' => $totalAkumulasiM3,
+            'kategoris' => $this->barangs
+                ->pluck('kategori.nama_kategori')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values(),
         ];
     }
 }

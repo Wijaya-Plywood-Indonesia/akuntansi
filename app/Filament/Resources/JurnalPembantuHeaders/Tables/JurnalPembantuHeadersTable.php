@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\JurnalPembantuHeaders\Tables;
 
+use App\Models\JurnalLampiran;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalUmum;
 use Filament\Actions\Action;
@@ -10,8 +11,11 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Support\Enums\Width;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -19,6 +23,8 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 use Throwable;
 
 class JurnalPembantuHeadersTable
@@ -30,17 +36,18 @@ class JurnalPembantuHeadersTable
                 TextColumn::make('no_jurnal_pembantu')
                     ->label('No. JP')
                     ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('jurnal')
-                    ->label('No. Jurnal')
-                    ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('tgl_transaksi')
                     ->label('Tgl. Transaksi')
                     ->date('d/m/Y')
                     ->sortable(),
+
+                TextColumn::make('jurnal')
+                    ->label('No. Jurnal')
+                    ->sortable()
+                    ->searchable(),
 
                 TextColumn::make('jenis_transaksi')
                     ->label('Jenis')
@@ -49,6 +56,44 @@ class JurnalPembantuHeadersTable
                         JurnalPembantuHeader::JENIS[$state] ?? $state
                     )
                     ->sortable(),
+
+                ImageColumn::make('lampiran.paths')
+                    ->label('Foto')
+                    ->disk('public')
+                    ->stacked()
+                    ->limit(3)
+                    ->limitedRemainingText()
+                    ->circular(false)
+                    ->size(32)
+                    ->extraImgAttributes(['class' => 'cursor-pointer hover:opacity-75 transition'])
+                    ->action(
+                        Action::make('lihatFotoLampiranJP')
+                            ->label('Lihat Foto')
+                            ->modalHeading(fn($record) => 'Foto Lampiran — No. Jurnal ' . $record->jurnal)
+                            ->modalWidth(Width::TwoExtraLarge)
+                            ->modalSubmitAction(false)
+                            ->modalCancelActionLabel('Tutup')
+                            ->visible(fn($record) => filled($record->lampiran?->paths))
+                            ->modalContent(function ($record) {
+                                $paths = $record->lampiran?->paths ?? [];
+
+                                if (blank($paths)) {
+                                    return new HtmlString('<p class="text-sm text-gray-500">Belum ada foto lampiran.</p>');
+                                }
+
+                                $html = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">';
+                                foreach ($paths as $path) {
+                                    $url = Storage::disk('public')->url($path);
+                                    $url = preg_replace('#(?<!:)//+#', '/', $url);
+                                    $html .= "<a href=\"{$url}\" target=\"_blank\" class=\"block\">"
+                                        . "<img src=\"{$url}\" alt=\"Foto lampiran\" class=\"w-full h-40 object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:opacity-80 transition\" />"
+                                        . "</a>";
+                                }
+                                $html .= '</div>';
+
+                                return new HtmlString($html);
+                            })
+                    ),
 
                 TextColumn::make('no_akun')
                     ->label('Akun')
@@ -361,6 +406,7 @@ class JurnalPembantuHeadersTable
             ->modifyQueryUsing(
                 fn(Builder $query) =>
                 $query
+                    ->with('lampiran')
                     ->orderByDesc('jurnal')
                     ->orderBy('map')
                     ->orderBy('id')
