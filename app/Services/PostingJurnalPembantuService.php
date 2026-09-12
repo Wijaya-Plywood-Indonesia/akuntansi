@@ -73,8 +73,35 @@ class PostingJurnalPembantuService
                 // jurnal — kalau nomornya di-renumber di atas tapi lampirannya
                 // tidak ikut dipindah, fotonya jadi "nyangkut" di nomor lama
                 // yang sudah tidak dipakai lagi (hilang dari Jurnal Umum).
-                \App\Models\JurnalLampiran::where('jurnal', $nomorJurnal)
-                    ->update(['jurnal' => $nomorFinal]);
+                //
+                // PENTING: tidak boleh langsung UPDATE ... SET jurnal =
+                // $nomorFinal, karena kolom "jurnal" di jurnal_lampirans
+                // UNIQUE — kalau nomor tujuan itu KEBETULAN sudah punya
+                // lampiran sendiri (dari transaksi lain), UPDATE itu akan
+                // bentrok dan membatalkan (rollback) SELURUH proses posting
+                // jurnal ini. Jadi digabung (merge foto), bukan ditimpa.
+                $lampiranLama = \App\Models\JurnalLampiran::where('jurnal', $nomorJurnal)->first();
+
+                if ($lampiranLama) {
+                    $lampiranTujuan = \App\Models\JurnalLampiran::firstOrNew(['jurnal' => $nomorFinal]);
+
+                    $gabunganFoto = collect($lampiranTujuan->paths ?? [])
+                        ->merge($lampiranLama->paths ?? [])
+                        ->unique()
+                        ->values()
+                        ->all();
+
+                    $lampiranTujuan->paths = $gabunganFoto;
+                    $lampiranTujuan->uploaded_by = $lampiranTujuan->uploaded_by ?? $lampiranLama->uploaded_by;
+                    $lampiranTujuan->save();
+
+                    // Baris lama dihapus SETELAH fotonya aman dipindah ke
+                    // baris tujuan, supaya tidak ada foto yang hilang dan
+                    // tidak ada baris "jurnal" duplikat yang nyangkut.
+                    if ((int) $lampiranLama->jurnal !== $nomorFinal) {
+                        $lampiranLama->delete();
+                    }
+                }
             }
 
             $namaGlobal = null;

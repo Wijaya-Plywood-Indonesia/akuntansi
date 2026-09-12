@@ -298,6 +298,23 @@
 
                                 <input type="text" wire:model="hutang_catatan" placeholder="Catatan (opsional)"
                                     class="w-full p-2 text-xs font-semibold bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none focus:ring-2 focus:ring-primary-500/10 transition-all" />
+
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Foto Bukti Bayar (opsional)</label>
+                                    <input type="file" wire:model="hutang_foto" multiple accept="image/*"
+                                        class="w-full p-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none" />
+                                    <div wire:loading wire:target="hutang_foto" class="text-[10px] text-gray-400 mt-1">Mengupload...</div>
+                                    @foreach ($hutang_foto as $fIdx => $f)
+                                        <div class="relative inline-block mt-2 mr-2 group">
+                                            <img src="{{ $f->temporaryUrl() }}" class="h-16 rounded border border-gray-200 dark:border-gray-700" />
+                                            <button type="button" wire:click.prevent.stop="removeFoto('hutang_foto', {{ $fIdx }})"
+                                                title="Hapus foto ini"
+                                                class="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-rose-600 text-white rounded-full text-xs leading-none transition-colors">
+                                                &times;
+                                            </button>
+                                        </div>
+                                    @endforeach
+                                </div>
                             </div>
 
                             <div class="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/20">
@@ -386,6 +403,23 @@
 
                                 <input type="text" wire:model="hutangdp_catatan" placeholder="Catatan (opsional)"
                                     class="w-full p-2 text-xs font-semibold bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none focus:ring-2 focus:ring-primary-500/10 transition-all" />
+
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Foto Bukti Bayar (opsional)</label>
+                                    <input type="file" wire:model="hutangdp_foto" multiple accept="image/*"
+                                        class="w-full p-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none" />
+                                    <div wire:loading wire:target="hutangdp_foto" class="text-[10px] text-gray-400 mt-1">Mengupload...</div>
+                                    @foreach ($hutangdp_foto as $fIdx => $f)
+                                        <div class="relative inline-block mt-2 mr-2 group">
+                                            <img src="{{ $f->temporaryUrl() }}" class="h-16 rounded border border-gray-200 dark:border-gray-700" />
+                                            <button type="button" wire:click.prevent.stop="removeFoto('hutangdp_foto', {{ $fIdx }})"
+                                                title="Hapus foto ini"
+                                                class="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-rose-600 text-white rounded-full text-xs leading-none transition-colors">
+                                                &times;
+                                            </button>
+                                        </div>
+                                    @endforeach
+                                </div>
                             </div>
 
                             <div class="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/20">
@@ -478,6 +512,23 @@
 
                                 <input type="text" wire:model="dp_reference_number" placeholder="No. Bukti / Ref (opsional)"
                                     class="w-full p-2 text-xs font-bold bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none focus:ring-2 focus:ring-primary-500/10 transition-all" />
+
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Foto Bukti Bayar (opsional)</label>
+                                    <input type="file" wire:model="dp_foto" multiple accept="image/*"
+                                        class="w-full p-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none" />
+                                    <div wire:loading wire:target="dp_foto" class="text-[10px] text-gray-400 mt-1">Mengupload...</div>
+                                    @foreach ($dp_foto as $fIdx => $f)
+                                        <div class="relative inline-block mt-2 mr-2 group">
+                                            <img src="{{ $f->temporaryUrl() }}" class="h-16 rounded border border-gray-200 dark:border-gray-700" />
+                                            <button type="button" wire:click.prevent.stop="removeFoto('dp_foto', {{ $fIdx }})"
+                                                title="Hapus foto ini"
+                                                class="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-rose-600 text-white rounded-full text-xs leading-none transition-colors">
+                                                &times;
+                                            </button>
+                                        </div>
+                                    @endforeach
+                                </div>
                             </div>
 
                             <div class="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/20">
@@ -558,6 +609,23 @@
 
                                 <input type="text" wire:model="sisa_reference_number" placeholder="No. Bukti / Ref (opsional)"
                                     class="w-full p-2 text-xs font-bold bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none focus:ring-2 focus:ring-primary-500/10 transition-all" />
+
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Foto Bukti / Surat Jalan (opsional)</label>
+                                    <input type="file" wire:model="sisa_foto" multiple accept="image/*"
+                                        class="w-full p-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none" />
+                                    <div wire:loading wire:target="sisa_foto" class="text-[10px] text-gray-400 mt-1">Mengupload...</div>
+                                    @foreach ($sisa_foto as $fIdx => $f)
+                                        <div class="relative inline-block mt-2 mr-2 group">
+                                            <img src="{{ $f->temporaryUrl() }}" class="h-16 rounded border border-gray-200 dark:border-gray-700" />
+                                            <button type="button" wire:click.prevent.stop="removeFoto('sisa_foto', {{ $fIdx }})"
+                                                title="Hapus foto ini"
+                                                class="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-rose-600 text-white rounded-full text-xs leading-none transition-colors">
+                                                &times;
+                                            </button>
+                                        </div>
+                                    @endforeach
+                                </div>
                             </div>
 
                             <div class="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/20">
@@ -585,6 +653,23 @@
                                     <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Tanggal Barang Datang</label>
                                     <input type="date" wire:model="sisa_tanggal"
                                         class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
+                                </div>
+
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Foto Bukti / Surat Jalan (opsional)</label>
+                                    <input type="file" wire:model="sisa_foto" multiple accept="image/*"
+                                        class="w-full p-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white outline-none" />
+                                    <div wire:loading wire:target="sisa_foto" class="text-[10px] text-gray-400 mt-1">Mengupload...</div>
+                                    @foreach ($sisa_foto as $fIdx => $f)
+                                        <div class="relative inline-block mt-2 mr-2 group">
+                                            <img src="{{ $f->temporaryUrl() }}" class="h-16 rounded border border-gray-200 dark:border-gray-700" />
+                                            <button type="button" wire:click.prevent.stop="removeFoto('sisa_foto', {{ $fIdx }})"
+                                                title="Hapus foto ini"
+                                                class="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-rose-600 text-white rounded-full text-xs leading-none transition-colors">
+                                                &times;
+                                            </button>
+                                        </div>
+                                    @endforeach
                                 </div>
                             </div>
 

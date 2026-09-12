@@ -154,7 +154,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? 'Pelunasan hutang (jatuh tempo)',
             ]);
 
-            $this->jurnalService->buatJurnalBayarHutang($data, $bayar, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalBayarHutang($data, $bayar, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
 
             $totalDibayar = $data->totalSudahDibayar();
             $data->update([
@@ -230,7 +230,7 @@ class PembelianKedatanganService
             // $bayar sudah tersimpan -> sisaTagihan() di dalam service jurnal
             // sudah mencerminkan pembayaran ini, jadi bisa dipakai untuk
             // deteksi "apakah ini cicilan terakhir".
-            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayar, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayar, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
 
             $totalDibayar = $data->totalSudahDibayar();
             $data->update([
@@ -307,7 +307,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? null,
             ]);
 
-            $this->jurnalService->buatJurnalTambahDp($data, $bayar, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalTambahDp($data, $bayar, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
 
             // Status pembayaran ikut diperbarui (hutang/cicilan/lunas) supaya
             // konsisten dengan status di menu lain — walaupun untuk DP,
@@ -365,7 +365,7 @@ class PembelianKedatanganService
             } else {
                 // BAYAR_DIMUKA: sudah lunas 100% sejak awal, tidak perlu
                 // pelunasan sisa apapun.
-                $this->jurnalService->buatJurnalKedatanganBarangDimuka($data, $userId, $tanggal->toDateString());
+                $this->jurnalService->buatJurnalKedatanganBarangDimuka($data, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
             }
 
             // Untuk DP, barang datang TIDAK selalu berarti lunas lagi
@@ -458,7 +458,7 @@ class PembelianKedatanganService
                 'catatan'                => $payload['catatan'] ?? 'Pelunasan sisa saat barang datang (DP)',
             ]);
 
-            $this->jurnalService->buatJurnalKedatanganBarangDp($data, $dpSudahDibayar, $bayarSisa, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalKedatanganBarangDp($data, $dpSudahDibayar, $bayarSisa, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
 
             return;
         }
@@ -471,7 +471,7 @@ class PembelianKedatanganService
         // Muka Pembelian.
         $dpTerkumpul = $data->totalSudahDibayar();
 
-        $this->jurnalService->buatJurnalKedatanganBarangDpBelumLunas($data, $userId, $tanggal->toDateString());
+        $this->jurnalService->buatJurnalKedatanganBarangDpBelumLunas($data, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
         $data->dp_terkumpul_saat_barang_datang = $dpTerkumpul;
 
         if ($nominal > 0) {
@@ -496,7 +496,7 @@ class PembelianKedatanganService
             // buatJurnalBayarHutangDp() otomatis TIDAK membalik Uang Muka
             // Pembelian di sini (baru nanti di cicilan yang benar-benar
             // menutup sisa ke 0).
-            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayarSebagian, $userId, $tanggal->toDateString());
+            $this->jurnalService->buatJurnalBayarHutangDp($data, $bayarSebagian, $userId, $tanggal->toDateString(), $payload['foto'] ?? null);
         }
     }
 

@@ -33,6 +33,30 @@ class JurnalPembantuHeadersTable
     {
         return $table
             ->columns([
+                TextColumn::make('no_jurnal_pembantu')
+                    ->label('No. JP')
+                    ->sortable()
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('tgl_transaksi')
+                    ->label('Tgl. Transaksi')
+                    ->date('d/m/Y')
+                    ->sortable(),
+
+                TextColumn::make('jurnal')
+                    ->label('No. Jurnal')
+                    ->sortable()
+                    ->searchable(),
+
+                TextColumn::make('jenis_transaksi')
+                    ->label('Jenis')
+                    ->formatStateUsing(
+                        fn($state) =>
+                        JurnalPembantuHeader::JENIS[$state] ?? $state
+                    )
+                    ->sortable(),
+
                 ImageColumn::make('lampiran.paths')
                     ->label('Foto')
                     ->disk('public')
@@ -70,29 +94,6 @@ class JurnalPembantuHeadersTable
                                 return new HtmlString($html);
                             })
                     ),
-
-                TextColumn::make('no_jurnal_pembantu')
-                    ->label('No. JP')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('jurnal')
-                    ->label('No. Jurnal')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('tgl_transaksi')
-                    ->label('Tgl. Transaksi')
-                    ->date('d/m/Y')
-                    ->sortable(),
-
-                TextColumn::make('jenis_transaksi')
-                    ->label('Jenis')
-                    ->formatStateUsing(
-                        fn($state) =>
-                        JurnalPembantuHeader::JENIS[$state] ?? $state
-                    )
-                    ->sortable(),
 
                 TextColumn::make('no_akun')
                     ->label('Akun')
