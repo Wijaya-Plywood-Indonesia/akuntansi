@@ -614,7 +614,7 @@
                                                 <button type="button"
                                                     wire:click.prevent.stop="removeFotoNota({{ $index }})"
                                                     title="Hapus foto ini"
-                                                    class="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/60 hover:bg-rose-600 text-white rounded-full text-xs leading-none transition-colors opacity-0 group-hover:opacity-100">
+                                                    class="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-rose-600 text-white rounded-full text-xs leading-none transition-colors">
                                                     &times;
                                                 </button>
                                             </div>

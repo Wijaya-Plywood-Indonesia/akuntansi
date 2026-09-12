@@ -73,6 +73,36 @@ class JurnalPembantuHeader extends Model
         'k' => 'Kredit',
     ];
 
+    /**
+     * Bersihkan lampiran (JurnalLampiran) yang jadi "sampah" begitu SATU
+     * nomor jurnal benar-benar sudah tidak punya baris apa pun lagi — baik
+     * di jurnal_pembantu_headers MAUPUN jurnal_umum. Tanpa ini, foto lama
+     * bisa "nyangkut" di nomor jurnal itu dan tiba-tiba muncul lagi kalau
+     * nomor tersebut kebetulan dipakai ulang oleh transaksi lain yang
+     * sama sekali tidak terkait (mis. gara-gara counter next-jurnal-number
+     * reuse nomor yang sempat kosong).
+     */
+    protected static function booted(): void
+    {
+        static::deleted(function (self $header) {
+            static::bersihkanLampiranJikaKosong((int) $header->jurnal);
+        });
+    }
+
+    public static function bersihkanLampiranJikaKosong(int $nomorJurnal): void
+    {
+        if ($nomorJurnal <= 0) {
+            return;
+        }
+
+        $masihAdaHeader = static::where('jurnal', $nomorJurnal)->exists();
+        $masihAdaJurnalUmum = JurnalUmum::where('jurnal', $nomorJurnal)->exists();
+
+        if (! $masihAdaHeader && ! $masihAdaJurnalUmum) {
+            JurnalLampiran::where('jurnal', $nomorJurnal)->delete();
+        }
+    }
+
     // ── Relasi ────────────────────────────────────────────────────────
 
     public function items(): HasMany

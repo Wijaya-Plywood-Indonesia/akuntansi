@@ -371,8 +371,26 @@ class PembelianKedatanganService
             // diteruskan ke JurnalPembelianTriplekService di bawah.
             $nomorNotaBaru = trim((string) ($payload['nomor_nota'] ?? ''));
             if ($nomorNotaBaru !== '' && $nomorNotaBaru !== $data->nomor_nota) {
+                // Simpan nomor LAMA ke riwayat SEBELUM ditimpa, supaya nanti
+                // bisa disinkronkan ke jurnal-jurnal yang sudah lebih dulu
+                // terlanjur dibuat pakai nomor lama itu (lihat tombol
+                // "Sinkronkan No. Nota ke Jurnal" di halaman View Pembelian).
+                $riwayat = $data->nomor_nota_history ?? [];
+                if (filled($data->nomor_nota) && ! in_array($data->nomor_nota, $riwayat, true)) {
+                    $riwayat[] = $data->nomor_nota;
+                }
+
+                $data->nomor_nota_history = $riwayat;
                 $data->nomor_nota = $nomorNotaBaru;
                 $data->save();
+
+                // Langsung sinkronkan otomatis — ini cuma teks referensi
+                // (No. Dokumen), bukan angka keuangan, jadi aman dilakukan
+                // otomatis tanpa perlu konfirmasi manual terpisah. Riwayat
+                // TETAP disimpan (tidak dikosongkan) sebagai jejak audit,
+                // dan tombol manual di View Pembelian tetap ada sebagai
+                // cadangan (mis. untuk data lama sebelum fitur ini ada).
+                $this->sinkronkanNomorNotaKeJurnal($data);
             }
 
             if ($data->jenis_pembayaran === Pembelian::JENIS_DP) {
@@ -532,5 +550,61 @@ class PembelianKedatanganService
         } catch (\Throwable) {
             return now();
         }
+    }
+
+    /**
+     * Sinkronkan No. Nota yang sudah direvisi ke jurnal-jurnal LAMA yang
+     * masih memakai nomor sebelumnya (tersimpan di nomor_nota_history).
+     *
+     * Hanya menyentuh kolom referensi teks — no_dokumen di Jurnal Pembantu
+     * & Jurnal Umum, plus teks "Nota: ..." di keterangan — TIDAK PERNAH
+     * mengubah nominal/akun/tanggal apa pun. Dicocokkan lewat riwayat
+     * spesifik milik pembelian ini (bukan tebak-tebak teks generik), jadi
+     * tidak beresiko salah update jurnal pembelian lain yang kebetulan
+     * pernah pakai placeholder yang sama persis.
+     *
+     * Idempotent & aman dipanggil berkali-kali — kalau tidak ada nomor
+     * lama yang cocok lagi (mis. sudah pernah disinkronkan sebelumnya),
+     * tidak melakukan apa-apa.
+     *
+     * @return array{jp: int, ju: int} jumlah baris yang diperbarui
+     */
+    public function sinkronkanNomorNotaKeJurnal(Pembelian $pembelian): array
+    {
+        $riwayat = collect($pembelian->nomor_nota_history ?? [])
+            ->filter(fn ($n) => filled($n) && $n !== $pembelian->nomor_nota)
+            ->unique()
+            ->values();
+
+        if ($riwayat->isEmpty()) {
+            return ['jp' => 0, 'ju' => 0];
+        }
+
+        $totalJp = 0;
+        $totalJu = 0;
+
+        foreach ($riwayat as $nomorLama) {
+            $jpQuery = \App\Models\JurnalPembantuHeader::where('no_dokumen', $nomorLama)
+                ->where('modul_asal', 'pembelian_barang');
+
+            $totalJp += $jpQuery->count();
+
+            $jpQuery->get()->each(function ($h) use ($nomorLama, $pembelian) {
+                $h->no_dokumen = $pembelian->nomor_nota;
+                $h->keterangan = str_replace($nomorLama, $pembelian->nomor_nota, $h->keterangan ?? '');
+                $h->save();
+            });
+
+            $juQuery = \App\Models\JurnalUmum::where('no-dokumen', $nomorLama);
+            $totalJu += $juQuery->count();
+
+            $juQuery->get()->each(function ($j) use ($nomorLama, $pembelian) {
+                $j->no_dokumen = $pembelian->nomor_nota;
+                $j->keterangan = str_replace($nomorLama, $pembelian->nomor_nota, $j->keterangan ?? '');
+                $j->save();
+            });
+        }
+
+        return ['jp' => $totalJp, 'ju' => $totalJu];
     }
 }

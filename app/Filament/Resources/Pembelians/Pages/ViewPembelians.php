@@ -141,6 +141,12 @@ class ViewPembelians extends ViewRecord
                                     ->where('adalah_jurnal_balik', false)
                                     ->where('modul_asal', 'pembelian_barang')
                                     ->update(['jurnal' => $nomorFinal]);
+
+                                // Foto lampiran juga dikunci berdasarkan nomor jurnal —
+                                // dipindah pakai helper yang otomatis aman terhadap
+                                // tabrakan (auto-merge kalau nomor tujuan kebetulan
+                                // sudah punya lampiran sendiri dari transaksi lain).
+                                \App\Models\JurnalLampiran::pindahkanKe($nomorAsli, $nomorFinal, $userId);
                             }
 
                             foreach ($headersAsli as $header) {
@@ -212,6 +218,50 @@ class ViewPembelians extends ViewRecord
                         ->title('Batal Validasi Berhasil')
                         ->body($pesanNotif)
                         ->warning()
+                        ->send();
+                }),
+
+            // ── Sinkronkan No. Nota ke Jurnal Lama (CADANGAN MANUAL) ────
+            // Sejak revisi No. Nota dilakukan, sinkronisasi ini SUDAH
+            // berjalan OTOMATIS (lihat PembelianKedatanganService::
+            // konfirmasiBarangDatang). Tombol ini disisakan sebagai
+            // cadangan saja — misalnya untuk data lama yang direvisi
+            // sebelum fitur auto-sync ini ada, atau kalau suatu saat perlu
+            // dijalankan ulang secara manual. Aman diklik berkali-kali
+            // (idempotent) — kalau memang tidak ada nomor lama yang cocok
+            // lagi, tidak melakukan apa-apa.
+            Action::make('sinkronkanNomorNota')
+                ->label('Sinkronkan No. Nota ke Jurnal')
+                ->icon('heroicon-o-arrow-path')
+                ->color('warning')
+                ->visible(fn (Pembelian $record) => filled($record->nomor_nota_history))
+                ->requiresConfirmation()
+                ->modalHeading('Sinkronkan No. Nota ke Jurnal Lama')
+                ->modalDescription(fn (Pembelian $record) => new HtmlString(
+                    '<em>Catatan: sinkronisasi ini biasanya sudah berjalan otomatis saat No. Nota direvisi — tombol ini cuma cadangan.</em><br><br>'
+                    .'Nomor nota lama yang akan dicari & diganti menjadi <strong>'.e($record->nomor_nota).'</strong>: '
+                    .collect($record->nomor_nota_history ?? [])->map(fn ($n) => '<code>'.e($n).'</code>')->implode(', ')
+                    .'<br><br>Ini hanya mengubah kolom referensi No. Dokumen di Jurnal Pembantu & Jurnal Umum — tidak mengubah nominal, akun, atau tanggal apa pun.'
+                ))
+                ->modalSubmitActionLabel('Ya, Sinkronkan')
+                ->action(function (Pembelian $record) {
+                    $hasil = app(\App\Services\PembelianKedatanganService::class)
+                        ->sinkronkanNomorNotaKeJurnal($record);
+
+                    if ($hasil['jp'] === 0 && $hasil['ju'] === 0) {
+                        Notification::make()
+                            ->title('Tidak ada yang perlu disinkronkan')
+                            ->body('Semua jurnal terkait sudah memakai No. Nota terbaru.')
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    Notification::make()
+                        ->title('Sinkronisasi Selesai')
+                        ->body("Diperbarui: {$hasil['jp']} baris Jurnal Pembantu, {$hasil['ju']} baris Jurnal Umum.")
+                        ->success()
                         ->send();
                 }),
 

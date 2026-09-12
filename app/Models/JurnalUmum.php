@@ -84,4 +84,17 @@ class JurnalUmum extends Model
             ? $this->nilai
             : 0;
     }
+
+    /**
+     * Sama seperti di JurnalPembantuHeader — bersihkan lampiran yang jadi
+     * sampah kalau nomor jurnal ini (setelah baris JurnalUmum dihapus)
+     * ternyata sudah tidak punya baris apa pun lagi sama sekali, baik di
+     * sini maupun di jurnal_pembantu_headers.
+     */
+    protected static function booted(): void
+    {
+        static::deleted(function (self $jurnal) {
+            JurnalPembantuHeader::bersihkanLampiranJikaKosong((int) $jurnal->jurnal);
+        });
+    }
 }
