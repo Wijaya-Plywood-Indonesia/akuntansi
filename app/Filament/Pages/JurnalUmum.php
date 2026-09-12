@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Exports\JurnalUmumExport;
 use App\Models\Barang;
+use App\Models\JurnalLampiran;
 use App\Models\JurnalUmum as JurnalModel;
 use App\Models\SubAnakAkun;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -11,6 +12,7 @@ use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -91,6 +93,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public $filterTglDari = '';
 
     public $filterTglSampai = '';
+
+    // Search bebas (nama akun, nama, keterangan, no. akun/dokumen, no. jurnal)
+    // supaya tidak perlu scroll manual mencari baris tertentu.
+    public $search = '';
 
     // Deep-link "Lihat di Jurnal" dari Rekap Arus Kas: jika terisi, tabel
     // history hanya menampilkan SATU nomor jurnal ini, mengabaikan filter
@@ -231,6 +237,21 @@ class JurnalUmum extends Page implements HasActions, HasForms
             }
         }
 
+        if (filled($this->search)) {
+            $needle = trim($this->search);
+            $query->where(function ($q) use ($needle) {
+                $q->where('nama_akun', 'like', "%{$needle}%")
+                    ->orWhere('nama', 'like', "%{$needle}%")
+                    ->orWhere('keterangan', 'like', "%{$needle}%")
+                    ->orWhere('no_akun', 'like', "%{$needle}%")
+                    ->orWhere('no-dokumen', 'like', "%{$needle}%")
+                    ->orWhere('mm', 'like', "%{$needle}%");
+                if (is_numeric($needle)) {
+                    $q->orWhere('jurnal', (int) $needle);
+                }
+            });
+        }
+
         // ── FIX: tambahkan selectRaw "total" agar kolom Debit/Kredit
         //         per baris di tabel history tidak menampilkan 0.
         //         Sebelumnya hanya select() kolom mentah tanpa "total",
@@ -289,6 +310,21 @@ class JurnalUmum extends Page implements HasActions, HasForms
             }
         }
 
+        if (filled($this->search)) {
+            $needle = trim($this->search);
+            $totalsQuery->where(function ($q) use ($needle) {
+                $q->where('nama_akun', 'like', "%{$needle}%")
+                    ->orWhere('nama', 'like', "%{$needle}%")
+                    ->orWhere('keterangan', 'like', "%{$needle}%")
+                    ->orWhere('no_akun', 'like', "%{$needle}%")
+                    ->orWhere('no-dokumen', 'like', "%{$needle}%")
+                    ->orWhere('mm', 'like', "%{$needle}%");
+                if (is_numeric($needle)) {
+                    $q->orWhere('jurnal', (int) $needle);
+                }
+            });
+        }
+
         $totals = $totalsQuery->selectRaw("
                 map,
                 SUM(
@@ -314,6 +350,14 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $accounts = collect($accountsMap)->map(fn ($nama, $no) => (object) ['no' => $no, 'nama' => $nama])->values();
 
+        // Jumlah + foto pertama lampiran per nomor jurnal yang tampil di
+        // halaman ini (1 query saja, bukan N+1 per baris) — dipakai untuk
+        // badge jumlah & thumbnail hover-zoom di kolom Aksi.
+        $nomorJurnalDiHalamanIni = $historyJurnals->pluck('jurnal')->unique()->values();
+        $lampiranRows = JurnalLampiran::whereIn('jurnal', $nomorJurnalDiHalamanIni)->get(['jurnal', 'paths']);
+        $lampiranCounts = $lampiranRows->mapWithKeys(fn ($l) => [(int) $l->jurnal => count($l->paths ?? [])]);
+        $lampiranThumbs = $lampiranRows->mapWithKeys(fn ($l) => [(int) $l->jurnal => ($l->paths[0] ?? null)]);
+
         return [
             'accounts' => $accounts,
             'historyJurnals' => $historyJurnals,
@@ -323,6 +367,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'selisihDB' => $selisihDB,
             'modeJurnalTunggal' => $modeJurnalTunggal,
             'nomorJurnalDitampilkan' => $this->filterJurnalNomor,
+            'lampiranCounts' => $lampiranCounts,
+            'lampiranThumbs' => $lampiranThumbs,
         ];
     }
 
@@ -362,6 +408,14 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->filterTglSampaiInput = '';
         $this->filterTglDari = '';
         $this->filterTglSampai = '';
+        $this->perPage = 50;
+        $this->hasMorePages = true;
+        $this->selectedIds = [];
+        $this->selectAll = false;
+    }
+
+    public function updatedSearch(): void
+    {
         $this->perPage = 50;
         $this->hasMorePages = true;
         $this->selectedIds = [];
@@ -957,6 +1011,64 @@ class JurnalUmum extends Page implements HasActions, HasForms
             });
     }
 
+    /**
+     * Lampiran (foto nota/bukti) untuk 1 nomor jurnal — bukan per baris
+     * debit/kredit. Bisa dibuka dari baris manapun yang punya nomor jurnal
+     * yang sama, dan otomatis tersambung dengan lampiran yang sama yang
+     * diupload dari halaman "Jurnal Pembantu Headers" (sebelum diposting),
+     * karena keduanya dikaitkan lewat kolom "jurnal" yang sama.
+     */
+    public function lampiranAction(): Action
+    {
+        return Action::make('lampiran')
+            ->label('Lampiran')
+            ->modalHeading(fn (array $arguments) => 'Lampiran — No. Jurnal '.($arguments['jurnal'] ?? '-'))
+            ->modalSubmitActionLabel('Simpan')
+            ->form([
+                FileUpload::make('paths')
+                    ->label('Foto Nota / Bukti')
+                    ->multiple()
+                    ->image()
+                    ->imageEditor()
+                    ->disk('public')
+                    ->directory('jurnal-lampiran')
+                    ->reorderable()
+                    ->downloadable()
+                    ->openable()
+                    // Kompres/perkecil resolusi foto SEBELUM diupload (bukan
+                    // dipotong kotak seperti foto pegawai — mode 'contain'
+                    // supaya seluruh isi nota tetap utuh, cuma dimuat ulang
+                    // ke resolusi maksimal 1600x1600, aspect ratio asli
+                    // dipertahankan). Foto HP yang aslinya 8-10 MB biasanya
+                    // jadi hanya beberapa ratus KB setelah ini.
+                    ->imageResizeMode('contain')
+                    ->imageResizeTargetWidth('1600')
+                    ->imageResizeTargetHeight('1600')
+                    // Batas ukuran file SEBELUM di-resize oleh browser (dalam KB).
+                    // Set eksplisit supaya ada pesan error yang jelas ke user kalau
+                    // kelebihan, bukan macet diam-diam di livewire/php upload limit.
+                    ->maxSize(15360),
+            ])
+            ->fillForm(function (array $arguments): array {
+                $lampiran = JurnalLampiran::untukJurnal((int) $arguments['jurnal']);
+
+                return ['paths' => $lampiran->paths ?? []];
+            })
+            ->action(function (array $data, array $arguments): void {
+                $jurnal = (int) $arguments['jurnal'];
+
+                JurnalLampiran::updateOrCreate(
+                    ['jurnal' => $jurnal],
+                    [
+                        'paths'       => $data['paths'] ?? [],
+                        'uploaded_by' => auth()->id(),
+                    ]
+                );
+
+                Notification::make()->title('Lampiran untuk jurnal #'.$jurnal.' disimpan')->success()->send();
+            });
+    }
+
     protected function validateJurnalData(string $hit_kbk, float &$harga, float &$total, ?float &$banyak, ?float &$m3): array
     {
         $errors = [];
@@ -1006,4 +1118,4 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         return $errors;
     }
-}
+} 

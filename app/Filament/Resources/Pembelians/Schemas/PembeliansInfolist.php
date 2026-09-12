@@ -4,11 +4,15 @@ namespace App\Filament\Resources\Pembelians\Schemas;
 
 use App\Models\Pembelian;
 use App\Models\PembelianMetodePembayaran;
+use Filament\Actions\Action;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 
 class PembeliansInfolist
 {
@@ -175,7 +179,38 @@ class PembeliansInfolist
                         ImageEntry::make('foto')
                             ->hiddenLabel()
                             ->disk('public')         // ← karena foto adalah array (multiple upload)
-                            ->visibility('public'),
+                            ->visibility('public')
+                            ->imageHeight(120)
+                            ->extraImgAttributes(['class' => 'cursor-pointer hover:opacity-80 transition rounded-lg'])
+                            ->action(
+                                Action::make('lihatFotoNota')
+                                    ->label('Lihat Foto')
+                                    ->modalHeading('Foto Nota')
+                                    ->modalWidth(Width::TwoExtraLarge)
+                                    ->modalSubmitAction(false)
+                                    ->modalCancelActionLabel('Tutup')
+                                    ->visible(fn($record) => filled($record->foto))
+                                    ->modalContent(function ($record) {
+                                        $paths = is_array($record->foto) ? $record->foto : [$record->foto];
+                                        $paths = array_filter($paths);
+
+                                        if (blank($paths)) {
+                                            return new HtmlString('<p class="text-sm text-gray-500">Foto tidak ditemukan.</p>');
+                                        }
+
+                                        $html = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">';
+                                        foreach ($paths as $path) {
+                                            $url = Storage::disk('public')->url($path);
+                                            $url = preg_replace('#(?<!:)//+#', '/', $url);
+                                            $html .= "<a href=\"{$url}\" target=\"_blank\" class=\"block\">"
+                                                . "<img src=\"{$url}\" alt=\"Foto nota\" class=\"w-full h-40 object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:opacity-80 transition\" />"
+                                                . "</a>";
+                                        }
+                                        $html .= '</div>';
+
+                                        return new HtmlString($html);
+                                    })
+                            ),
                     ]),
             ]);
     }

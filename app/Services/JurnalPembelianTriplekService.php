@@ -67,6 +67,27 @@ class JurnalPembelianTriplekService
         DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $hutangUsahaPenuh) {
             $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
 
+            // ──────────────────────────────────────────────────────────────
+            // Sinkronkan Foto Nota dari Pembelian ke Lampiran Jurnal, supaya
+            // otomatis tampil di kolom Foto Jurnal Pembantu Header dan nanti
+            // tetap ikut setelah di-posting ke Jurnal Umum (nomor $noJurnal
+            // sama persis dipakai di keduanya). Berlaku untuk semua jenis
+            // pembayaran (NORMAL/BAYAR_DIMUKA/DP) karena diletakkan sebelum
+            // percabangannya.
+            // ──────────────────────────────────────────────────────────────
+            $fotoNota = $pembelian->foto ?? [];
+            $fotoNota = is_array($fotoNota) ? array_values(array_filter($fotoNota)) : (blank($fotoNota) ? [] : [$fotoNota]);
+
+            if (! empty($fotoNota)) {
+                \App\Models\JurnalLampiran::updateOrCreate(
+                    ['jurnal' => $noJurnal],
+                    [
+                        'paths'       => $fotoNota,
+                        'uploaded_by' => $userId,
+                    ]
+                );
+            }
+
             if ($pembelian->jenis_pembayaran === \App\Models\Pembelian::JENIS_BAYAR_DIMUKA) {
                 // ── BAYAR_DIMUKA: cuma catat DP keluar, barang BELUM diakui ──
                 $this->postingUangMukaGabungan(

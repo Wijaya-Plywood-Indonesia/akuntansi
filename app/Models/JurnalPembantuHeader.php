@@ -81,6 +81,17 @@ class JurnalPembantuHeader extends Model
             ->orderBy('urut');
     }
 
+    /**
+     * Lampiran foto nota/bukti — dikaitkan lewat nomor "jurnal" (BUKAN
+     * primary key header ini), karena 1 nomor jurnal bisa dimiliki banyak
+     * header (baris D & K), tapi lampirannya cuma 1 set foto yang sama
+     * untuk semua baris dalam 1 nomor jurnal itu.
+     */
+    public function lampiran(): BelongsTo
+    {
+        return $this->belongsTo(JurnalLampiran::class, 'jurnal', 'jurnal');
+    }
+
     public function dibuatOleh(): BelongsTo
     {
         return $this->belongsTo(User::class, 'dibuat_oleh');
