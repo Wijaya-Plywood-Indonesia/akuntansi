@@ -360,6 +360,21 @@ class PembelianKedatanganService
                 );
             }
 
+            // ── Revisi No. Nota / Surat Jalan saat barang datang ────────
+            // Untuk BAYAR_DIMUKA & DP, nota dibuat SEBELUM barang dikirim
+            // supplier — jadi nomor surat jalan aslinya belum ada saat itu
+            // (sering diisi placeholder). Begitu barang benar-benar datang
+            // dan surat jalan fisik diterima, nomor itu boleh diperbaiki di
+            // sini, dan SEMUA jurnal yang dibuat setelah titik ini (baik
+            // untuk BAYAR_DIMUKA maupun DP) otomatis memakai nomor yang
+            // sudah direvisi — karena $data (bukan $pembelian lama) yang
+            // diteruskan ke JurnalPembelianTriplekService di bawah.
+            $nomorNotaBaru = trim((string) ($payload['nomor_nota'] ?? ''));
+            if ($nomorNotaBaru !== '' && $nomorNotaBaru !== $data->nomor_nota) {
+                $data->nomor_nota = $nomorNotaBaru;
+                $data->save();
+            }
+
             if ($data->jenis_pembayaran === Pembelian::JENIS_DP) {
                 $this->konfirmasiBarangDatangDp($data, $payload, $userId, $tanggal);
             } else {

@@ -557,6 +557,16 @@
                                         class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
                                 </div>
 
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">No. Nota / Surat Jalan</label>
+                                    <input type="text" wire:model="sisa_nomor_nota" placeholder="Isi/perbaiki nomor surat jalan asli dari supplier"
+                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
+                                    <p class="text-[9.5px] text-gray-500 dark:text-gray-400 leading-snug px-0.5">
+                                        Boleh diperbaiki di sini kalau saat nota dibuat suratnya belum ada.
+                                        Jurnal kedatangan barang akan memakai nomor yang tertulis di sini.
+                                    </p>
+                                </div>
+
                                 <div class="flex flex-col gap-1.5"
                                     x-data="{
                                         nominal: @entangle('sisa_nominal'),
@@ -653,6 +663,16 @@
                                     <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Tanggal Barang Datang</label>
                                     <input type="date" wire:model="sisa_tanggal"
                                         class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
+                                </div>
+
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">No. Nota / Surat Jalan</label>
+                                    <input type="text" wire:model="sisa_nomor_nota" placeholder="Isi/perbaiki nomor surat jalan asli dari supplier"
+                                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white" />
+                                    <p class="text-[9.5px] text-gray-500 dark:text-gray-400 leading-snug px-0.5">
+                                        Boleh diperbaiki di sini kalau saat nota dibuat suratnya belum ada.
+                                        Jurnal kedatangan barang akan memakai nomor yang tertulis di sini.
+                                    </p>
                                 </div>
 
                                 <div>

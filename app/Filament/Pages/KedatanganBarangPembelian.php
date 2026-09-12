@@ -68,6 +68,13 @@ class KedatanganBarangPembelian extends Page
     // ── Form "Konfirmasi Barang Datang" (khusus sisa DP) ────────────────
     public string $sisa_tanggal = '';
 
+    // Nota/surat jalan biasanya BELUM ada saat nota dibuat untuk transaksi
+    // BAYAR_DIMUKA/DP (baru dikirim setelah barang berangkat dari
+    // supplier). Field ini opsional diisi/direvisi begitu surat jalan
+    // fisik diterima saat barang datang — kalau diisi, akan menimpa
+    // nomor_nota Pembelian SEBELUM jurnal kedatangan barang dibuat.
+    public string $sisa_nomor_nota = '';
+
     public string $sisa_nominal = '';
 
     public string $sisa_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
@@ -192,6 +199,7 @@ class KedatanganBarangPembelian extends Page
         $this->dp_foto = [];
 
         $this->sisa_tanggal = $hariIni;
+        $this->sisa_nomor_nota = $this->selectedNota?->nomor_nota ?? '';
         $this->sisa_nominal = '';
         $this->sisa_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->sisa_rekening_perusahaan_id = null;
@@ -451,13 +459,15 @@ class KedatanganBarangPembelian extends Page
         $fotoPaths = $this->simpanFotoLampiran($this->sisa_foto);
 
         $payload = [
-            'tanggal' => $this->sisa_tanggal,
-            'foto'    => $fotoPaths,
+            'tanggal'    => $this->sisa_tanggal,
+            'nomor_nota' => $this->sisa_nomor_nota,
+            'foto'       => $fotoPaths,
         ];
 
         if ($this->selectedNota->jenis_pembayaran === Pembelian::JENIS_DP) {
             $payload = [
                 'tanggal'                => $this->sisa_tanggal,
+                'nomor_nota'             => $this->sisa_nomor_nota,
                 'nominal'                => $this->parseNumber($this->sisa_nominal),
                 'payment_method'         => $this->sisa_payment_method,
                 'rekening_perusahaan_id' => $this->sisa_rekening_perusahaan_id,
