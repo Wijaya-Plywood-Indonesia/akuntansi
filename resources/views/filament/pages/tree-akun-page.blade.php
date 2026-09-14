@@ -826,6 +826,128 @@
         @endif
     </x-filament::modal>
 
+    {{-- ============================================================
+     MODAL LEVEL 1: Buku Pembantu Piutang — daftar pembeli + saldo
+     berjalan untuk sub akun piutang yang diklik.
+     ============================================================ --}}
+    <x-filament::modal id="piutang-pembeli-modal" width="2xl">
+        <x-slot name="heading">
+            Buku Pembantu Piutang
+            @if ($this->selectedPiutangSubAkun)
+                <span style="font-weight:400; color:var(--tree-text-muted,#9aa0bb);">
+                    — {{ $this->selectedPiutangSubAkun->kode_sub_anak_akun }}
+                    {{ $this->selectedPiutangSubAkun->nama_sub_anak_akun }}
+                </span>
+            @endif
+        </x-slot>
+
+        @php $pembeliList = $this->piutangPembeliList; @endphp
+
+        @if ($pembeliList->isEmpty())
+            <div class="barang-empty-state">
+                Belum ada transaksi piutang yang terposting di akun ini.
+            </div>
+        @else
+            <div class="barang-group-title">Saldo per Pembeli ({{ $pembeliList->count() }})</div>
+            <div class="barang-list-box">
+                @foreach ($pembeliList as $p)
+                    @php
+                        $stokClass = $p->saldo > 0 ? 'positif' : ($p->saldo < 0 ? 'negatif' : 'nol');
+                    @endphp
+                    <div class="barang-list-row" style="cursor:pointer"
+                        wire:click="openPiutangDetail('{{ $p->key }}')">
+                        <div class="barang-list-info">
+                            <span class="barang-list-kode">{{ $p->jumlah_transaksi }}x</span>
+                            <span>Piutang {{ $p->nama }}</span>
+                            @if ($p->saldo > 0 && $p->hari_sejak_terakhir !== null)
+                                <span style="font-size:10px; color:{{ $p->hari_sejak_terakhir >= 30 ? '#f87171' : '#9aa0bb' }}; margin-left:6px;">
+                                    ({{ $p->hari_sejak_terakhir }} hari sejak transaksi terakhir)
+                                </span>
+                            @endif
+                        </div>
+                        <span class="barang-list-stok {{ $stokClass }}">
+                            Rp {{ number_format($p->saldo, 0, ',', '.') }}
+                        </span>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+    </x-filament::modal>
+
+    {{-- ============================================================
+     MODAL LEVEL 2: Kartu Piutang — rincian transaksi 1 pembeli
+     (tanggal, no dokumen, debit, kredit, saldo berjalan).
+     ============================================================ --}}
+    <x-filament::modal id="piutang-detail-modal" width="4xl">
+        <x-slot name="heading">
+            Kartu Piutang
+            @if ($this->selectedPembeliRingkasan)
+                <span style="font-weight:400; color:var(--tree-text-muted,#9aa0bb);">
+                    — {{ $this->selectedPembeliRingkasan->nama }}
+                </span>
+            @endif
+        </x-slot>
+
+        @php
+            $transaksi = $this->piutangDetailTransaksi;
+            $ringkasan = $this->selectedPembeliRingkasan;
+        @endphp
+
+        @if ($ringkasan)
+            <div style="display:flex; gap:16px; margin-bottom:12px; font-size:12px; color:var(--tree-text-muted,#9aa0bb); flex-wrap:wrap; align-items:center;">
+                <span>Total Debit: <strong style="color:#34d399;">Rp {{ number_format($ringkasan->debit, 0, ',', '.') }}</strong></span>
+                <span>Total Kredit: <strong style="color:#f87171;">Rp {{ number_format($ringkasan->kredit, 0, ',', '.') }}</strong></span>
+                <span>Sisa Piutang: <strong>Rp {{ number_format($ringkasan->saldo, 0, ',', '.') }}</strong></span>
+                @if ($ringkasan->saldo > 0 && $ringkasan->hari_sejak_terakhir !== null)
+                    <span style="padding:2px 8px; border-radius:9999px; font-weight:600;
+                        background:{{ $ringkasan->hari_sejak_terakhir >= 30 ? 'rgba(248,113,113,0.15)' : 'rgba(154,160,187,0.15)' }};
+                        color:{{ $ringkasan->hari_sejak_terakhir >= 30 ? '#f87171' : '#9aa0bb' }};">
+                        {{ $ringkasan->hari_sejak_terakhir }} hari sejak transaksi terakhir
+                    </span>
+                @endif
+            </div>
+        @endif
+
+        @if ($transaksi->isEmpty())
+            <div class="barang-empty-state">
+                Tidak ada rincian transaksi untuk pembeli ini.
+            </div>
+        @else
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <thead>
+                        <tr style="text-align:left; color:var(--tree-text-muted,#9aa0bb); border-bottom:1px solid rgba(255,255,255,0.08);">
+                            <th style="padding:6px 8px;">Tanggal</th>
+                            <th style="padding:6px 8px;">No. SJ / Nota</th>
+                            <th style="padding:6px 8px;">Keterangan</th>
+                            <th style="padding:6px 8px; text-align:right;">Debit</th>
+                            <th style="padding:6px 8px; text-align:right;">Kredit</th>
+                            <th style="padding:6px 8px; text-align:right;">Saldo Berjalan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($transaksi as $t)
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                <td style="padding:6px 8px; white-space:nowrap;">{{ \Illuminate\Support\Carbon::parse($t->tgl)->format('d/m/Y') }}</td>
+                                <td style="padding:6px 8px; white-space:nowrap;">{{ $t->no_dokumen ?: '-' }}</td>
+                                <td style="padding:6px 8px;">{{ $t->keterangan ?: '-' }}</td>
+                                <td style="padding:6px 8px; text-align:right; color:#34d399;">
+                                    {{ $t->debit > 0 ? number_format($t->debit, 0, ',', '.') : '-' }}
+                                </td>
+                                <td style="padding:6px 8px; text-align:right; color:#f87171;">
+                                    {{ $t->kredit > 0 ? number_format($t->kredit, 0, ',', '.') : '-' }}
+                                </td>
+                                <td style="padding:6px 8px; text-align:right; font-weight:600;">
+                                    {{ number_format($t->saldo_berjalan, 0, ',', '.') }}
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </x-filament::modal>
+
     @push('scripts')
         <script>
             function toggleInduk(el) {

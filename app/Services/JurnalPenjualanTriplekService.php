@@ -91,6 +91,7 @@ class JurnalPenjualanTriplekService
                         'piutang_usaha'          => (float) $penjualan->total,
                         'dp_penjualan'           => $totalBayar,
                         'hpp'                    => $data['hpp'],
+                        'ppn_keluaran'           => $data['ppn_nominal'],
                         'nilai_penjualan'        => (float) $penjualan->sub_total,
                         'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
                         'hutang_gaji'            => $data['hutang_gaji'],
@@ -140,6 +141,7 @@ class JurnalPenjualanTriplekService
                     userId: $userId,
                     jenisPihak: 'pelanggan',
                     namaPihak: $penjualan->nama_customer ?: 'Pelanggan',
+                    pihakId: $penjualan->pembeli_id,
                     keteranganDefault: $this->tambahKeteranganNota('Pengiriman Barang (Bayar Dimuka)', $penjualan),
                     itemBreakdown: [
                         'persediaan_barang_jadi' => $data['breakdown_persediaan'],
@@ -173,6 +175,7 @@ class JurnalPenjualanTriplekService
                 userId: $userId,
                 jenisPihak: 'pelanggan',
                 namaPihak: $penjualan->nama_customer ?: 'Pelanggan',
+                pihakId: $penjualan->pembeli_id,
                 keteranganDefault: $this->tambahKeteranganNota('Penjualan Triplek', $penjualan),
                 itemBreakdown: [
                     'persediaan_barang_jadi' => $data['breakdown_persediaan'],
@@ -384,6 +387,7 @@ class JurnalPenjualanTriplekService
                 userId: $userId,
                 jenisPihak: 'pelanggan',
                 namaPihak: $penjualan->nama_customer ?: 'Pelanggan',
+                pihakId: $penjualan->pembeli_id,
                 keteranganDefault: $keteranganDefault,
                 itemBreakdown: $itemBreakdown,
                 splitHeaderPerBarang: $splitHeaderPerBarang,

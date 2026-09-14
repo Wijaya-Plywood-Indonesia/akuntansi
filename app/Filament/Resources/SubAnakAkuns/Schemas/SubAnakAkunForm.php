@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\SubAnakAkuns\Schemas;
 
+use App\Models\SubAnakAkun;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -39,6 +40,13 @@ class SubAnakAkunForm
                     ])
                     ->default('aktif')
                     ->required(),
+
+                Select::make('tipe_buku_pembantu')
+                    ->label('Buku Pembantu')
+                    ->helperText('Menentukan modal apa yang muncul saat akun ini diklik di Chart of Accounts. Kosongkan kalau akun ini bukan Piutang (mis. akun Persediaan tetap pakai Barang Terkait secara otomatis).')
+                    ->options(SubAnakAkun::TIPE_BUKU_PEMBANTU)
+                    ->native(false)
+                    ->placeholder('Default (Barang Terkait, kalau ada)'),
 
                 Textarea::make('keterangan')
                     ->columnSpanFull(),

@@ -14,6 +14,7 @@ class JurnalUmum extends Model
         'jurnal',
         'no_akun',
         'id_barang',
+        'id_pembeli',
         'nama_akun',
         'nama',
         'banyak',
@@ -52,6 +53,11 @@ class JurnalUmum extends Model
         return $this->belongsTo(Barang::class, 'id_barang');
     }
 
+    public function pembeli()
+    {
+        return $this->belongsTo(Pembeli::class, 'id_pembeli');
+    }
+
     public function subAkun()
     {
         return $this->belongsTo(
@@ -68,6 +74,21 @@ class JurnalUmum extends Model
     public function indukAkun()
     {
         return $this->subAkun?->indukAkun();
+    }
+
+    // Nilai baris jurnal, mengikuti hit_kbk (samakan dengan rumus di
+    // Filament\Pages\JurnalUmum agar Debit/Kredit di sini konsisten
+    // dengan yang ditampilkan di halaman Jurnal Umum & Buku Pembantu):
+    //   b -> banyak * harga | m -> m3 * harga | selain itu -> harga
+    public function getNilaiAttribute()
+    {
+        $hitKbk = strtolower((string) $this->hit_kbk);
+
+        return match ($hitKbk) {
+            'b' => (float) $this->banyak * (float) $this->harga,
+            'm' => (float) $this->m3 * (float) $this->harga,
+            default => (float) $this->harga,
+        };
     }
 
     // Perhitungan Debit dan Kredit

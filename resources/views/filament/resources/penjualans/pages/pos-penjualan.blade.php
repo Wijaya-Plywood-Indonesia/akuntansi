@@ -627,6 +627,11 @@
                                             <label
                                                 class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1"
                                                 x-text="jenisTransaksi === 'DP' ? 'Nominal DP' : 'Nominal Bayar'"></label>
+                                            <template x-if="jenisTransaksi !== 'DP'">
+                                                <button type="button" @click="$wire.setBayar('pas')"
+                                                    class="text-[9px] font-bold text-primary-600 hover:underline uppercase tracking-wide">Bayar
+                                                    Pas</button>
+                                            </template>
                                         </div>
                                         <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
                                             <span class="text-lg font-bold text-primary-600">Rp</span>

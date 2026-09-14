@@ -361,6 +361,9 @@
         id_barang: @entangle('id_barang'),
         showBarangPicker: @entangle('showBarangPicker'),
         barangOptions: @entangle('barangOptions'),
+        id_pembeli: @entangle('id_pembeli'),
+        showPembeliPicker: @entangle('showPembeliPicker'),
+        pembeliOptions: @entangle('pembeliOptions'),
         nama: @entangle('nama'),
         mm: @entangle('mm'),
         keterangan: @entangle('keterangan'),
@@ -378,6 +381,8 @@
         total_display: '',
         barangSearchTerm: '',
         isBarangDropdownOpen: false,
+        pembeliSearchTerm: '',
+        isPembeliDropdownOpen: false,
     
         get filteredAccounts() {
             if (this.searchTerm === '') return this.accounts;
@@ -392,6 +397,7 @@
             this.searchTerm = acc.no;
             this.isDropdownOpen = false;
             $wire.syncBarangPickerForAkun(acc.no);
+            $wire.syncPembeliPickerForAkun(acc.no);
         },
         get showBarangPickerSafe() {
             return this.showBarangPicker && Array.isArray(this.barangOptions) && this.barangOptions.length > 0;
@@ -413,6 +419,26 @@
             this.barangSearchTerm = '';
             this.isBarangDropdownOpen = false;
         },
+        get showPembeliPickerSafe() {
+            return this.showPembeliPicker && Array.isArray(this.pembeliOptions) && this.pembeliOptions.length > 0;
+        },
+        get filteredPembeliOptions() {
+            if (!Array.isArray(this.pembeliOptions)) return [];
+            if (this.pembeliSearchTerm === '') return this.pembeliOptions;
+            return this.pembeliOptions.filter(opt =>
+                (opt.nama ?? '').toLowerCase().includes(this.pembeliSearchTerm.toLowerCase())
+            );
+        },
+        selectPembeli(opt) {
+            this.id_pembeli = opt.id;
+            this.pembeliSearchTerm = opt.nama;
+            this.isPembeliDropdownOpen = false;
+        },
+        clearPembeli() {
+            this.id_pembeli = '';
+            this.pembeliSearchTerm = '';
+            this.isPembeliDropdownOpen = false;
+        },
         clearAccount() {
             this.no_akun = '';
             this.nama_akun = '';
@@ -422,7 +448,12 @@
             this.showBarangPicker = false;
             this.barangOptions = [];
             this.barangSearchTerm = '';
+            this.id_pembeli = '';
+            this.showPembeliPicker = false;
+            this.pembeliOptions = [];
+            this.pembeliSearchTerm = '';
             $wire.syncBarangPickerForAkun('');
+            $wire.syncPembeliPickerForAkun('');
         },
         formatRupiah(val) {
             if (val === null || val === undefined || val === '') return '';
@@ -537,6 +568,14 @@
         if (!value) { barangSearchTerm = ''; return; }
         const found = (barangOptions || []).find(o => o.id == value);
         if (found) barangSearchTerm = found.nama;
+    });
+    $watch('pembeliOptions', () => {
+        pembeliSearchTerm = '';
+    });
+    $watch('id_pembeli', value => {
+        if (!value) { pembeliSearchTerm = ''; return; }
+        const found = (pembeliOptions || []).find(o => o.id == value);
+        if (found) pembeliSearchTerm = found.nama;
     });
     
     const saveLocal = (key, val) => {
@@ -811,6 +850,46 @@
                                             x-text="opt.nama"></button>
                                     </template>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ── Picker Pembeli, muncul kalau akun ditandai Buku Pembantu = Piutang ── --}}
+                <div x-show="showPembeliPickerSafe" style="display: none;"
+                    x-transition:enter="transition ease-out duration-300 delay-100"
+                    x-transition:enter-start="opacity-0 translate-y-2"
+                    x-transition:enter-end="opacity-100 translate-y-0"
+                    class="concept-b-section mt-2" @click.away="isPembeliDropdownOpen = false">
+                    <div class="space-y-1.5">
+                        <div class="flex items-center gap-1 mb-1">
+                            <span
+                                class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Pilih
+                                Pembeli (Piutang)</span>
+                            <span class="text-rose-500 text-[11px]">*</span>
+                        </div>
+                        <div class="relative">
+                            <input type="text" x-model="pembeliSearchTerm" @focus="isPembeliDropdownOpen = true"
+                                placeholder="Cari pembeli..."
+                                class="w-full px-3.5 py-2.5 pr-10 text-sm bg-indigo-50 dark:bg-gray-800 border border-indigo-300 dark:border-indigo-900 rounded-lg font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm">
+                            <button type="button" x-show="pembeliSearchTerm.length > 0 || id_pembeli"
+                                @click="clearPembeli()"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-rose-500 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                            <div x-show="isPembeliDropdownOpen" x-cloak
+                                class="absolute z-50 w-full mt-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-52 overflow-y-auto p-1.5 custom-scroll">
+                                <template x-if="filteredPembeliOptions.length === 0">
+                                    <div class="px-3 py-2 text-xs text-gray-400 italic">Tidak ditemukan</div>
+                                </template>
+                                <template x-for="opt in filteredPembeliOptions" :key="opt.id">
+                                    <button type="button" @click="selectPembeli(opt)"
+                                        class="w-full text-left px-3.5 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 rounded-md text-sm font-medium text-gray-800 dark:text-gray-200 transition-none"
+                                        x-text="opt.nama"></button>
+                                </template>
                             </div>
                         </div>
                     </div>
@@ -1817,12 +1896,19 @@
                                             @if($hj->nama_barang)
                                                 <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-700 dark:text-blue-400">{{ $hj->nama_barang }}</span>
                                             @endif
+                                            @if(in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
+                                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400" title="Piutang atas nama pembeli ini">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                                    {{ $hj->nama }}
+                                                </span>
+                                            @endif
                                             @if($hj->mm)
                                                 <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }} mm</span>
                                             @endif
                                         </div>
                                         <div class="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 mt-0.5">
-                                            @if($hj->nama)
+                                            @php $sudahJadiBadgePiutang = in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama; @endphp
+                                            @if($hj->nama && ! $sudahJadiBadgePiutang)
                                                 <span class="font-semibold shrink-0">{{ $hj->nama }}</span>
                                                 @if($hj->keterangan)<span class="text-gray-400">&middot;</span>@endif
                                             @endif
@@ -1949,15 +2035,19 @@
                                                 @if($hj->nama_barang)
                                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-700 dark:text-blue-400">{{ $hj->nama_barang }}</span>
                                                 @endif
+                                                @if(in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400">{{ $hj->nama }}</span>
+                                                @endif
                                                 @if($hj->mm)
                                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }} mm</span>
                                                 @endif
                                             </div>
 
-                                            @if($hj->nama || $hj->keterangan)
+                                            @php $sudahJadiBadgePiutangCard = in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama; @endphp
+                                            @if(($hj->nama && ! $sudahJadiBadgePiutangCard) || $hj->keterangan)
                                                 <div class="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-snug">
-                                                    @if($hj->nama)<span class="font-semibold">{{ $hj->nama }}</span>@endif
-                                                    @if($hj->nama && $hj->keterangan) &middot; @endif
+                                                    @if($hj->nama && ! $sudahJadiBadgePiutangCard)<span class="font-semibold">{{ $hj->nama }}</span>@endif
+                                                    @if($hj->nama && ! $sudahJadiBadgePiutangCard && $hj->keterangan) &middot; @endif
                                                     @if($hj->keterangan)<span class="text-gray-400 dark:text-gray-500">{{ $hj->keterangan }}</span>@endif
                                                 </div>
                                             @endif
@@ -2150,7 +2240,15 @@
                                         </td>
 
                                         <td class="px-4 py-4 text-center font-bold text-gray-800 dark:text-gray-200">{{ $hj->mm ?? '-' }}</td>
-                                        <td class="px-4 py-4 text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">{{ $hj->nama ?? '-' }}</td>
+                                        <td class="px-4 py-4 whitespace-nowrap">
+                                            @if ($hj->nama && in_array($hj->no_akun, $piutangAkunCodes ?? []))
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/20 text-[10px] font-black text-violet-700 dark:text-violet-400 tracking-wider" title="Piutang atas nama pembeli ini">
+                                                    {{ $hj->nama }}
+                                                </span>
+                                            @else
+                                                <span class="text-gray-800 dark:text-gray-200 font-medium">{{ $hj->nama ?? '-' }}</span>
+                                            @endif
+                                        </td>
                                         <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 break-words whitespace-normal max-w-[300px]">{{ $hj->keterangan }}</td>
                                         <td class="px-4 py-4 text-center text-gray-700 dark:text-gray-300 font-bold lowercase tracking-wider">{{ $hj->hit_kbk ?? '-' }}</td>
                                         <td class="px-4 py-4 text-right font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">

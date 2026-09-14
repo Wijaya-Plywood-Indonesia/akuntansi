@@ -11,6 +11,7 @@ class Penjualan extends Model
         'no_nota',
         'tanggal',
         'nama_customer',
+        'pembeli_id',
         'is_member',
         'alamat',
         'metode_pembayaran',
@@ -65,6 +66,11 @@ class Penjualan extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function pembeli()
+    {
+        return $this->belongsTo(Pembeli::class);
     }
 
     public function user_return()
