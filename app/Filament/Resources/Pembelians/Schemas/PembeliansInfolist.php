@@ -186,7 +186,7 @@ class PembeliansInfolist
                                 Action::make('lihatFotoNota')
                                     ->label('Lihat Foto')
                                     ->modalHeading('Foto Nota')
-                                    ->modalWidth(Width::TwoExtraLarge)
+                                    ->modalWidth(Width::FourExtraLarge)
                                     ->modalSubmitAction(false)
                                     ->modalCancelActionLabel('Tutup')
                                     ->visible(fn($record) => filled($record->foto))
@@ -198,12 +198,23 @@ class PembeliansInfolist
                                             return new HtmlString('<p class="text-sm text-gray-500">Foto tidak ditemukan.</p>');
                                         }
 
-                                        $html = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">';
+                                        // Kalau cuma 1 foto (kasus paling umum untuk foto nota),
+                                        // tampilkan besar & penuh (seperti modal lampiran di Jurnal
+                                        // Umum) — bukan dipotong kotak kecil ala thumbnail galeri.
+                                        // Kalau lebih dari 1, baru dijadikan grid supaya semua foto
+                                        // tetap kelihatan sekaligus tapi tetap besar per fotonya.
+                                        $satuFoto = count($paths) === 1;
+                                        $gridClass = $satuFoto ? '' : 'grid grid-cols-1 sm:grid-cols-2 gap-4';
+                                        $imgClass = $satuFoto
+                                            ? 'max-w-full max-h-[75vh] object-contain rounded-lg border border-gray-200 dark:border-gray-700 mx-auto'
+                                            : 'w-full h-72 object-contain bg-gray-50 dark:bg-gray-950 rounded-lg border border-gray-200 dark:border-gray-700 hover:opacity-80 transition p-1';
+
+                                        $html = "<div class=\"{$gridClass}\">";
                                         foreach ($paths as $path) {
                                             $url = Storage::disk('public')->url($path);
                                             $url = preg_replace('#(?<!:)//+#', '/', $url);
                                             $html .= "<a href=\"{$url}\" target=\"_blank\" class=\"block\">"
-                                                . "<img src=\"{$url}\" alt=\"Foto nota\" class=\"w-full h-40 object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:opacity-80 transition\" />"
+                                                . "<img src=\"{$url}\" alt=\"Foto nota\" class=\"{$imgClass}\" />"
                                                 . "</a>";
                                         }
                                         $html .= '</div>';

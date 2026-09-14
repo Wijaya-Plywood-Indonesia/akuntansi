@@ -484,6 +484,7 @@ class JurnalReturnPenjualanService
                 userId: $userId,
                 jenisPihak: 'pelanggan',
                 namaPihak: $return->nama_customer ?: 'Pelanggan',
+                pihakId: $return->penjualan?->pembeli_id,
                 keteranganDefault: "Retur Penjualan | Ref: {$return->no_nota}",
                 itemBreakdown: $itemBreakdown,
                 splitHeaderPerBarang: $splitHeaderPerBarang,

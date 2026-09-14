@@ -283,6 +283,7 @@ class JurnalPenjualanPelunasanService
                     userId: $userId,
                     jenisPihak: 'pelanggan',
                     namaPihak: $nota->nama_customer ?: 'Pelanggan',
+                    pihakId: $nota->pembeli_id,
                     keteranganDefault: 'Pelunasan Piutang Penjualan (Tunai, split)'.($dpUntukTunai ? ' + Reklas Uang Muka Pelanggan' : ''),
                     noJurnalOverride: $noJurnal,
                     catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpUntukTunai),
@@ -309,6 +310,7 @@ class JurnalPenjualanPelunasanService
                     userId: $userId,
                     jenisPihak: 'pelanggan',
                     namaPihak: $nota->nama_customer ?: 'Pelanggan',
+                    pihakId: $nota->pembeli_id,
                     keteranganDefault: "Pelunasan Piutang Penjualan (Transfer {$rekening->namaAkun()}, split)".($dpUntukTransfer ? ' + Reklas Uang Muka Pelanggan' : ''),
                     noJurnalOverride: $noJurnal,
                     catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpUntukTransfer),
@@ -341,6 +343,7 @@ class JurnalPenjualanPelunasanService
         $barisPiutang = JurnalPembantuHeader::query()
             ->where('jurnal', $noJurnal)
             ->where('no_akun', $kodeAkunPiutang)
+            ->with('items')
             ->lockForUpdate()
             ->orderBy('id')
             ->get();
@@ -355,6 +358,23 @@ class JurnalPenjualanPelunasanService
         $barisPertama->update([
             'total_nilai' => $totalNilai,
         ]);
+
+        // PENTING: PostingJurnalPembantuService MENGHITUNG ULANG nilai yang
+        // diposting ke Jurnal Umum dari baris jurnal_pembantu_items
+        // (banyak x harga), BUKAN dari total_nilai header. Kalau item
+        // generik di bawah baris pertama tidak ikut di-update ke nilai
+        // gabungan, Jurnal Umum (dan Kartu Piutang di COA) akan keposting
+        // pakai nilai LAMA (cuma porsi leg pertama), padahal header sudah
+        // menampilkan total yang benar. Ini yang bikin Kartu Piutang
+        // menunjukkan nilai lebih kecil dari yang seharusnya.
+        $itemPertama = $barisPertama->items->first();
+
+        if ($itemPertama) {
+            $itemPertama->update([
+                'banyak' => 1,
+                'harga'  => $totalNilai,
+            ]);
+        }
 
         $barisPiutang->skip(1)->each->delete();
     }
@@ -400,6 +420,7 @@ class JurnalPenjualanPelunasanService
                 userId: $userId,
                 jenisPihak: 'pelanggan',
                 namaPihak: $nota->nama_customer ?: 'Pelanggan',
+                pihakId: $nota->pembeli_id,
                 keteranganDefault: $keteranganDefault,
                 noJurnalOverride: $noJurnal,
                 catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpAwal),

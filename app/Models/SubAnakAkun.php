@@ -14,8 +14,17 @@ class SubAnakAkun extends Model
         'nama_sub_anak_akun',
         'keterangan',
         'saldo_normal',
+        'tipe_buku_pembantu',
         'status',
         'created_by',
+    ];
+
+    /**
+     * Konstanta pilihan tipe buku pembantu, dipakai di form Sub Anak Akun.
+     * null/'' = default (coba tampilkan Barang Terkait kalau ada).
+     */
+    const TIPE_BUKU_PEMBANTU = [
+        'piutang' => 'Piutang (per Pembeli)',
     ];
 
     /*

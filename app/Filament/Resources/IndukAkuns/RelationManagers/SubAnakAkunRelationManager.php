@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\IndukAkuns\RelationManagers;
 
 use App\Models\AnakAkun;
+use App\Models\SubAnakAkun;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -125,10 +126,17 @@ class SubAnakAkunRelationManager extends RelationManager
                     ->required()
                     ->native(false),
 
+                Select::make('tipe_buku_pembantu')
+                    ->label('Buku Pembantu')
+                    ->helperText('Menentukan modal apa yang muncul saat akun ini diklik di Chart of Accounts. Kosongkan kalau akun ini bukan Piutang (mis. akun Persediaan tetap pakai Barang Terkait secara otomatis).')
+                    ->options(SubAnakAkun::TIPE_BUKU_PEMBANTU)
+                    ->native(false)
+                    ->placeholder('Default (Barang Terkait, kalau ada)'),
+
                 // ── Status ───────────────────────────────────────────────────
                 Select::make('status')
                     ->label('Status')
-                    ->options(['aktif' => 'Aktif', 'non-aktif' => 'Non-Aktif'])
+                    ->options(['aktif' => 'Aktif', 'nonaktif' => 'Non-Aktif'])
                     ->default('aktif')
                     ->required()
                     ->native(false),
@@ -167,7 +175,7 @@ class SubAnakAkunRelationManager extends RelationManager
                     ->label('Status')
                     ->formatStateUsing(fn($state) => match ((string) $state) {
                         'aktif', '1'     => 'Aktif',
-                        'non-aktif', '0' => 'Non-Aktif',
+                        'nonaktif', 'non-aktif', '0' => 'Non-Aktif',
                         default          => ucfirst($state),
                     })
                     ->colors([

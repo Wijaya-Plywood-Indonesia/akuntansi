@@ -80,6 +80,7 @@ class PostingJurnalPembantuService
 
             $namaGlobal = null;
             $noDokumenGlobal = null;
+            $pihakIdGlobal = null;
 
             foreach ($headers as $h) {
                 if (empty($noDokumenGlobal) && !empty($h->no_dokumen)) {
@@ -98,6 +99,10 @@ class PostingJurnalPembantuService
                             $namaGlobal = $firstItem->nama_pihak ?: $firstItem->nama_barang;
                         }
                     }
+                }
+
+                if (empty($pihakIdGlobal)) {
+                    $pihakIdGlobal = $h->items->first()?->pihak_id;
                 }
             }
 
@@ -176,6 +181,7 @@ class PostingJurnalPembantuService
                         'nama' => $namaGlobal,
                         'keterangan' => $header->keterangan,
                         'id_barang' => $idBarangFinal,
+                        'id_pembeli' => $pihakIdGlobal,
                         'banyak' => $banyakFinal !== null ? round($banyakFinal, 4) : null,
                         'm3' => $m3Final !== null ? round($m3Final, 4) : null,
                         'harga' => round($hargaFinal, 2),
