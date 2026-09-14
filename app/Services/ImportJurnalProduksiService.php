@@ -38,7 +38,7 @@ class ImportJurnalProduksiService
         // Cari sheet "jurnal produksi" (case-insensitive)
         $sheet = null;
         foreach ($spreadsheet->getSheetNames() as $name) {
-            if (strtolower(trim($name)) === 'jurnal produksi') {
+            if (strtolower(trim($name)) === 'jurnal produksi v2') {
                 $sheet = $spreadsheet->getSheetByName($name);
                 break;
             }
@@ -47,7 +47,7 @@ class ImportJurnalProduksiService
         if (! $sheet) {
             return [
                 'success' => false,
-                'errors' => ['Sheet "jurnal produksi" tidak ditemukan di file Excel.'],
+                'errors' => ['Sheet "jurnal produksi v2" tidak ditemukan di file Excel.'],
                 'results' => [],
             ];
         }
@@ -59,7 +59,7 @@ class ImportJurnalProduksiService
         if (empty($jurnals)) {
             return [
                 'success' => false,
-                'errors' => ['Tidak ada data jurnal valid yang ditemukan di sheet "jurnal produksi". Pastikan ada baris header kolom (Nama Akun, tgl, No Akun, map, dst).'],
+                'errors' => ['Tidak ada data jurnal valid yang ditemukan di sheet "jurnal produksi v2". Pastikan ada baris header kolom (Nama Akun, tgl, No Akun, map, dst).'],
                 'results' => [],
             ];
         }
@@ -212,17 +212,14 @@ class ImportJurnalProduksiService
         $tglPertama = collect($jurnal['items'])->first()['tgl'] ?? now()->format('Y-m-d');
         $noJurnal = $this->nextNomorJurnal();
 
-        $grouped = collect($jurnal['items'])->groupBy(fn ($i) => $i['no_akun'].'|'.$i['map']);
-
         $headersDibuat = [];
         $akunTidakDitemukan = [];
 
-        foreach ($grouped as $items) {
-            $firstItem = $items->first();
-            $noAkun = $firstItem['no_akun'];
-            $map = $firstItem['map'];
+        foreach ($jurnal['items'] as $item) {
+            $noAkun = $item['no_akun'];
+            $map = $item['map'];
             $akun = $this->resolveAkun($noAkun);
-            $keterangan = $firstItem['nama'] ?: ($firstItem['keterangan'] ?: $noDokumen);
+            $keterangan = $item['nama'] ?: ($item['keterangan'] ?: $noDokumen);
 
             if (str_starts_with($akun['nama'], '⚠')) {
                 $akunTidakDitemukan[] = $noAkun;
@@ -235,7 +232,7 @@ class ImportJurnalProduksiService
                 'modul_asal' => 'produksi',
                 'jurnal' => $noJurnal,
                 'no_akun' => $akun['kode'],
-                'nama_akun' => $akun['nama'] ?: $firstItem['nama_akun'],
+                'nama_akun' => $akun['nama'] ?: $item['nama_akun'],
                 'map' => $map,
                 'keterangan' => $keterangan.' | No.Jurnal: '.$noDokumen,
                 'no_dokumen' => $noDokumen,
@@ -245,28 +242,23 @@ class ImportJurnalProduksiService
                 'dibuat_oleh' => $userId,
             ]);
 
-            $urut = 1;
-            foreach ($items as $item) {
-                // REVISI: Menggunakan nilai Total asli yang ditarik lurus dari Excel
-                // tanpa melakukan perhitungan hitungJumlah() lagi.
-                $jumlah = $item['total'];
+            $jumlah = $item['total'];
 
-                JurnalPembantuItem::create([
-                    'jurnal_pembantu_header_id' => $header->id,
-                    'urut' => $urut++,
-                    'nama_barang' => $item['keterangan'] ?: $item['nama_akun'],
-                    'no_dokumen' => $noDokumen,
-                    'keterangan' => $item['keterangan'] ?: $item['nama'],
-                    'banyak' => $item['banyak'],
-                    'm3' => $item['m3'],
-                    'harga' => $item['harga'],
-                    'hit_kbk' => $item['hit_kbk'],
-                    'jumlah' => $jumlah,
-                    'status' => true,
-                    'created_by' => $userId,
-                    'updated_by' => $userId,
-                ]);
-            }
+            JurnalPembantuItem::create([
+                'jurnal_pembantu_header_id' => $header->id,
+                'urut' => 1,
+                'nama_barang' => $item['keterangan'] ?: $item['nama_akun'],
+                'no_dokumen' => $noDokumen,
+                'keterangan' => $item['keterangan'] ?: $item['nama'],
+                'banyak' => $item['banyak'],
+                'm3' => $item['m3'],
+                'harga' => $item['harga'],
+                'hit_kbk' => $item['hit_kbk'],
+                'jumlah' => $jumlah,
+                'status' => true,
+                'created_by' => $userId,
+                'updated_by' => $userId,
+            ]);
 
             $header->recalculateTotalNilai();
             $headersDibuat[] = $akun['kode'].' ('.strtoupper($map).')';
@@ -346,12 +338,14 @@ class ImportJurnalProduksiService
     {
         $v = strtolower(trim((string) ($val ?? '')));
 
-        if ($v === 'm')
+        if ($v === 'm') {
             return 'm';
-        else if ($v === 'b')
+        } elseif ($v === 'b') {
             return 'b';
-        else if ($v === 'k')
+        } elseif ($v === 'k') {
             return 'm';
+        }
+
         return null;
     }
 
