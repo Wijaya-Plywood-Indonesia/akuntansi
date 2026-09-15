@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Barangs\Tables;
 
+use App\Models\Kategori;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -9,6 +10,7 @@ use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -117,7 +119,50 @@ class BarangsTable
 
             ])
             ->filters([
-                // nanti bisa tambah filter kategori / status
+                // ── FILTER KATEGORI BERJENJANG ──────────────────────────────
+                // Pilih kategori induk (mis. "Veneer") -> tampil SEMUA barang di
+                // kategori itu + semua anaknya (Veneer Basah/Kering/Jadi).
+                // Pilih kategori anak -> tampil spesifik anak itu saja.
+                SelectFilter::make('id_kategori')
+                    ->label('Kategori')
+                    ->options(function (): array {
+                        $options = [];
+
+                        $parents = Kategori::whereNull('parent_id')
+                            ->orderBy('nama_kategori')
+                            ->with(['children' => fn ($q) => $q->orderBy('nama_kategori')])
+                            ->get();
+
+                        foreach ($parents as $parent) {
+                            $options[$parent->id] = $parent->nama_kategori;
+
+                            foreach ($parent->children as $child) {
+                                $options[$child->id] = '— '.$child->nama_kategori;
+                            }
+                        }
+
+                        return $options;
+                    })
+                    ->query(function (Builder $query, array $data): Builder {
+                        $selected = $data['value'] ?? null;
+
+                        if (blank($selected)) {
+                            return $query;
+                        }
+
+                        $kategori = Kategori::find($selected);
+
+                        if (! $kategori) {
+                            return $query;
+                        }
+
+                        // Kategori induk (parent_id null) -> gabung id-nya sendiri + semua id anak
+                        $ids = $kategori->parent_id === null
+                            ? $kategori->children()->pluck('id')->push($kategori->id)
+                            : collect([$kategori->id]);
+
+                        return $query->whereIn('id_kategori', $ids);
+                    }),
             ])
             ->recordActions([
                 // ViewAction::make(),
