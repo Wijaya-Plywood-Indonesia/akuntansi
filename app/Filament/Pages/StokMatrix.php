@@ -7,6 +7,7 @@ use App\Models\JurnalUmum;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use UnitEnum;
+use Filament\Support\Enums\Width;
 
 class StokMatrix extends Page
 {
@@ -21,6 +22,10 @@ class StokMatrix extends Page
     protected $stok;
 
     protected int $pairs = 5;
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     public function mount(): void
     {

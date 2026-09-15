@@ -11,9 +11,14 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Maatwebsite\Excel\Facades\Excel;
+use Filament\Support\Enums\Width;
 
 class ListPenjualans extends ListRecords
 {
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
     public function exportExcel($method = 'main')
     {
         if (empty($this->laporanGabungan)) {

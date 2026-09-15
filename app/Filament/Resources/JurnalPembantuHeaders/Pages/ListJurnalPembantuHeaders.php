@@ -15,10 +15,15 @@ use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
+use Filament\Support\Enums\Width;
 
 class ListJurnalPembantuHeaders extends ListRecords
 {
     protected static string $resource = JurnalPembantuHeaderResource::class;
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     protected function getHeaderActions(): array
     {
