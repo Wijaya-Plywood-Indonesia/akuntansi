@@ -158,6 +158,7 @@ class ImportJurnalProduksiService
                 'harga' => $this->parseNumber($row[12] ?? null) ?? 0,
                 // Pastikan 'total' langsung ditarik dari index 13 excel
                 'total' => $this->parseNumber($row[13] ?? null) ?? 0,
+                'id_barang' => trim((string) ($row[14] ?? '')),
             ];
         }
 
@@ -261,6 +262,7 @@ class ImportJurnalProduksiService
                 'status' => true,
                 'created_by' => $userId,
                 'updated_by' => $userId,
+                'id_barang' => $item['id_barang'] ?: null,
             ]);
 
             $header->recalculateTotalNilai();
