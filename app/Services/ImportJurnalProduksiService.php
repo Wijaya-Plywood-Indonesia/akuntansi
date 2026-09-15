@@ -23,6 +23,8 @@ class ImportJurnalProduksiService
     {
         $this->errors = [];
         $this->results = [];
+        $this->currentJurnalNo = null;
+        $this->currentPembantuNo = null;
         $userId = $userId ?? 1;
 
         try {
@@ -95,7 +97,8 @@ class ImportJurnalProduksiService
         $currentJurnal = null;
         $isDataRow = false;
 
-        $defaultNoDokumen = 'PRODUKSI/'.strtoupper(pathinfo($filePath, PATHINFO_FILENAME));
+        $defaultNoDokumenBase = 'PRODUKSI/'.strtoupper(pathinfo($filePath, PATHINFO_FILENAME));
+        $defaultDocCount = 1;
 
         foreach ($rows as $row) {
             $col0 = trim((string) ($row[0] ?? ''));
@@ -115,7 +118,7 @@ class ImportJurnalProduksiService
                 $isDataRow = true;
 
                 if (! $currentJurnal) {
-                    $currentJurnal = ['no_dokumen' => $defaultNoDokumen, 'items' => []];
+                    $currentJurnal = ['no_dokumen' => $defaultNoDokumenBase . '-' . $defaultDocCount++, 'items' => []];
                 }
 
                 continue;
@@ -403,13 +406,22 @@ class ImportJurnalProduksiService
         ];
     }
 
+    private ?int $currentJurnalNo = null;
+    private ?int $currentPembantuNo = null;
+
     private function nextNomorJurnal(): int
     {
-        return (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+        if ($this->currentJurnalNo === null) {
+            $this->currentJurnalNo = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0);
+        }
+        return ++$this->currentJurnalNo;
     }
 
     private function nextNomorPembantu(): int
     {
-        return (JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') ?? 0) + 1;
+        if ($this->currentPembantuNo === null) {
+            $this->currentPembantuNo = (int) (JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') ?? 0);
+        }
+        return ++$this->currentPembantuNo;
     }
 }
