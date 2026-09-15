@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\AnakAkun;
+use App\Models\Barang;
 use App\Models\IndukAkun;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
+use App\Models\Kategori;
+use App\Models\Satuan;
 use App\Models\SubAnakAkun;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -15,14 +18,22 @@ class ImportJurnalProduksiService
 {
     private array $akunCache = [];
 
+    private array $barangCache = [];
+
     private array $errors = [];
 
+    private array $warnings = [];
+
     private array $results = [];
+
+    private array $barangBaruDibuat = [];
 
     public function import(string $filePath, ?int $userId): array
     {
         $this->errors = [];
+        $this->warnings = [];
         $this->results = [];
+        $this->barangBaruDibuat = [];
         $this->currentJurnalNo = null;
         $this->currentPembantuNo = null;
         $userId = $userId ?? 1;
@@ -72,9 +83,17 @@ class ImportJurnalProduksiService
             }
         });
 
+        // Gabungkan warning barang baru ke errors/warnings supaya kelihatan di notifikasi
+        if (! empty($this->barangBaruDibuat)) {
+            $this->warnings[] = 'Barang baru otomatis dibuat ('.count($this->barangBaruDibuat).'): '
+                .implode(', ', array_slice(array_unique($this->barangBaruDibuat), 0, 20))
+                .(count(array_unique($this->barangBaruDibuat)) > 20 ? ', ...' : '');
+        }
+
         return [
             'success' => empty($this->errors) || ! empty($this->results),
             'errors' => $this->errors,
+            'warnings' => $this->warnings,
             'results' => $this->results,
         ];
     }
@@ -118,7 +137,7 @@ class ImportJurnalProduksiService
                 $isDataRow = true;
 
                 if (! $currentJurnal) {
-                    $currentJurnal = ['no_dokumen' => $defaultNoDokumenBase . '-' . $defaultDocCount++, 'items' => []];
+                    $currentJurnal = ['no_dokumen' => $defaultNoDokumenBase.'-'.$defaultDocCount++, 'items' => []];
                 }
 
                 continue;
@@ -158,7 +177,8 @@ class ImportJurnalProduksiService
                 'harga' => $this->parseNumber($row[12] ?? null) ?? 0,
                 // Pastikan 'total' langsung ditarik dari index 13 excel
                 'total' => $this->parseNumber($row[13] ?? null) ?? 0,
-                'id_barang' => trim((string) ($row[14] ?? '')),
+                // Identifier barang mentah dari Excel (kode/nama barang produksi, BUKAN id numerik akuntansi)
+                'barang_identifier' => trim((string) ($row[14] ?? '')),
             ];
         }
 
@@ -225,8 +245,27 @@ class ImportJurnalProduksiService
             $akun = $this->resolveAkun($noAkun);
             $keterangan = $item['nama'] ?: ($item['keterangan'] ?: $noDokumen);
 
+            $idBarang = null;
+
             if (str_starts_with($akun['nama'], '⚠')) {
                 $akunTidakDitemukan[] = $noAkun;
+            } else {
+                // Akun ketemu -> resolve/auto-create barang untuk item persediaan ini
+                $subAkun = SubAnakAkun::where('kode_sub_anak_akun', $akun['kode'])->first();
+
+                $barang = $this->resolveBarang(
+                    kodeAkun: $akun['kode'],
+                    idSubAnakAkun: $subAkun?->id,
+                    identifierAsli: $item['barang_identifier'],
+                    namaAkunAsli: $item['nama_akun'],
+                    keteranganAsli: $item['keterangan'] ?: $item['nama']
+                );
+
+                $idBarang = $barang->id;
+
+                if ($barang->wasRecentlyCreated) {
+                    $this->barangBaruDibuat[] = $barang->nama_barang;
+                }
             }
 
             $header = JurnalPembantuHeader::create([
@@ -262,7 +301,7 @@ class ImportJurnalProduksiService
                 'status' => true,
                 'created_by' => $userId,
                 'updated_by' => $userId,
-                'id_barang' => $item['id_barang'] ?: null,
+                'id_barang' => $idBarang,
             ]);
 
             $header->recalculateTotalNilai();
@@ -278,6 +317,108 @@ class ImportJurnalProduksiService
             'headers' => $headersDibuat,
             'jumlah_baris' => count($jurnal['items']),
         ];
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // RESOLUSI / AUTO-CREATE BARANG
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Buang suffix/prefix "kelebihan" / "kehilangan" dari repair-journal
+     * supaya baris itu tetap match ke barang yang SAMA dengan baris aslinya
+     * (bukan dianggap barang baru).
+     */
+    private function normalisasiKeteranganBarang(string $keterangan): string
+    {
+        $k = trim($keterangan);
+
+        // buang prefix "Kehilangan " di depan
+        $k = preg_replace('/^kehilangan\s+/i', '', $k);
+
+        // buang suffix "// kelebihan" / "// kehilangan" (dengan variasi spasi)
+        $k = preg_replace('/\s*\/\/\s*(kelebihan|kehilangan)\s*$/i', '', $k);
+
+        return trim($k);
+    }
+
+    /**
+     * Cari atau buat Barang untuk satu baris jurnal produksi.
+     * Key pencocokan (urutan prioritas):
+     *   1. barang_identifier dari kolom Excel (row 14) kalau terisi -> paling akurat
+     *   2. kombinasi kode akun + keterangan (dinormalisasi) -> fallback
+     */
+    private function resolveBarang(
+        string $kodeAkun,
+        ?int $idSubAnakAkun,
+        string $identifierAsli,
+        string $namaAkunAsli,
+        string $keteranganAsli
+    ): Barang {
+        $keteranganBersih = $this->normalisasiKeteranganBarang($keteranganAsli);
+
+        if (trim($identifierAsli) !== '') {
+            $slugKey = strtolower(trim($identifierAsli));
+        } else {
+            $slugKey = strtolower($kodeAkun.'|'.$keteranganBersih);
+        }
+        $slugKey = preg_replace('/\s+/', ' ', $slugKey);
+
+        if (isset($this->barangCache[$slugKey])) {
+            return $this->barangCache[$slugKey];
+        }
+
+        $kodeBarang = trim($identifierAsli) !== ''
+            ? trim($identifierAsli)
+            : 'VNR-'.substr(md5($slugKey), 0, 12);
+
+        $namaBarang = trim($namaAkunAsli.' - '.$keteranganBersih, ' -');
+        if ($namaBarang === '') {
+            $namaBarang = $kodeBarang;
+        }
+
+        $barang = Barang::firstOrCreate(
+            ['kode_barang' => $kodeBarang],
+            [
+                'nama_barang' => $namaBarang,
+                'id_sub_anak_akun' => $idSubAnakAkun,
+                'id_kategori' => $this->getOrCreateKategoriVeneer(),
+                'id_satuan' => $this->getOrCreateSatuanLembar(),
+                'harga_beli' => 0,
+                'harga_jual' => 0,
+                'stok_minimum' => 0,
+                'is_active' => true,
+            ]
+        );
+
+        return $this->barangCache[$slugKey] = $barang;
+    }
+
+    private ?int $kategoriVeneerId = null;
+
+    private function getOrCreateKategoriVeneer(): int
+    {
+        if ($this->kategoriVeneerId) {
+            return $this->kategoriVeneerId;
+        }
+
+        // TODO: sesuaikan dengan id_kategori master yang sudah ada kalau berbeda
+        $kat = Kategori::firstOrCreate(['nama_kategori' => 'Veneer']);
+
+        return $this->kategoriVeneerId = $kat->id;
+    }
+
+    private ?int $satuanLembarId = null;
+
+    private function getOrCreateSatuanLembar(): int
+    {
+        if ($this->satuanLembarId) {
+            return $this->satuanLembarId;
+        }
+
+        // TODO: sesuaikan dengan id_satuan master yang sudah ada kalau berbeda
+        $sat = Satuan::firstOrCreate(['nama_satuan' => 'Lembar']);
+
+        return $this->satuanLembarId = $sat->id;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -409,6 +550,7 @@ class ImportJurnalProduksiService
     }
 
     private ?int $currentJurnalNo = null;
+
     private ?int $currentPembantuNo = null;
 
     private function nextNomorJurnal(): int
@@ -416,6 +558,7 @@ class ImportJurnalProduksiService
         if ($this->currentJurnalNo === null) {
             $this->currentJurnalNo = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0);
         }
+
         return ++$this->currentJurnalNo;
     }
 
@@ -424,6 +567,7 @@ class ImportJurnalProduksiService
         if ($this->currentPembantuNo === null) {
             $this->currentPembantuNo = (int) (JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') ?? 0);
         }
+
         return ++$this->currentPembantuNo;
     }
 }
