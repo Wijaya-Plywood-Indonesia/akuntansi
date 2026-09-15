@@ -12,6 +12,7 @@ use Livewire\Attributes\Computed;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
+use Filament\Support\Enums\Width;
 
 class NeracaPage extends Page implements HasForms
 {
@@ -28,6 +29,10 @@ class NeracaPage extends Page implements HasForms
     public string $periodeAwal;
     public string $periodeAkhir;
     public bool $tampilkanSaldoNol = false;
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     public function mount(): void
     {
