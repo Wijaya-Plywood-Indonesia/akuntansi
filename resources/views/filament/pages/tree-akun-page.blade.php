@@ -587,15 +587,25 @@
                 border-top: 1px solid var(--tree-border, #e4e7f0);
             }
 
-            .barang-list-kode {
-                font-family: var(--tree-font-mono);
-                font-size: 11px;
-                color: var(--tree-text-muted, #9aa0bb);
-                margin-right: 8px;
-            }
-
             .barang-list-info {
                 min-width: 0;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                gap: 1px;
+            }
+
+            .barang-list-kode {
+                font-family: var(--tree-font-mono);
+                font-size: 10.5px;
+                color: var(--tree-text-muted, #9aa0bb);
+                margin-right: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .barang-list-nama {
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
@@ -812,8 +822,10 @@
                             @endphp
                             <div class="barang-list-row">
                                 <div class="barang-list-info">
-                                    <span class="barang-list-kode">{{ $b->kode_barang }}</span>
-                                    <span>{{ $b->nama_barang }}</span>
+                                    @if (strcasecmp($b->kode_barang, $b->nama_barang) !== 0)
+                                        <span class="barang-list-kode">{{ $b->kode_barang }}</span>
+                                    @endif
+                                    <span class="barang-list-nama">{{ $b->nama_barang }}</span>
                                 </div>
                                 <span class="barang-list-stok {{ $stokClass }}">
                                     {{ number_format($stok, 2) }} {{ $b->satuan?->nama_satuan }}
