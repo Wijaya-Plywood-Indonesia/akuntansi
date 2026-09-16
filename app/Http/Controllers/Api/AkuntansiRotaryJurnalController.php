@@ -54,7 +54,8 @@ class AkuntansiRotaryJurnalController extends Controller
             'jurnal_items.*.items.*.jumlah'         => 'required|numeric',
 
             // field opsional di items
-            'jurnal_items.*.items.*.nama_barang'     => 'nullable|string',
+            'jurnal_items.*.items.*.id_barang'      => 'nullable|integer',
+            'jurnal_items.*.items.*.nama_barang'    => 'nullable|string',
             'jurnal_items.*.items.*.ukuran'         => 'nullable|string',
             'jurnal_items.*.items.*.banyak'         => 'nullable|numeric',
             'jurnal_items.*.items.*.m3'             => 'nullable|numeric',

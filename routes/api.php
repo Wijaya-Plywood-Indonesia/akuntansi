@@ -17,3 +17,4 @@ Route::prefix('jurnal/rotary')->group(function () {
 
 Route::post('/terima-produksi-dryer', [TerimaPressDryerController::class, 'terima']);
 
+Route::get('/barang/resolve-veneer', [\App\Http\Controllers\Api\BarangController::class, 'resolveVeneer']);

@@ -143,9 +143,9 @@ class JurnalPembantuHeader extends Model
     {
         $items = $this->items()->where('status', true)->get();
 
-        // JALUR 1: Khusus untuk Import Produksi (Ambil bulat-bulat dari kolom 'jumlah')
+        // JALUR 1: Khusus untuk Import (Ambil bulat-bulat dari kolom 'jumlah')
         // Ini menghindari selisih desimal/floating-point antara Excel dan PHP
-        if (in_array($this->modul_asal, ['produksi', 'web_kayu'])) {
+        if (in_array($this->modul_asal, ['produksi', 'web_kayu', 'rotary', 'import'])) {
             
             $total = $items->sum('jumlah');
             
@@ -166,7 +166,8 @@ class JurnalPembantuHeader extends Model
             
         }
 
-        $this->update(['total_nilai' => $total]);
+        // Hilangkan koma/desimal secara general untuk semua modul (floor/pembulatan ke bawah)
+        $this->update(['total_nilai' => floor($total)]);
     }
 
     // ── Auto-set total_nilai dari items saat items berubah ────────────

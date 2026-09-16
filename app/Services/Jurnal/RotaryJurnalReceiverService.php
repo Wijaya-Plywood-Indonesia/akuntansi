@@ -115,6 +115,7 @@ class RotaryJurnalReceiverService
                         'urut'                      => $detail['urut'],
                         'jenis_pihak'               => $detail['jenis_pihak'],
                         'nama_pihak'                => $detail['nama_pihak'],
+                        'id_barang'                 => $detail['id_barang'] ?? null,
                         'nama_barang'               => $detail['nama_barang'] ?? null,
                         'keterangan'                => $detail['keterangan'],
                         'ukuran'                    => $detail['ukuran']   ?? null,
