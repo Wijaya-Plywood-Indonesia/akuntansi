@@ -90,4 +90,46 @@ class BarangController extends Controller
             'message' => 'Barang not found'
         ], 404);
     }
+    public function resolveKayu(Request $request)
+    {
+        $ukuran = $request->query('ukuran') ?? $request->query('panjang');
+        $jenisKayu = $request->query('jenis_kayu');
+
+        $jenisKayuStr = ucwords(strtolower($jenisKayu));
+
+        $namaBarang = sprintf('Persediaan Kayu %s %s', $ukuran, $jenisKayuStr);
+        $namaBarang = trim(preg_replace('/\s+/', ' ', $namaBarang));
+
+        // Find the barang
+        $barang = Barang::where('nama_barang', 'like', $namaBarang)->first();
+
+        if ($barang) {
+            return response()->json([
+                'success' => true,
+                'nama_barang_format' => $namaBarang,
+                'id_barang' => $barang->id,
+                'barang' => $barang
+            ]);
+        }
+
+        // Try loose search if exact match fails
+        $looseName = sprintf('Persediaan Kayu%%%s%%%s%%', $ukuran, $jenisKayu);
+        $barangLoose = Barang::where('nama_barang', 'like', $looseName)->first();
+
+        if ($barangLoose) {
+            return response()->json([
+                'success' => true,
+                'nama_barang_format' => $namaBarang,
+                'id_barang' => $barangLoose->id,
+                'barang' => $barangLoose,
+                'note' => 'Found via loose search'
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'nama_barang_format' => $namaBarang,
+            'message' => 'Barang not found'
+        ], 404);
+    }
 }
