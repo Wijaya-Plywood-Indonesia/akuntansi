@@ -164,6 +164,7 @@ class BarangsTable
                         return $query->whereIn('id_kategori', $ids);
                     }),
             ])
+            ->deferFilters(false) // langsung apply begitu dipilih, tidak perlu klik "Apply" lagi
             ->recordActions([
                 // ViewAction::make(),
                 EditAction::make(),

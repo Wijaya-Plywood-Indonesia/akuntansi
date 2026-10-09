@@ -2,7 +2,7 @@
     {{-- Main Container dengan Alpine.js --}}
     <div x-data="{
         search: '',
-        filterStatus: 'all',
+        filterStatus: 'available',
         filterKategori: 'all',
         items: @js($barangs->map(fn($barang) => [
             'id' => $barang->id,
