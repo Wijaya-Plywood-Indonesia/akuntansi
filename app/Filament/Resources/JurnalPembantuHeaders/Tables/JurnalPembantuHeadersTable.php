@@ -27,77 +27,97 @@ class JurnalPembantuHeadersTable
     {
         return $table
             ->columns([
+
+                // ── ① No. JP ──────────────────────────────────────────────
                 TextColumn::make('no_jurnal_pembantu')
                     ->label('No. JP')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->alignCenter()
+                    ->weight('bold')
+                    ->width('70px'),
 
+                // ── ② No. Jurnal  +  Tanggal · Jenis Transaksi (stacked) ──
                 TextColumn::make('jurnal')
                     ->label('No. Jurnal')
                     ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('tgl_transaksi')
-                    ->label('Tgl. Transaksi')
-                    ->date('d/m/Y')
-                    ->sortable(),
-
-                TextColumn::make('jenis_transaksi')
-                    ->label('Jenis')
-                    ->formatStateUsing(
-                        fn($state) =>
-                        JurnalPembantuHeader::JENIS[$state] ?? $state
+                    ->searchable()
+                    ->weight('bold')
+                    ->description(
+                        fn($record) =>
+                            ($record->tgl_transaksi
+                                ? $record->tgl_transaksi->format('d/m/Y')
+                                : '—')
+                            . '  ·  '
+                            . (JurnalPembantuHeader::JENIS[$record->jenis_transaksi] ?? $record->jenis_transaksi)
                     )
-                    ->sortable(),
+                    ->width('150px'),
 
+                // ── ③ Kode Akun  +  Nama Akun (stacked) ──────────────────
                 TextColumn::make('no_akun')
                     ->label('Akun')
+                    ->searchable()
+                    ->weight('semibold')
+                    ->copyable()
+                    ->copyMessage('Kode akun disalin ✓')
+                    ->description(fn($record) => $record->nama_akun ?? '—')
+                    ->width('210px'),
+
+                // ── ④ Keterangan (terpotong + tooltip full) ───────────────
+                TextColumn::make('keterangan')
+                    ->label('Keterangan')
+                    ->limit(55)
+                    ->tooltip(fn($record) => strlen((string) $record->keterangan) > 55
+                        ? $record->keterangan
+                        : null
+                    )
+                    ->wrap()
                     ->searchable(),
 
-                TextColumn::make('nama_akun')
-                    ->label('Nama Akun')
-                    ->searchable()
-                    ->limit(30),
-
-                TextColumn::make('keterangan')
-                    ->limit(100),
-
+                // ── ⑤ D / K  (badge berwarna) ─────────────────────────────
                 TextColumn::make('map')
                     ->label('D/K')
                     ->badge()
-                    ->color(
-                        fn($state) =>
-                        strtolower($state) === 'd'
-                            ? 'info'
-                            : 'warning'
-                    )
-                    ->formatStateUsing(
-                        fn($state) => strtoupper($state)
-                    ),
+                    ->alignCenter()
+                    ->color(fn($state) => strtolower($state) === 'd' ? 'info' : 'warning')
+                    ->formatStateUsing(fn($state) => strtolower($state) === 'd' ? '▲ Debet' : '▼ Kredit')
+                    ->width('105px'),
 
+                // ── ⑥ Total Nilai ─────────────────────────────────────────
                 TextColumn::make('total_nilai')
                     ->label('Total Nilai')
                     ->money('IDR')
-                    ->sortable(),
+                    ->sortable()
+                    ->alignRight()
+                    ->weight('bold')
+                    ->color(fn($record) => strtolower($record->map) === 'd' ? 'info' : 'warning')
+                    ->width('165px'),
 
+                // ── ⑦ Status (badge berwarna) ─────────────────────────────
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
+                    ->alignCenter()
                     ->color(fn($state) => match ($state) {
-                        'draft' => 'gray',
-                        'diposting' => 'success',
-                        'dibalik' => 'warning',
+                        'draft'      => 'gray',
+                        'diposting'  => 'success',
+                        'dibalik'    => 'warning',
                         'dibatalkan' => 'danger',
-                        default => 'gray',
+                        default      => 'gray',
                     })
-                    ->formatStateUsing(
-                        fn($state) =>
-                        JurnalPembantuHeader::STATUSES[$state] ?? $state
-                    ),
+                    ->formatStateUsing(fn($state) => JurnalPembantuHeader::STATUSES[$state] ?? $state)
+                    ->width('110px'),
 
+                // ── Kolom tersembunyi (bisa dinyalakan via kolom toggle) ──
                 TextColumn::make('no_dokumen')
                     ->label('No. Dokumen')
                     ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('modul_asal')
+                    ->label('Modul Asal')
+                    ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('dibuatOleh.name')
@@ -105,7 +125,7 @@ class JurnalPembantuHeadersTable
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('created_at')
-                    ->label('Dibuat')
+                    ->label('Dibuat Pada')
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -147,9 +167,11 @@ class JurnalPembantuHeadersTable
                     ),
             ])
             ->actions([
-                ViewAction::make(),
+                ViewAction::make()
+                    ->label('Lihat'),
 
                 EditAction::make()
+                    ->label('Edit')
                     ->visible(
                         fn($record) =>
                         $record->isDraft()
@@ -158,7 +180,7 @@ class JurnalPembantuHeadersTable
                 Action::make('posting')
                     ->label(
                         fn($record) =>
-                        "Posting Jurnal No. {$record->jurnal}"
+                        "Posting #{$record->jurnal}"
                     )
                     ->icon('heroicon-o-arrow-up-tray')
                     ->color('success')
@@ -216,7 +238,7 @@ class JurnalPembantuHeadersTable
                     }),
 
                 Action::make('balik')
-                    ->label('Jurnal Balik')
+                    ->label('Balik')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
                     ->visible(function ($record) {
