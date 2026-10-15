@@ -2,20 +2,16 @@
 
 namespace App\Filament\Resources\JurnalPembantuHeaders\Tables;
 
-use App\Models\JurnalLampiran;
 use App\Models\JurnalPembantuHeader;
-use App\Models\JurnalUmum;
+use App\Services\PostingJurnalPembantuService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Support\Enums\Width;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
-use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -23,8 +19,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\HtmlString;
 use Throwable;
 
 class JurnalPembantuHeadersTable
@@ -33,116 +27,117 @@ class JurnalPembantuHeadersTable
     {
         return $table
             ->columns([
+
+                // ── ① No. JP ──────────────────────────────────────────────
                 TextColumn::make('no_jurnal_pembantu')
                     ->label('No. JP')
                     ->sortable()
                     ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->alignCenter()
+                    ->weight('bold')
+                    ->width('70px'),
 
-                TextColumn::make('tgl_transaksi')
-                    ->label('Tgl. Transaksi')
-                    ->date('d/m/Y')
-                    ->sortable(),
-
+                // ── ② No. Jurnal  +  Tanggal · Jenis Transaksi (stacked) ──
                 TextColumn::make('jurnal')
                     ->label('No. Jurnal')
                     ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('jenis_transaksi')
-                    ->label('Jenis')
-                    ->formatStateUsing(
-                        fn($state) =>
-                        JurnalPembantuHeader::JENIS[$state] ?? $state
+                    ->searchable()
+                    ->weight('bold')
+                    ->description(
+                        fn ($record) => ($record->tgl_transaksi
+                                ? $record->tgl_transaksi->format('d/m/Y')
+                                : '—')
+                            .'  ·  '
+                            .(JurnalPembantuHeader::JENIS[$record->jenis_transaksi] ?? $record->jenis_transaksi)
                     )
-                    ->sortable(),
+                    ->width('150px'),
 
-                ImageColumn::make('lampiran.paths')
-                    ->label('Foto')
-                    ->disk('public')
-                    ->stacked()
-                    ->limit(3)
-                    ->limitedRemainingText()
-                    ->circular(false)
-                    ->size(32)
-                    ->extraImgAttributes(['class' => 'cursor-pointer hover:opacity-75 transition'])
-                    ->action(
-                        Action::make('lihatFotoLampiranJP')
-                            ->label('Lihat Foto')
-                            ->modalHeading(fn($record) => 'Foto Lampiran — No. Jurnal ' . $record->jurnal)
-                            ->modalWidth(Width::TwoExtraLarge)
-                            ->modalSubmitAction(false)
-                            ->modalCancelActionLabel('Tutup')
-                            ->visible(fn($record) => filled($record->lampiran?->paths))
-                            ->modalContent(function ($record) {
-                                $paths = $record->lampiran?->paths ?? [];
-
-                                if (blank($paths)) {
-                                    return new HtmlString('<p class="text-sm text-gray-500">Belum ada foto lampiran.</p>');
-                                }
-
-                                $html = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">';
-                                foreach ($paths as $path) {
-                                    $url = Storage::disk('public')->url($path);
-                                    $url = preg_replace('#(?<!:)//+#', '/', $url);
-                                    $html .= "<a href=\"{$url}\" target=\"_blank\" class=\"block\">"
-                                        . "<img src=\"{$url}\" alt=\"Foto lampiran\" class=\"w-full h-40 object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:opacity-80 transition\" />"
-                                        . "</a>";
-                                }
-                                $html .= '</div>';
-
-                                return new HtmlString($html);
-                            })
-                    ),
-
+                // ── ③ Kode Akun  +  Nama Akun (stacked) ──────────────────
                 TextColumn::make('no_akun')
                     ->label('Akun')
+                    ->searchable()
+                    ->weight('semibold')
+                    ->copyable()
+                    ->copyMessage('Kode akun disalin ✓')
+                    ->description(fn ($record) => $record->nama_akun ?? '—')
+                    ->width('210px'),
+
+                // ── ④ Keterangan (terpotong + tooltip full) ───────────────
+                TextColumn::make('keterangan')
+                    ->label('Keterangan')
+                    ->limit(55)
+                    ->tooltip(fn ($record) => strlen((string) $record->keterangan) > 55
+                        ? $record->keterangan
+                        : null
+                    )
+                    ->wrap()
                     ->searchable(),
 
-                TextColumn::make('nama_akun')
-                    ->label('Nama Akun')
-                    ->searchable()
-                    ->limit(30),
-
-                TextColumn::make('keterangan')
-                    ->limit(100),
-
+                // ── ④b Barang (BARU) ──────────────────────────────────────
+                // Menampilkan [kode] nama barang dari id_barang tiap item aktif.
+                // Kosong => "— kosong —". Relasi 'barang' di-eager-load lewat
+                // modifyQueryUsing di bagian bawah (tanpa N+1).
+                TextColumn::make('status_id_barang')
+                    ->label('Barang')
+                    ->state(function ($record) {
+                        return $record->items
+                            ->filter(fn ($i) => $i->id_barang)
+                            ->map(fn ($i) => $i->barang
+                                ? $i->barang->nama_barang
+                                : "ID {$i->id_barang} (barang tidak ditemukan)")
+                            ->unique()
+                            ->values()
+                            ->all();
+                    })
+                    ->listWithLineBreaks()
+                    ->limitList(2)
+                    ->expandableLimitedList()
+                    ->placeholder('— kosong —')
+                    ->wrap(),
+                // ── ⑤ D / K  (badge berwarna) ─────────────────────────────
                 TextColumn::make('map')
                     ->label('D/K')
                     ->badge()
-                    ->color(
-                        fn($state) =>
-                        strtolower($state) === 'd'
-                            ? 'info'
-                            : 'warning'
-                    )
-                    ->formatStateUsing(
-                        fn($state) => strtoupper($state)
-                    ),
+                    ->alignCenter()
+                    ->color(fn ($state) => strtolower($state) === 'd' ? 'info' : 'warning')
+                    ->formatStateUsing(fn ($state) => strtolower($state) === 'd' ? '▲ Debet' : '▼ Kredit')
+                    ->width('105px'),
 
+                // ── ⑥ Total Nilai ─────────────────────────────────────────
                 TextColumn::make('total_nilai')
                     ->label('Total Nilai')
                     ->money('IDR')
-                    ->sortable(),
+                    ->sortable()
+                    ->alignRight()
+                    ->weight('bold')
+                    ->color(fn ($record) => strtolower($record->map) === 'd' ? 'info' : 'warning')
+                    ->width('165px'),
 
+                // ── ⑦ Status (badge berwarna) ─────────────────────────────
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
-                    ->color(fn($state) => match ($state) {
+                    ->alignCenter()
+                    ->color(fn ($state) => match ($state) {
                         'draft' => 'gray',
                         'diposting' => 'success',
                         'dibalik' => 'warning',
                         'dibatalkan' => 'danger',
                         default => 'gray',
                     })
-                    ->formatStateUsing(
-                        fn($state) =>
-                        JurnalPembantuHeader::STATUSES[$state] ?? $state
-                    ),
+                    ->formatStateUsing(fn ($state) => JurnalPembantuHeader::STATUSES[$state] ?? $state)
+                    ->width('110px'),
 
+                // ── Kolom tersembunyi (bisa dinyalakan via kolom toggle) ──
                 TextColumn::make('no_dokumen')
                     ->label('No. Dokumen')
                     ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('modul_asal')
+                    ->label('Modul Asal')
+                    ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('dibuatOleh.name')
@@ -150,7 +145,7 @@ class JurnalPembantuHeadersTable
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('created_at')
-                    ->label('Dibuat')
+                    ->label('Dibuat Pada')
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -168,6 +163,35 @@ class JurnalPembantuHeadersTable
                     ->label('Posisi D/K')
                     ->options(JurnalPembantuHeader::MAP),
 
+                // ── Filter ID Barang ─────────────────────────────────────
+                SelectFilter::make('id_barang_status')
+                    ->label('ID Barang')
+                    ->options([
+                        'terisi' => 'Semua item terisi',
+                        'sebagian' => 'Sebagian terisi',
+                        'kosong' => 'Semua kosong',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'terisi' => $query
+                                ->whereHas('items', fn ($q) => $q->where('status', true))
+                                ->whereDoesntHave(
+                                    'items',
+                                    fn ($q) => $q->where('status', true)->whereNull('id_barang')
+                                ),
+                            'kosong' => $query
+                                ->whereHas('items', fn ($q) => $q->where('status', true))
+                                ->whereDoesntHave(
+                                    'items',
+                                    fn ($q) => $q->where('status', true)->whereNotNull('id_barang')
+                                ),
+                            'sebagian' => $query
+                                ->whereHas('items', fn ($q) => $q->where('status', true)->whereNull('id_barang'))
+                                ->whereHas('items', fn ($q) => $q->where('status', true)->whereNotNull('id_barang')),
+                            default => $query,
+                        };
+                    }),
+
                 Filter::make('tgl_transaksi')
                     ->form([
                         DatePicker::make('dari')
@@ -177,38 +201,35 @@ class JurnalPembantuHeadersTable
                             ->label('Sampai Tanggal'),
                     ])
                     ->query(
-                        fn(Builder $query, array $data): Builder =>
-                        $query
+                        fn (Builder $query, array $data): Builder => $query
                             ->when(
                                 $data['dari'] ?? null,
-                                fn($q, $v) =>
-                                $q->whereDate('tgl_transaksi', '>=', $v)
+                                fn ($q, $v) => $q->whereDate('tgl_transaksi', '>=', $v)
                             )
                             ->when(
                                 $data['sampai'] ?? null,
-                                fn($q, $v) =>
-                                $q->whereDate('tgl_transaksi', '<=', $v)
+                                fn ($q, $v) => $q->whereDate('tgl_transaksi', '<=', $v)
                             )
                     ),
             ])
             ->actions([
-                ViewAction::make(),
+                ViewAction::make()
+                    ->label('Lihat'),
 
                 EditAction::make()
+                    ->label('Edit')
                     ->visible(
-                        fn($record) =>
-                        $record->isDraft()
+                        fn ($record) => $record->isDraft()
                     ),
 
                 Action::make('posting')
                     ->label(
-                        fn($record) =>
-                        "Posting Jurnal No. {$record->jurnal}"
+                        fn ($record) => "Posting #{$record->jurnal}"
                     )
                     ->icon('heroicon-o-arrow-up-tray')
                     ->color('success')
                     ->visible(function ($record) {
-                        if (!$record->isDraft()) {
+                        if (! $record->isDraft()) {
                             return false;
                         }
 
@@ -221,8 +242,7 @@ class JurnalPembantuHeadersTable
                     })
                     ->requiresConfirmation()
                     ->modalHeading(
-                        fn($record) =>
-                        "Posting Jurnal No. {$record->jurnal}"
+                        fn ($record) => "Posting Jurnal No. {$record->jurnal}"
                     )
                     ->modalDescription(function ($record) {
                         $headers = JurnalPembantuHeader::query()
@@ -235,15 +255,15 @@ class JurnalPembantuHeadersTable
                         $balance = abs($totalD - $totalK) < 0.0001;
 
                         return
-                            "Jumlah Baris: {$headers->count()} | " .
-                            "Debit: Rp " . number_format($totalD, 0, ',', '.') . " | " .
-                            "Kredit: Rp " . number_format($totalK, 0, ',', '.') . " | " .
-                            "Status: " . ($balance ? '✓ Balance' : '✗ Tidak Balance');
+                            "Jumlah Baris: {$headers->count()} | ".
+                            'Debit: Rp '.number_format($totalD, 0, ',', '.').' | '.
+                            'Kredit: Rp '.number_format($totalK, 0, ',', '.').' | '.
+                            'Status: '.($balance ? '✓ Balance' : '✗ Tidak Balance');
                     })
                     ->modalSubmitActionLabel('Ya, Posting')
                     ->action(function ($record) {
                         try {
-                            app(\App\Services\PostingJurnalPembantuService::class)->postingByNomorJurnal($record->jurnal, Auth::id());
+                            app(PostingJurnalPembantuService::class)->postingByNomorJurnal($record->jurnal, Auth::id());
 
                             Notification::make()
                                 ->success()
@@ -261,11 +281,11 @@ class JurnalPembantuHeadersTable
                     }),
 
                 Action::make('balik')
-                    ->label('Jurnal Balik')
+                    ->label('Balik')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
                     ->visible(function ($record) {
-                        if (!$record->isPosted() || $record->adalah_jurnal_balik) {
+                        if (! $record->isPosted() || $record->adalah_jurnal_balik) {
                             return false;
                         }
 
@@ -278,19 +298,15 @@ class JurnalPembantuHeadersTable
                     })
                     ->requiresConfirmation()
                     ->modalHeading(
-                        fn($record) =>
-                        "Buat Jurnal Balik No. {$record->jurnal}"
+                        fn ($record) => "Buat Jurnal Balik No. {$record->jurnal}"
                     )
                     ->modalSubmitActionLabel('Ya, Buat')
                     ->action(function ($record) {
                         try {
                             DB::transaction(function () use ($record) {
-                                // FIX: sama seperti action "posting" di atas — urutkan
-                                // Debit dulu baru Kredit supaya jurnal balik yang
-                                // dihasilkan juga konsisten urutannya.
                                 $headers = JurnalPembantuHeader::query()
                                     ->with([
-                                        'items' => fn($q) => $q->where('status', true)
+                                        'items' => fn ($q) => $q->where('status', true),
                                     ])
                                     ->where('jurnal', $record->jurnal)
                                     ->where('status', JurnalPembantuHeader::STATUS_DIPOSTING)
@@ -326,13 +342,9 @@ class JurnalPembantuHeadersTable
                                         'jurnal' => $nomorJurnalBaru,
                                         'no_akun' => $header->no_akun,
                                         'nama_akun' => $header->nama_akun,
-                                        // Jurnal balik SENGAJA membalik posisi D<->K, jadi
-                                        // kalau baris asli sudah D,D,K,K, hasil baliknya
-                                        // otomatis jadi K,K,D,D dalam urutan insert yang
-                                        // sama — TIDAK di-re-sort di sini, karena listing
-                                        // & posting toh sudah orderBy('map') sendiri.
+                                        // Jurnal balik SENGAJA membalik posisi D<->K.
                                         'map' => strtolower($header->map) === 'd' ? 'k' : 'd',
-                                        'keterangan' => 'BALIK: ' . $header->keterangan,
+                                        'keterangan' => 'BALIK: '.$header->keterangan,
                                         'no_dokumen' => $header->no_dokumen,
                                         'total_nilai' => $header->total_nilai,
                                         'status' => JurnalPembantuHeader::STATUS_DRAFT,
@@ -385,8 +397,7 @@ class JurnalPembantuHeadersTable
 
                 DeleteAction::make()
                     ->visible(
-                        fn($record) =>
-                        $record->isDraft()
+                        fn ($record) => $record->isDraft()
                     ),
             ])
             ->bulkActions([
@@ -394,19 +405,15 @@ class JurnalPembantuHeadersTable
                     DeleteBulkAction::make(),
                 ]),
             ])
-            // FIX: sebelumnya defaultSort('created_at', 'desc') — ini bikin
-            // baris yang dibuat BELAKANGAN (mis. baris K yang di-loop setelah
-            // baris D) tampil DI ATAS baris yang dibuat duluan, jadi dalam 1
-            // No. Jurnal urutannya kebalik/acak (K, K, D, D alih-alih D, D, K, K).
-            //
-            // Sekarang: urutkan per grup 'jurnal' (nomor jurnal terbaru di atas,
-            // supaya transaksi baru tetap gampang ditemukan), lalu DI DALAM
-            // grup jurnal yang sama, urutkan 'map' (d sebelum k, alfabetis)
-            // dan 'id' (stabil, sesuai urutan insert asli) sebagai tie-breaker.
+            // Urut per nomor jurnal (terbaru di atas), lalu D sebelum K, lalu id.
+            // Item aktif + relasi barang di-eager-load untuk kolom "Barang".
             ->modifyQueryUsing(
-                fn(Builder $query) =>
-                $query
-                    ->with('lampiran')
+                fn (Builder $query) => $query
+                    ->with([
+                        'items' => fn ($q) => $q
+                            ->where('status', true)
+                            ->with('barang:id,kode_barang,nama_barang'),
+                    ])
                     ->orderByDesc('jurnal')
                     ->orderBy('map')
                     ->orderBy('id')

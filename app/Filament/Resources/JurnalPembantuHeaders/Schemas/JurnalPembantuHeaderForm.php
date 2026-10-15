@@ -6,12 +6,10 @@ use App\Models\JurnalPembantuHeader;
 use App\Models\SubAnakAkun;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -22,22 +20,49 @@ class JurnalPembantuHeaderForm
     {
         return $schema->components([
 
-            Section::make('Identitas Jurnal')
+            // ═══════════════════════════════════════════════════════════
+            //  BAGIAN 1 — NOMOR & REFERENSI
+            // ═══════════════════════════════════════════════════════════
+            Section::make('🔢 Nomor & Referensi')
+                ->description('Identifikasi unik jurnal dan dokumen sumbernya.')
+                ->collapsible()
                 ->schema([
-                    Grid::make(2)->schema([
+                    Grid::make(3)->schema([
 
                         TextInput::make('no_jurnal_pembantu')
                             ->label('No. Jurnal Pembantu')
                             ->numeric()
                             ->required()
+                            ->placeholder('cth. 10001')
+                            ->helperText('ID unik baris ini di jurnal pembantu.')
                             ->columnSpan(1),
 
                         TextInput::make('jurnal')
                             ->label('No. Jurnal Umum')
                             ->numeric()
                             ->required()
-                            ->helperText('Satu nomor jurnal bisa dimiliki banyak header (pasangan D/K).')
+                            ->placeholder('cth. 5001')
+                            ->helperText('Satu nomor jurnal bisa berisi banyak pasangan D/K.')
                             ->columnSpan(1),
+
+                        TextInput::make('no_dokumen')
+                            ->label('No. Dokumen')
+                            ->placeholder('No. DO / INV / PO / Surat Jalan')
+                            ->maxLength(100)
+                            ->nullable()
+                            ->helperText('Nomor surat jalan, invoice, atau PO terkait.')
+                            ->columnSpan(1),
+                    ]),
+                ]),
+
+            // ═══════════════════════════════════════════════════════════
+            //  BAGIAN 2 — JENIS & TANGGAL
+            // ═══════════════════════════════════════════════════════════
+            Section::make('📅 Jenis & Tanggal Transaksi')
+                ->description('Klasifikasi transaksi dan tanggal terjadinya.')
+                ->collapsible()
+                ->schema([
+                    Grid::make(3)->schema([
 
                         DatePicker::make('tgl_transaksi')
                             ->label('Tgl. Transaksi')
@@ -49,73 +74,52 @@ class JurnalPembantuHeaderForm
                             ->label('Jenis Transaksi')
                             ->options(JurnalPembantuHeader::JENIS)
                             ->required()
+                            ->native(false)
+                            ->helperText('Pilih sesuai jenis bukti transaksi.')
                             ->columnSpan(1),
 
                         Select::make('modul_asal')
                             ->label('Modul Asal')
-                            ->options(function (?string $state) {
-                                // Daftar kode modul yang MEMANG dipakai oleh
-                                // sistem saat mencatat transaksi (lihat
-                                // JurnalPembelianTriplekService,
-                                // JurnalPenjualanTriplekService, dll).
-                                $options = [
-                                    'pembelian_barang' => 'Pembelian',
-                                    'penjualan_triplek' => 'Penjualan',
-                                    'penjualan_return' => 'Retur Penjualan',
-                                    'pelunasan_penjualan' => 'Pelunasan Penjualan',
-                                    'penjualan_telur' => 'Penjualan — Telur',
-                                    'produksi' => 'Produksi',
-                                    'produksi_dryer' => 'Produksi — Dryer',
-                                    'produksi_kupasan' => 'Produksi — Kupasan',
-                                    'produksi_hotpress' => 'Produksi — Hotpress',
-                                    'stock_opname' => 'Stock Opname',
-                                    'kayu_masuk' => 'Kayu Masuk',
-                                    'web_kayu' => 'Web Kayu',
-                                    'penggajian' => 'Penggajian',
-                                    'lain' => 'Lain-lain',
-                                ];
-
-                                // Jaring pengaman: kalau data yang tersimpan
-                                // (lama atau baru) ternyata pakai kode modul
-                                // yang belum terdaftar di atas, tetap
-                                // ditampilkan apa adanya — supaya form edit
-                                // tidak menolak simpan gara-gara "invalid"
-                                // padahal cuma daftar opsinya yang ketinggalan.
-                                if ($state && ! array_key_exists($state, $options)) {
-                                    $options[$state] = $state;
-                                }
-
-                                return $options;
-                            })
+                            ->options([
+                                'penjualan' => '🛒  Penjualan',
+                                'pembelian' => '📦  Pembelian',
+                                'produksi_kupasan' => '🪚  Produksi — Kupasan',
+                                'produksi_dryer' => '🔥  Produksi — Dryer',
+                                'produksi_hotpress' => '🗜️  Produksi — Hotpress',
+                                'penggajian' => '💼  Penggajian',
+                                'lain' => '📝  Lain-lain',
+                            ])
                             ->nullable()
-                            ->columnSpan(1),
-
-                        TextInput::make('no_dokumen')
-                            ->label('No. Dokumen')
-                            ->placeholder('No. DO / INV / PO / Surat Jalan')
-                            ->maxLength(100)
-                            ->nullable()
+                            ->native(false)
+                            ->helperText('Modul sistem yang menghasilkan jurnal ini.')
                             ->columnSpan(1),
                     ]),
                 ]),
 
-            Section::make('Akun & Posisi')
+            // ═══════════════════════════════════════════════════════════
+            //  BAGIAN 3 — AKUN & POSISI DEBET/KREDIT
+            // ═══════════════════════════════════════════════════════════
+            Section::make('📊 Akun & Posisi Debet / Kredit')
+                ->description('Pilih akun buku besar dan tentukan posisi debet atau kredit.')
+                ->collapsible()
                 ->schema([
                     Grid::make(2)->schema([
 
                         Select::make('no_akun')
-                            ->label('Akun')
+                            ->label('Akun Buku Besar')
                             ->options(
-                                fn() => SubAnakAkun::where('status', 'aktif')
+                                fn () => SubAnakAkun::where('status', 'aktif')
                                     ->orderBy('kode_sub_anak_akun')
                                     ->get()
-                                    ->mapWithKeys(fn($a) => [
-                                        $a->kode_sub_anak_akun => "{$a->kode_sub_anak_akun} — {$a->nama_sub_anak_akun}"
+                                    ->mapWithKeys(fn ($a) => [
+                                        $a->kode_sub_anak_akun => "[{$a->kode_sub_anak_akun}]  {$a->nama_sub_anak_akun}",
                                     ])
                             )
                             ->searchable()
                             ->required()
                             ->live()
+                            ->native(false)
+                            ->helperText('Ketik kode atau nama akun untuk mencari.')
                             ->afterStateUpdated(function ($state, callable $set) {
                                 $akun = SubAnakAkun::where('kode_sub_anak_akun', $state)->first();
                                 $set('nama_akun', $akun?->nama_sub_anak_akun);
@@ -123,9 +127,14 @@ class JurnalPembantuHeaderForm
                             ->columnSpan(1),
 
                         Select::make('map')
-                            ->label('Posisi D/K')
-                            ->options(JurnalPembantuHeader::MAP)
+                            ->label('Posisi D / K')
+                            ->options([
+                                'd' => '⬆️  Debet  (D)',
+                                'k' => '⬇️  Kredit (K)',
+                            ])
                             ->required()
+                            ->native(false)
+                            ->helperText('Debet menambah aset/beban; Kredit menambah kewajiban/pendapatan.')
                             ->columnSpan(1),
 
                         // Cache nama akun — diisi otomatis oleh live() di atas
@@ -133,23 +142,32 @@ class JurnalPembantuHeaderForm
                     ]),
                 ]),
 
-            Section::make('Keterangan')
+            // ═══════════════════════════════════════════════════════════
+            //  BAGIAN 4 — KETERANGAN
+            // ═══════════════════════════════════════════════════════════
+            Section::make('📝 Keterangan')
+                ->description('Uraian transaksi dan catatan tambahan untuk keperluan internal.')
+                ->collapsible()
                 ->schema([
                     Textarea::make('keterangan')
-                        ->label('Keterangan')
+                        ->label('Keterangan Transaksi')
                         ->required()
                         ->rows(3)
+                        ->placeholder('Contoh: Penjualan kayu tripleks ke PT. Maju Jaya — Inv. 2026/001')
+                        ->helperText('Uraian ini akan diteruskan ke Jurnal Umum.')
                         ->columnSpanFull(),
 
                     Textarea::make('catatan_internal')
                         ->label('Catatan Internal')
                         ->rows(2)
                         ->nullable()
-                        ->helperText('Tidak diteruskan ke Jurnal Umum.')
+                        ->placeholder('Catatan khusus staf akuntansi — tidak tampil di laporan.')
+                        ->helperText('⚠️ Tidak diteruskan ke Jurnal Umum.')
                         ->columnSpanFull(),
                 ]),
+
             Hidden::make('dibuat_oleh')
-                ->default(fn() => Filament::auth()->id())
+                ->default(fn () => Filament::auth()->id())
                 ->dehydrated(),
         ]);
     }

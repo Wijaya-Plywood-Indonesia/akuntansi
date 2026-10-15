@@ -177,7 +177,8 @@ class ImportJurnalProduksiService
                 'harga' => $this->parseNumber($row[12] ?? null) ?? 0,
                 // Pastikan 'total' langsung ditarik dari index 13 excel
                 'total' => $this->parseNumber($row[13] ?? null) ?? 0,
-                // Identifier barang mentah dari Excel (kode/nama barang produksi, BUKAN id numerik akuntansi)
+                // Kolom "ID Barang" mentah dari Excel (index 14).
+                // Kosong => id_barang kosong. Angka => dianggap barangs.id.
                 'barang_identifier' => trim((string) ($row[14] ?? '')),
             ];
         }
@@ -246,25 +247,65 @@ class ImportJurnalProduksiService
             $keterangan = $item['nama'] ?: ($item['keterangan'] ?: $noDokumen);
 
             $idBarang = null;
+            $identifier = trim((string) ($item['barang_identifier'] ?? ''));
 
             if (str_starts_with($akun['nama'], '⚠')) {
                 $akunTidakDitemukan[] = $noAkun;
             } else {
-                // Akun ketemu -> resolve/auto-create barang untuk item persediaan ini
-                $subAkun = SubAnakAkun::where('kode_sub_anak_akun', $akun['kode'])->first();
+                // ── LOGIC LAMA (DINONAKTIFKAN) ───────────────────────────────
+                // Dulu: akun ketemu -> selalu resolve/auto-create barang, walaupun
+                // kolom ID Barang di Excel kosong (jadi Hutang Gaji, Selisih, dst.
+                // ikut punya id_barang), dan angka di Excel dianggap kode_barang
+                // sehingga barang baru dibuat (mis. 270 -> id 1826).
+                if (false) {
+                    $subAkun = SubAnakAkun::where('kode_sub_anak_akun', $akun['kode'])->first();
 
-                $barang = $this->resolveBarang(
-                    kodeAkun: $akun['kode'],
-                    idSubAnakAkun: $subAkun?->id,
-                    identifierAsli: $item['barang_identifier'],
-                    namaAkunAsli: $item['nama_akun'],
-                    keteranganAsli: $item['keterangan'] ?: $item['nama']
-                );
+                    $barang = $this->resolveBarang(
+                        kodeAkun: $akun['kode'],
+                        idSubAnakAkun: $subAkun?->id,
+                        identifierAsli: $item['barang_identifier'],
+                        namaAkunAsli: $item['nama_akun'],
+                        keteranganAsli: $item['keterangan'] ?: $item['nama']
+                    );
 
-                $idBarang = $barang->id;
+                    $idBarang = $barang->id;
 
-                if ($barang->wasRecentlyCreated) {
-                    $this->barangBaruDibuat[] = $barang->nama_barang;
+                    if ($barang->wasRecentlyCreated) {
+                        $this->barangBaruDibuat[] = $barang->nama_barang;
+                    }
+                }
+
+                // ── LOGIC BARU ───────────────────────────────────────────────
+                // Kosong di Excel => id_barang kosong (tidak ada auto-create).
+                // Angka di Excel  => dianggap barangs.id, dicari langsung.
+                // Bukan angka     => perilaku lama (dianggap kode_barang).
+                if ($identifier !== '') {
+                    if (ctype_digit($identifier)) {
+                        $barang = Barang::find((int) $identifier);
+
+                        if ($barang) {
+                            $idBarang = $barang->id;
+                        } else {
+                            $this->errors[] = "Jurnal '{$noDokumen}': ID Barang {$identifier} tidak ditemukan "
+                                ."(akun {$akun['kode']}) — id_barang dikosongkan.";
+                        }
+                    } else {
+                        $subAkun = SubAnakAkun::where('kode_sub_anak_akun', $akun['kode'])->first();
+
+                        $barang = $this->resolveBarang(
+                            kodeAkun: $akun['kode'],
+                            idSubAnakAkun: $subAkun?->id,
+                            identifierAsli: $identifier,
+                            namaAkunAsli: $item['nama_akun'],
+                            keteranganAsli: $item['keterangan'] ?: $item['nama']
+                        );
+
+                        $idBarang = $barang->id;
+
+                        if ($barang->wasRecentlyCreated) {
+                            $this->barangBaruDibuat[] = $barang->nama_barang;
+                        }
+                    }
                 }
             }
 
@@ -346,6 +387,9 @@ class ImportJurnalProduksiService
      * Key pencocokan (urutan prioritas):
      *   1. barang_identifier dari kolom Excel (row 14) kalau terisi -> paling akurat
      *   2. kombinasi kode akun + keterangan (dinormalisasi) -> fallback
+     *
+     * CATATAN: setelah perubahan di simpanJurnal(), method ini hanya dipanggil
+     * kalau identifier terisi DAN bukan angka murni (dianggap kode_barang).
      */
     private function resolveBarang(
         string $kodeAkun,
