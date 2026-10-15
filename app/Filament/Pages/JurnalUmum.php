@@ -4,13 +4,16 @@ namespace App\Filament\Pages;
 
 use App\Exports\JurnalUmumExport;
 use App\Models\Barang;
+use App\Models\JurnalLampiran;
 use App\Models\JurnalUmum as JurnalModel;
+use App\Models\Pembeli;
 use App\Models\SubAnakAkun;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -77,6 +80,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public bool $showBarangPicker = false;
 
+    // ── Pemilihan pembeli saat akun ditandai sebagai Buku Pembantu Piutang ──
+    public $id_pembeli = null;
+
+    public array $pembeliOptions = [];
+
+    public bool $showPembeliPicker = false;
+
     public bool $wasBalanced = false;
 
     // Deep-link dari Rekap Arus Kas (tombol "Lihat di Jurnal") mengisi
@@ -91,6 +101,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public $filterTglDari = '';
 
     public $filterTglSampai = '';
+
+    // Search bebas (nama akun, nama, keterangan, no. akun/dokumen, no. jurnal)
+    // supaya tidak perlu scroll manual mencari baris tertentu.
+    public $search = '';
 
     // Deep-link "Lihat di Jurnal" dari Rekap Arus Kas: jika terisi, tabel
     // history hanya menampilkan SATU nomor jurnal ini, mengabaikan filter
@@ -231,6 +245,21 @@ class JurnalUmum extends Page implements HasActions, HasForms
             }
         }
 
+        if (filled($this->search)) {
+            $needle = trim($this->search);
+            $query->where(function ($q) use ($needle) {
+                $q->where('nama_akun', 'like', "%{$needle}%")
+                    ->orWhere('nama', 'like', "%{$needle}%")
+                    ->orWhere('keterangan', 'like', "%{$needle}%")
+                    ->orWhere('no_akun', 'like', "%{$needle}%")
+                    ->orWhere('no-dokumen', 'like', "%{$needle}%")
+                    ->orWhere('mm', 'like', "%{$needle}%");
+                if (is_numeric($needle)) {
+                    $q->orWhere('jurnal', (int) $needle);
+                }
+            });
+        }
+
         // ── FIX: tambahkan selectRaw "total" agar kolom Debit/Kredit
         //         per baris di tabel history tidak menampilkan 0.
         //         Sebelumnya hanya select() kolom mentah tanpa "total",
@@ -289,6 +318,21 @@ class JurnalUmum extends Page implements HasActions, HasForms
             }
         }
 
+        if (filled($this->search)) {
+            $needle = trim($this->search);
+            $totalsQuery->where(function ($q) use ($needle) {
+                $q->where('nama_akun', 'like', "%{$needle}%")
+                    ->orWhere('nama', 'like', "%{$needle}%")
+                    ->orWhere('keterangan', 'like', "%{$needle}%")
+                    ->orWhere('no_akun', 'like', "%{$needle}%")
+                    ->orWhere('no-dokumen', 'like', "%{$needle}%")
+                    ->orWhere('mm', 'like', "%{$needle}%");
+                if (is_numeric($needle)) {
+                    $q->orWhere('jurnal', (int) $needle);
+                }
+            });
+        }
+
         $totals = $totalsQuery->selectRaw("
                 map,
                 SUM(
@@ -314,15 +358,38 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $accounts = collect($accountsMap)->map(fn ($nama, $no) => (object) ['no' => $no, 'nama' => $nama])->values();
 
+        // Jumlah + foto pertama lampiran per nomor jurnal yang tampil di
+        // halaman ini (1 query saja, bukan N+1 per baris) — dipakai untuk
+        // badge jumlah & thumbnail hover-zoom di kolom Aksi.
+        $nomorJurnalDiHalamanIni = $historyJurnals->pluck('jurnal')->unique()->values();
+        $lampiranRows = JurnalLampiran::whereIn('jurnal', $nomorJurnalDiHalamanIni)->get(['jurnal', 'paths']);
+        $lampiranCounts = $lampiranRows->mapWithKeys(fn ($l) => [(int) $l->jurnal => count($l->paths ?? [])]);
+        $lampiranThumbs = $lampiranRows->mapWithKeys(fn ($l) => [(int) $l->jurnal => ($l->paths[0] ?? null)]);
+
+        // Kode akun mana saja yang tipe_buku_pembantu = 'piutang' — dipakai
+        // di blade untuk nge-badge-in nama pembeli KHUSUS di baris akun
+        // piutang (mis. 1122.0), bukan di semua baris transaksi. Sebelumnya
+        // $hj->nama ditampilkan generik di semua baris (termasuk Hutang
+        // Gaji, Persediaan, dst — yang bukan piutang ke pembeli itu),
+        // jadinya membingungkan seolah semua akun itu terkait ke pembeli.
+        $piutangAkunCodes = cache()->remember('sub_anak_akun_piutang_codes_v1', 600, function () {
+            return SubAnakAkun::where('tipe_buku_pembantu', 'piutang')
+                ->pluck('kode_sub_anak_akun')
+                ->all();
+        });
+
         return [
             'accounts' => $accounts,
             'historyJurnals' => $historyJurnals,
+            'piutangAkunCodes' => $piutangAkunCodes,
             'totalDebitDB' => $totalDebitDB,
             'totalKreditDB' => $totalKreditDB,
             'isHistoryBalanced' => $isHistoryBalanced,
             'selisihDB' => $selisihDB,
             'modeJurnalTunggal' => $modeJurnalTunggal,
             'nomorJurnalDitampilkan' => $this->filterJurnalNomor,
+            'lampiranCounts' => $lampiranCounts,
+            'lampiranThumbs' => $lampiranThumbs,
         ];
     }
 
@@ -368,6 +435,14 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->selectAll = false;
     }
 
+    public function updatedSearch(): void
+    {
+        $this->perPage = 50;
+        $this->hasMorePages = true;
+        $this->selectedIds = [];
+        $this->selectAll = false;
+    }
+
     public function loadMore(): void
     {
         if (! $this->hasMorePages) {
@@ -393,6 +468,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public function updatedNoAkun($value): void
     {
         $this->syncBarangPickerForAkun($value);
+        $this->syncPembeliPickerForAkun($value);
     }
 
     /**
@@ -448,9 +524,45 @@ class JurnalUmum extends Page implements HasActions, HasForms
         }
     }
 
+    /**
+     * Sinkronkan picker Pembeli untuk kode akun yang dipilih. Muncul HANYA
+     * kalau sub akun itu ditandai tipe_buku_pembantu = 'piutang' (lihat form
+     * Sub Anak Akun) — supaya orang yang input manual di Jurnal Umum WAJIB
+     * memilih pembelinya, bukan cuma ketik nama bebas, supaya Buku Pembantu
+     * Piutang di Chart of Accounts bisa mengelompokkan dengan akurat.
+     */
+    public function syncPembeliPickerForAkun($value): void
+    {
+        if (blank($value)) {
+            $this->id_pembeli = null;
+            $this->pembeliOptions = [];
+            $this->showPembeliPicker = false;
+
+            return;
+        }
+
+        $isPiutang = SubAnakAkun::where('kode_sub_anak_akun', $value)
+            ->where('tipe_buku_pembantu', 'piutang')
+            ->exists();
+
+        if ($isPiutang) {
+            $this->id_pembeli = null;
+            $this->pembeliOptions = Pembeli::orderBy('nama')->get(['id', 'nama'])->map(fn ($p) => [
+                'id' => $p->id,
+                'nama' => $p->nama,
+            ])->values()->toArray();
+            $this->showPembeliPicker = true;
+        } else {
+            $this->id_pembeli = null;
+            $this->pembeliOptions = [];
+            $this->showPembeliPicker = false;
+        }
+    }
+
     private array $transientProps = [
         'no_akun',
         'id_barang',
+        'id_pembeli',
         'nama_akun',
         'nama',
         'keterangan',
@@ -497,6 +609,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
         if ($this->showBarangPicker && ! empty($this->barangOptions) && blank($this->id_barang)) {
             $errors[] = 'Akun ini terkait barang, pilih barangnya terlebih dahulu.';
         }
+        if ($this->showPembeliPicker && blank($this->id_pembeli)) {
+            $errors[] = 'Akun ini pakai Buku Pembantu Piutang, pilih pembelinya terlebih dahulu.';
+        }
         if (blank($this->harga) || (float) $this->harga < 0.01) {
             $errors[] = 'Harga wajib diisi (minimal Rp 1).';
         }
@@ -535,6 +650,14 @@ class JurnalUmum extends Page implements HasActions, HasForms
             $namaBarangTerpilih = Barang::find($this->id_barang)?->nama_barang;
         }
 
+        // ── Kalau pembeli dipilih, kolom `nama` (teks) ikut diisi otomatis
+        // dari nama pembeli itu (fallback tetap kompatibel dengan tampilan
+        // Jurnal Umum & Buku Pembantu lama yang membaca kolom `nama`) ──
+        $namaAkun = $this->nama;
+        if (! blank($this->id_pembeli)) {
+            $namaAkun = Pembeli::find($this->id_pembeli)?->nama ?: $this->nama;
+        }
+
         $this->items[] = [
             'tgl' => $this->tgl,
             'jurnal' => $this->jurnal,
@@ -542,8 +665,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'no_akun' => $this->no_akun,
             'id_barang' => $this->id_barang,
             'nama_barang' => $namaBarangTerpilih,
+            'id_pembeli' => $this->id_pembeli,
             'nama_akun' => $this->nama_akun,
-            'nama' => $this->nama,
+            'nama' => $namaAkun,
             'mm' => $this->mm === '' ? null : (int) $this->mm,
             'keterangan' => $this->keterangan,
             'hit_kbk' => $this->hit_kbk,
@@ -568,6 +692,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'id_barang',
             'barangOptions',
             'showBarangPicker',
+            'id_pembeli',
+            'pembeliOptions',
+            'showPembeliPicker',
         ]);
         $this->banyak = '';
 
@@ -658,7 +785,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         $this->items = [];
         $this->wasBalanced = false;
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'id_barang', 'barangOptions', 'showBarangPicker']);
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'id_barang', 'barangOptions', 'showBarangPicker', 'id_pembeli', 'pembeliOptions', 'showPembeliPicker']);
         $this->harga = '';
         $this->banyak = '';
         $this->map = 'd';
@@ -673,7 +800,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public function resetForm(): void
     {
-        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'id_barang', 'barangOptions', 'showBarangPicker']);
+        $this->reset(['no_akun', 'nama_akun', 'nama', 'keterangan', 'mm', 'm3', 'id_barang', 'barangOptions', 'showBarangPicker', 'id_pembeli', 'pembeliOptions', 'showPembeliPicker']);
         $this->harga = '';
         $this->map = 'd';
         $this->hit_kbk = '';
@@ -759,6 +886,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                         });
                         $set('nama_akun', $accountsMap[$state] ?? '');
                         $set('id_barang', null); // reset pilihan barang saat akun ganti
+                        $set('id_pembeli', null); // reset pilihan pembeli saat akun ganti
                     }),
                 TextInput::make('nama_akun')->label('Nama Akun')->required()->readOnly(),
 
@@ -792,6 +920,19 @@ class JurnalUmum extends Page implements HasActions, HasForms
                         'subAnakAkun',
                         fn ($q) => $q->where('kode_sub_anak_akun', $get('no_akun'))
                     )->exists())
+                    ->live(),
+
+                // ── FIELD: Pilih Pembeli, muncul jika akun ditandai Buku Pembantu = Piutang ──
+                Select::make('id_pembeli')
+                    ->label('Pembeli (Piutang)')
+                    ->searchable()
+                    ->options(fn () => Pembeli::orderBy('nama')->pluck('nama', 'id'))
+                    ->visible(fn (Get $get) => SubAnakAkun::where('kode_sub_anak_akun', $get('no_akun'))
+                        ->where('tipe_buku_pembantu', 'piutang')
+                        ->exists())
+                    ->required(fn (Get $get) => SubAnakAkun::where('kode_sub_anak_akun', $get('no_akun'))
+                        ->where('tipe_buku_pembantu', 'piutang')
+                        ->exists())
                     ->live(),
 
                 TextInput::make('mm')->label('MM (Tebal Plywood)')->numeric(),
@@ -886,6 +1027,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 $data = $record->toArray();
                 $data['no_dokumen'] = $record->{'no-dokumen'} ?? $record->no_dokumen;
                 $data['id_barang'] = $record->id_barang;
+                $data['id_pembeli'] = $record->id_pembeli;
 
                 return $data;
             })
@@ -954,6 +1096,64 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     $record->delete();
                     Notification::make()->title('Data riwayat berhasil dihapus')->success()->send();
                 }
+            });
+    }
+
+    /**
+     * Lampiran (foto nota/bukti) untuk 1 nomor jurnal — bukan per baris
+     * debit/kredit. Bisa dibuka dari baris manapun yang punya nomor jurnal
+     * yang sama, dan otomatis tersambung dengan lampiran yang sama yang
+     * diupload dari halaman "Jurnal Pembantu Headers" (sebelum diposting),
+     * karena keduanya dikaitkan lewat kolom "jurnal" yang sama.
+     */
+    public function lampiranAction(): Action
+    {
+        return Action::make('lampiran')
+            ->label('Lampiran')
+            ->modalHeading(fn (array $arguments) => 'Lampiran — No. Jurnal '.($arguments['jurnal'] ?? '-'))
+            ->modalSubmitActionLabel('Simpan')
+            ->form([
+                FileUpload::make('paths')
+                    ->label('Foto Nota / Bukti')
+                    ->multiple()
+                    ->image()
+                    ->imageEditor()
+                    ->disk('public')
+                    ->directory('jurnal-lampiran')
+                    ->reorderable()
+                    ->downloadable()
+                    ->openable()
+                    // Kompres/perkecil resolusi foto SEBELUM diupload (bukan
+                    // dipotong kotak seperti foto pegawai — mode 'contain'
+                    // supaya seluruh isi nota tetap utuh, cuma dimuat ulang
+                    // ke resolusi maksimal 1600x1600, aspect ratio asli
+                    // dipertahankan). Foto HP yang aslinya 8-10 MB biasanya
+                    // jadi hanya beberapa ratus KB setelah ini.
+                    ->imageResizeMode('contain')
+                    ->imageResizeTargetWidth('1600')
+                    ->imageResizeTargetHeight('1600')
+                    // Batas ukuran file SEBELUM di-resize oleh browser (dalam KB).
+                    // Set eksplisit supaya ada pesan error yang jelas ke user kalau
+                    // kelebihan, bukan macet diam-diam di livewire/php upload limit.
+                    ->maxSize(15360),
+            ])
+            ->fillForm(function (array $arguments): array {
+                $lampiran = JurnalLampiran::untukJurnal((int) $arguments['jurnal']);
+
+                return ['paths' => $lampiran->paths ?? []];
+            })
+            ->action(function (array $data, array $arguments): void {
+                $jurnal = (int) $arguments['jurnal'];
+
+                JurnalLampiran::updateOrCreate(
+                    ['jurnal' => $jurnal],
+                    [
+                        'paths'       => $data['paths'] ?? [],
+                        'uploaded_by' => auth()->id(),
+                    ]
+                );
+
+                Notification::make()->title('Lampiran untuk jurnal #'.$jurnal.' disimpan')->success()->send();
             });
     }
 

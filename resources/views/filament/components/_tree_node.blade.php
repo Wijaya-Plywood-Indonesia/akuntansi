@@ -66,9 +66,13 @@
             @endforeach
 
             @foreach ($subAkuns as $sub)
-                @php $subBarangCount = $sub->barang_count ?? 0; @endphp
+                @php
+                    $subBarangCount = $sub->barang_count ?? 0;
+                    $isPiutang = $sub->tipe_buku_pembantu === 'piutang';
+                    $clickAction = $isPiutang ? 'openPiutangModal(' . $sub->id . ')' : 'openBarangModal(' . $sub->id . ')';
+                @endphp
                 <div class="tree-node level-leaf">
-                    <div class="tree-leaf-row" style="cursor:pointer" wire:click="openBarangModal({{ $sub->id }})"
+                    <div class="tree-leaf-row" style="cursor:pointer" wire:click="{{ $clickAction }}"
                         data-node-search="{{ strtolower($sub->kode_sub_anak_akun . ' ' . $sub->nama_sub_anak_akun) }}">
                         <span class="tree-leaf-dot"></span>
                         <span class="tree-leaf-code">{{ $sub->kode_sub_anak_akun }}</span>
@@ -79,7 +83,17 @@
                                 <span
                                     class="badge badge-{{ $sub->saldo_normal }}">{{ strtoupper(substr($sub->saldo_normal, 0, 2)) }}</span>
                             @endif
-                            @if ($subBarangCount > 0)
+                            @if ($isPiutang)
+                                <span class="barang-count-pill" title="Buku Pembantu Piutang — klik untuk lihat per pembeli" style="background:rgba(251,191,36,0.15); color:#f59e0b;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="flex-shrink:0;">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                                    </svg>
+                                    Piutang
+                                </span>
+                            @elseif ($subBarangCount > 0)
                                 <span class="barang-count-pill" title="Jumlah barang terhubung">
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
                                         stroke="currentColor" stroke-width="2" style="flex-shrink:0;">

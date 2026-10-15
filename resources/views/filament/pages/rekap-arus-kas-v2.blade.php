@@ -23,24 +23,24 @@
                 <p class="text-sm font-black text-gray-800 dark:text-gray-100">{{ $labelPeriode }}</p>
 
                 <div class="flex flex-wrap items-center gap-2 lg:justify-end">
-                    <div class="grid grid-cols-2 lg:flex items-center gap-2">
+                    <div class="grid grid-cols-4 lg:flex items-center gap-1 lg:gap-2">
                         <button type="button" wire:click="terapkanPreset('kemarin')"
-                            class="px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-none text-center
+                            class="px-1.5 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase tracking-normal lg:tracking-wider border transition-none text-center
                                 {{ $periodeAktif === 'kemarin' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200' }}">
                             Kemarin
                         </button>
                         <button type="button" wire:click="terapkanPreset('hari_ini')"
-                            class="px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-none text-center
+                            class="px-1.5 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase tracking-normal lg:tracking-wider border transition-none text-center
                                 {{ $periodeAktif === 'hari_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200' }}">
                             Hari ini
                         </button>
                         <button type="button" wire:click="terapkanPreset('minggu_ini')"
-                            class="px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-none text-center
+                            class="px-1.5 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase tracking-normal lg:tracking-wider border transition-none text-center
                                 {{ $periodeAktif === 'minggu_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200' }}">
                             7 hari
                         </button>
                         <button type="button" wire:click="terapkanPreset('bulan_ini')"
-                            class="px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-none text-center
+                            class="px-1.5 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase tracking-normal lg:tracking-wider border transition-none text-center
                                 {{ $periodeAktif === 'bulan_ini' ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200' }}">
                             Bulan ini
                         </button>
@@ -48,14 +48,14 @@
 
                     <span class="hidden lg:inline text-gray-300 dark:text-gray-700">|</span>
 
-                    <div class="flex items-center gap-2 w-full lg:w-auto">
+                    <div class="flex items-center gap-1.5 lg:gap-2 w-full lg:w-auto">
                         <input type="date" wire:model="tglDariInput"
-                            class="flex-1 lg:flex-none px-2.5 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-medium text-gray-800 dark:text-gray-200 min-w-0">
+                            class="flex-1 lg:flex-none min-w-0 px-1.5 lg:px-2.5 py-1.5 lg:py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-[11px] lg:text-xs font-medium text-gray-800 dark:text-gray-200">
                         <span class="text-gray-500 dark:text-gray-400 flex-shrink-0">&rarr;</span>
                         <input type="date" wire:model="tglSampaiInput"
-                            class="flex-1 lg:flex-none px-2.5 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-medium text-gray-800 dark:text-gray-200 min-w-0">
+                            class="flex-1 lg:flex-none min-w-0 px-1.5 lg:px-2.5 py-1.5 lg:py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-[11px] lg:text-xs font-medium text-gray-800 dark:text-gray-200">
                         <button type="button" wire:click="terapkanRentangCustom"
-                            class="flex-shrink-0 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-none">
+                            class="flex-shrink-0 px-2.5 lg:px-3 py-1.5 lg:py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] lg:text-xs font-bold uppercase tracking-normal lg:tracking-wider transition-none">
                             Terapkan
                         </button>
                     </div>
@@ -115,16 +115,16 @@
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
             @foreach($kodeAkun as $kode)
             <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 min-w-0">
-                <div class="text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider truncate">{{ $namaAkun[$kode] ?? $kode }}</div>
-                <div class="text-lg font-black text-gray-800 dark:text-gray-100 mt-1 truncate">Rp {{ number_format($hasil['saldo_akhir'][$kode] ?? 0, 0, ',', '.') }}</div>
-                <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                <div class="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider truncate">{{ $namaAkun[$kode] ?? $kode }}</div>
+                <div class="text-xl font-black text-gray-800 dark:text-gray-100 mt-1 truncate">Rp {{ number_format($hasil['saldo_akhir'][$kode] ?? 0, 0, ',', '.') }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Awal Rp {{ number_format($hasil['saldo_awal'][$kode] ?? 0, 0, ',', '.') }}
                 </div>
             </div>
             @endforeach
             <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 min-w-0">
-                <div class="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider truncate">Total Semua Kas &amp; Bank</div>
-                <div class="text-lg font-black text-amber-600 dark:text-amber-400 mt-1 truncate">
+                <div class="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider truncate">Total Semua Kas &amp; Bank</div>
+                <div class="text-xl font-black text-amber-600 dark:text-amber-400 mt-1 truncate">
                     Rp {{ number_format(collect($hasil['saldo_akhir'] ?? [])->sum(), 0, ',', '.') }}
                 </div>
             </div>
@@ -146,24 +146,24 @@
             ]);
         @endphp
         <div class="rak2-table-wrap bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl">
-            <table class="rak2-table text-xs">
+            <table class="rak2-table text-sm">
                 <thead>
-                    <tr class="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 uppercase tracking-wider font-bold">
-                        <th rowspan="2" class="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left border-b border-r border-gray-200 dark:border-gray-800" style="min-width:90px;">Tgl</th>
-                        <th rowspan="2" class="bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left border-b border-r border-gray-200 dark:border-gray-800" style="min-width:220px;">Keterangan</th>
+                    <tr class="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 uppercase tracking-wider font-black">
+                        <th rowspan="2" class="bg-gray-100 dark:bg-gray-800 px-3 py-3 text-left border-b-2 border-r border-gray-300 dark:border-gray-700" style="min-width:90px;">Tgl</th>
+                        <th rowspan="2" class="bg-gray-100 dark:bg-gray-800 px-3 py-3 text-left border-b-2 border-r border-gray-300 dark:border-gray-700" style="min-width:220px;">Keterangan</th>
                         @foreach($kodeAkun as $kode)
-                        <th colspan="{{ $akunAktif[$kode] ? 3 : 1 }}" class="px-3 py-2 text-center border-b border-l border-gray-200 dark:border-gray-800">{{ $namaAkun[$kode] ?? $kode }}</th>
+                        <th colspan="{{ $akunAktif[$kode] ? 3 : 1 }}" class="px-3 py-3 text-center border-b-2 border-l border-gray-300 dark:border-gray-700">{{ $namaAkun[$kode] ?? $kode }}</th>
                         @endforeach
-                        <th rowspan="2" class="px-3 py-2 border-b border-l border-gray-200 dark:border-gray-800" style="min-width:60px;"></th>
+                        <th rowspan="2" class="px-3 py-3 border-b-2 border-l border-gray-300 dark:border-gray-700" style="min-width:60px;"></th>
                     </tr>
-                    <tr class="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 uppercase font-bold">
+                    <tr class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 uppercase font-black">
                         @foreach($kodeAkun as $kode)
                         @if($akunAktif[$kode])
-                        <th class="px-2 py-1.5 text-right border-l border-gray-200 dark:border-gray-800" style="min-width:105px;">D</th>
-                        <th class="px-2 py-1.5 text-right" style="min-width:105px;">K</th>
-                        <th class="px-2 py-1.5 text-right border-r border-gray-200 dark:border-gray-800" style="min-width:110px;">Saldo</th>
+                        <th class="px-2 py-2 text-right border-l border-gray-300 dark:border-gray-700" style="min-width:105px;">D</th>
+                        <th class="px-2 py-2 text-right" style="min-width:105px;">K</th>
+                        <th class="px-2 py-2 text-right border-r border-gray-300 dark:border-gray-700" style="min-width:110px;">Saldo</th>
                         @else
-                        <th class="px-2 py-1.5 text-right border-l border-r border-gray-200 dark:border-gray-800" style="min-width:90px;">Saldo</th>
+                        <th class="px-2 py-2 text-right border-l border-r border-gray-300 dark:border-gray-700" style="min-width:90px;">Saldo</th>
                         @endif
                         @endforeach
                     </tr>
@@ -186,11 +186,18 @@
                     </tr>
 
                     @foreach($hasil['baris'] as $b)
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                        <td class="bg-white dark:bg-gray-900 px-3 py-2 border-r border-gray-100 dark:border-gray-800 font-semibold text-gray-700 dark:text-gray-200">
+                    @php
+                        // Selang-seling warna baris (zebra striping) supaya mata
+                        // tidak ketuker baris saat geser pandangan dari kolom
+                        // Keterangan ke kolom nominal yang jauh di kanan — makin
+                        // penting di tabel ini karena banyak kolom sejajar per akun.
+                        $rowBg = $loop->even ? 'bg-gray-50/70 dark:bg-gray-800/30' : 'bg-white dark:bg-gray-900';
+                    @endphp
+                    <tr class="{{ $rowBg }} hover:bg-amber-50 dark:hover:bg-amber-900/10">
+                        <td class="{{ $rowBg }} px-3 py-2 border-r border-gray-100 dark:border-gray-800 font-semibold text-gray-700 dark:text-gray-200">
                             {{ \Carbon\Carbon::parse($b['tgl'])->format('d/m/y') }}
                         </td>
-                        <td class="bg-white dark:bg-gray-900 px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-100 truncate" style="max-width:260px;" title="{{ $b['deskripsi'] }}">
+                        <td class="{{ $rowBg }} px-3 py-2 border-r border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-100 truncate" style="max-width:320px;" title="{{ $b['deskripsi'] }}">
                             {{ $b['deskripsi'] }}
                         </td>
                         @foreach($kodeAkun as $kode)

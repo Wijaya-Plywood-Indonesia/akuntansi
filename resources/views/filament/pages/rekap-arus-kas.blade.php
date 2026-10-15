@@ -175,6 +175,16 @@
                 <div class="cat-body border-t border-gray-100 dark:border-gray-800" x-cloak x-show="isOpen('{{ $rowKey }}')">
                     <div class="divide-y divide-gray-100 dark:divide-gray-800">
                         @foreach($kat['transaksi'] as $tx)
+                        @php
+                            // PENTING: pakai tanda milik TRANSAKSI INI sendiri
+                            // ($tx['tipe']), bukan tanda kategori induknya
+                            // ($isIn/$isNetral di atas). Kalau ikut kategori
+                            // induk, transaksi yang sebenarnya kas keluar bisa
+                            // salah tampil "+" hanya karena kategori itu net-nya
+                            // positif secara keseluruhan (dan sebaliknya).
+                            $txIsIn = $tx['tipe'] === 'in';
+                            $txIsNetral = $tx['tipe'] === 'netral';
+                        @endphp
                         <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-4 py-2.5 sm:pl-[3.75rem] text-sm">
                             <div class="flex items-center justify-between sm:contents">
     <div class="text-xs text-gray-600 dark:text-gray-300 font-semibold sm:min-w-[74px]">
@@ -182,8 +192,8 @@
     </div>
     <div class="sm:hidden text-right">
         <div class="font-bold whitespace-nowrap
-            {{ $isNetral ? 'text-gray-700 dark:text-gray-200' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
-            {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
+            {{ $txIsNetral ? 'text-gray-700 dark:text-gray-200' : ($txIsIn ? 'text-emerald-500' : 'text-rose-500') }}">
+            {{ $txIsNetral ? '' : ($txIsIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
         </div>
         @if(!empty($tx['kas']))
         <div class="text-[10px] text-gray-600 dark:text-gray-300 font-medium whitespace-nowrap">{{ $tx['kas'] }}</div>
@@ -198,11 +208,16 @@
     @if(!empty($tx['keterangan']))
     <div class="text-xs text-gray-600 dark:text-gray-300 truncate mt-0.5">{{ $tx['keterangan'] }}</div>
     @endif
+    @if(!empty($tx['cara_hitung']))
+    <div class="text-[11px] text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5" title="Cara hitung porsi ini">
+        {{ $tx['cara_hitung'] }}
+    </div>
+    @endif
 </div>
 <div class="hidden sm:block min-w-[100px] text-right">
     <div class="font-bold whitespace-nowrap
-        {{ $isNetral ? 'text-gray-700 dark:text-gray-200' : ($isIn ? 'text-emerald-500' : 'text-rose-500') }}">
-        {{ $isNetral ? '' : ($isIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
+        {{ $txIsNetral ? 'text-gray-700 dark:text-gray-200' : ($txIsIn ? 'text-emerald-500' : 'text-rose-500') }}">
+        {{ $txIsNetral ? '' : ($txIsIn ? '+ ' : '- ') }}Rp {{ number_format($tx['nilai'], 0, ',', '.') }}
     </div>
     @if(!empty($tx['kas']))
     <div class="text-[10px] text-gray-600 dark:text-gray-300 font-medium whitespace-nowrap">{{ $tx['kas'] }}</div>

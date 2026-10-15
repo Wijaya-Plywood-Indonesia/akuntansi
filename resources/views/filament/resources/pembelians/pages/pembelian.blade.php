@@ -293,7 +293,18 @@
                                     placeholder="Cari barang untuk dibeli / barcode... (/)"
                                     id="pembelian-search-input"
                                     class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg !pl-8 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary-500/20 transition-all"
-                                    @keydown.slash.window.prevent="document.getElementById('pembelian-search-input').focus()"
+                                    x-on:keydown.slash.window="
+                                        // Shortcut '/' cuma untuk LOMPAT ke kolom pencarian dari
+                                        // luar (mis. lagi tidak fokus di input mana pun). Kalau
+                                        // fokus SUDAH di dalam input/textarea (termasuk kolom ini
+                                        // sendiri), biarkan '/' diketik apa adanya sebagai karakter
+                                        // biasa — jangan di-preventDefault, supaya nama/kode barang
+                                        // yang mengandung '/' bisa diketik normal.
+                                        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+                                            $event.preventDefault();
+                                            document.getElementById('pembelian-search-input').focus();
+                                        }
+                                    "
                                     wire:focus="openDropdown" />
 
                                 @if($showDropdown && !empty($searchResults))
@@ -597,14 +608,20 @@
                                     @if ($foto_nota)
                                     <div class="w-full flex flex-col items-center">
                                         <div class="grid grid-cols-3 gap-2 w-full mb-2">
-                                            @foreach ($foto_nota as $foto)
-                                            <div class="relative rounded-lg overflow-hidden border border-primary-500 shadow aspect-square">
+                                            @foreach ($foto_nota as $index => $foto)
+                                            <div class="relative rounded-lg overflow-hidden border border-primary-500 shadow aspect-square group">
                                                 <img src="{{ $foto->temporaryUrl() }}" alt="Preview" class="w-full h-full object-cover">
+                                                <button type="button"
+                                                    wire:click.prevent.stop="removeFotoNota({{ $index }})"
+                                                    title="Hapus foto ini"
+                                                    class="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-rose-600 text-white rounded-full text-xs leading-none transition-colors">
+                                                    &times;
+                                                </button>
                                             </div>
                                             @endforeach
                                         </div>
                                         <div class="flex items-center gap-1 text-[10px] text-primary-600 dark:text-primary-400 font-bold bg-primary-50 dark:bg-primary-900/40 px-2.5 py-1 rounded-full">
-                                            <x-heroicon-o-arrow-path class="w-3 h-3" /> Ganti foto
+                                            <x-heroicon-o-arrow-path class="w-3 h-3" /> Ganti / tambah foto
                                         </div>
                                     </div>
                                     @endif

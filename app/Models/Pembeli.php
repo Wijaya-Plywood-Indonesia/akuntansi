@@ -24,4 +24,10 @@ class Pembeli extends Model
     {
         return $this->hasMany(RekeningPembeli::class);
     }
+
+    // 1 pembeli bisa muncul di banyak baris jurnal (buku pembantu piutang)
+    public function jurnalUmums()
+    {
+        return $this->hasMany(JurnalUmum::class, 'id_pembeli');
+    }
 }

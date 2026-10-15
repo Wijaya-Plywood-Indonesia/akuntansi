@@ -11,6 +11,7 @@ use Filament\Pages\Page;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
+use Filament\Support\Enums\Width;
 
 class LabaRugi extends Page
 {
@@ -31,6 +32,10 @@ class LabaRugi extends Page
     public array $bulanList         = [];
     public array $ringkasanPerBulan = [];
     public bool  $sudahFilter       = false;
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     public function mount(): void
     {

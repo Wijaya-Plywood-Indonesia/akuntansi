@@ -6,10 +6,15 @@ use App\Filament\Resources\ReturnPenjualans\ReturnPenjualanResource;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Support\Enums\Width;
 
 class ListReturnPenjualans extends ListRecords
 {
     protected static string $resource = ReturnPenjualanResource::class;
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     protected function getHeaderActions(): array
     {

@@ -216,10 +216,13 @@ class ArusKasPerAkunService
      * Susun deskripsi ringkas untuk kolom "Ket".
      *
      * Untuk transaksi yang berasal dari penjualan/pembelian (punya nomor
-     * dokumen/nota dan nama pihak terkait), tampilkan cukup "No. Nota -
-     * Nama" saja — bukan keterangan teknis yang panjang. Kalau kedua
-     * kolom itu kosong (mis. jurnal manual seperti "Modal Awal"), baru
-     * pakai keterangan asli / nama akun lawan sebagai fallback.
+     * dokumen/nota dan nama pihak terkait), tampilkan "Catatan | No. Nota |
+     * Nama" (catatan di depan supaya langsung kebaca apa transaksinya;
+     * dipisah "|" bukan "-" karena nomor nota sendiri sudah mengandung "-",
+     * mis. "sj-9217", jadi kalau dipisah "-" jadi susah dibedakan). Kalau
+     * kedua kolom (nota & nama) itu kosong (mis. jurnal manual seperti
+     * "Modal Awal"), baru pakai keterangan asli / nama akun lawan sebagai
+     * fallback.
      */
     private function buatDeskripsi(int|string $noJurnal, $barisKasDiJurnalIni, $semuaBaris, array $kodeAkunTerpilih): string
     {
@@ -233,19 +236,35 @@ class ArusKasPerAkunService
         // keterangan baris kas dalam kurung, contoh:
         // "KAS TUNAI | Nota: sj-9218 | DOVER CHEMICAL (beli lem)".
         // Ambil catatan itu supaya ikut tampil di kolom Ket rekap arus kas,
-        // bukan cuma "No. Nota - Nama" saja.
-        $keteranganKasMentah = optional($barisKasDiJurnalIni->first())->keterangan ?? '';
+        // ditaruh paling depan (mis. "beli lem | sj-9218 | DOVER CHEMICAL").
+        $keteranganKasMentah = (string) (optional($barisKasDiJurnalIni->first())->keterangan ?? '');
         $catatanUser = null;
-        if (preg_match('/\(([^()]+)\)\s*$/', (string) $keteranganKasMentah, $m)) {
+        if (preg_match('/\(([^()]+)\)\s*$/', $keteranganKasMentah, $m)) {
+            // Format otomatis dari Penjualan/Pembelian, mis.
+            // "KAS TUNAI | Nota: sj-9218 | DOVER CHEMICAL (beli lem)".
             $catatanUser = trim($m[1]);
+        } elseif (
+            $keteranganKasMentah !== ''
+            && !($noNota && str_contains($keteranganKasMentah, (string) $noNota))
+            && !($namaPihak && str_contains($keteranganKasMentah, (string) $namaPihak))
+        ) {
+            // Jurnal Umum manual: No. Dokumen / Nama diisi di kolom
+            // terpisah, keterangan diketik polos (bukan format kurung di
+            // atas) dan belum mengandung nota/nama itu sendiri — pakai apa
+            // adanya supaya tidak hilang, mis. "beli selang".
+            $catatanUser = trim($keteranganKasMentah);
         }
 
         if ($noNota || $namaPihak) {
-            return collect([
-                $noNota,
-                $namaPihak,
-                $catatanUser,
-            ])->filter()->implode(' - ');
+            // Nota & nama digabung dengan " - " (satu kesatuan info dokumen),
+            // dipisah dari catatan user dengan " | ". Mis.
+            // "beli selang | sj-2984 - dian utama", bukan
+            // "beli selang | sj-2984 | dian utama" — supaya jelas nota dan
+            // nama itu satu kelompok info yang sama, beda level dengan
+            // catatan bebas yang diketik user.
+            $notaDanNama = collect([$noNota, $namaPihak])->filter()->implode(' - ');
+
+            return collect([$catatanUser, $notaDanNama])->filter()->implode(' | ');
         }
 
         $keteranganKas = $keteranganKasMentah ?: null;

@@ -68,10 +68,19 @@ class PostingJurnalPembantuService
                 JurnalPembantuHeader::query()
                     ->where('jurnal', $nomorJurnal)
                     ->update(['jurnal' => $nomorFinal]);
+
+                // Foto lampiran juga dikunci berdasarkan nomor jurnal — kalau
+                // nomornya di-renumber di atas tapi lampirannya tidak ikut
+                // dipindah, fotonya jadi "nyangkut" di nomor lama yang sudah
+                // tidak dipakai lagi (hilang dari Jurnal Umum). Method ini
+                // aman terhadap tabrakan (auto-merge kalau nomor tujuan
+                // kebetulan sudah punya lampiran sendiri).
+                \App\Models\JurnalLampiran::pindahkanKe((int) $nomorJurnal, $nomorFinal, $userId);
             }
 
             $namaGlobal = null;
             $noDokumenGlobal = null;
+            $pihakIdGlobal = null;
 
             foreach ($headers as $h) {
                 if (empty($noDokumenGlobal) && !empty($h->no_dokumen)) {
@@ -90,6 +99,10 @@ class PostingJurnalPembantuService
                             $namaGlobal = $firstItem->nama_pihak ?: $firstItem->nama_barang;
                         }
                     }
+                }
+
+                if (empty($pihakIdGlobal)) {
+                    $pihakIdGlobal = $h->items->first()?->pihak_id;
                 }
             }
 
@@ -168,6 +181,7 @@ class PostingJurnalPembantuService
                         'nama' => $namaGlobal,
                         'keterangan' => $header->keterangan,
                         'id_barang' => $idBarangFinal,
+                        'id_pembeli' => $pihakIdGlobal,
                         'banyak' => $banyakFinal !== null ? round($banyakFinal, 4) : null,
                         'm3' => $m3Final !== null ? round($m3Final, 4) : null,
                         'harga' => round($hargaFinal, 2),

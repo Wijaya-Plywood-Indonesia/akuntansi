@@ -732,7 +732,6 @@ class PosPenjualan extends Page
 
             $kembalian = $this->kembalian;
             $jenisTransaksiSelesai = $this->jenis_transaksi;
-            $this->resetPos();
 
             $pesanSukses = match ($jenisTransaksiSelesai) {
                 'COD' => 'Transaksi COD tersimpan. Seluruh nominal akan ditagih lewat menu Pelunasan saat barang diterima.',
@@ -745,6 +744,10 @@ class PosPenjualan extends Page
                 ->body($pesanSukses)
                 ->success()
                 ->send();
+
+            $this->redirect(PenjualanResource::getUrl('index'));
+
+            return;
 
         } catch (\Exception $e) {
             Notification::make()

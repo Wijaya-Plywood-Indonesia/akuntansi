@@ -11,15 +11,18 @@ use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Filament\Support\Enums\Width;
 use InvalidArgumentException;
 use Livewire\Attributes\Computed;
+use Livewire\WithFileUploads;
 use RuntimeException;
 use UnitEnum;
 
 class KedatanganBarangPembelian extends Page
 {
     use HasPageShield;
+    use WithFileUploads;
 
     protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
 
@@ -37,7 +40,18 @@ class KedatanganBarangPembelian extends Page
 
     public ?Pembelian $selectedNota = null;
 
+    /**
+     * Tab aktif di panel kanan untuk nota DP yang barangnya BELUM datang:
+     * 'dp' (Tambah DP) atau 'datang' (Konfirmasi Barang Datang). Dipisah
+     * jadi tab supaya admin tidak salah isi kolom nominal antara dua aksi
+     * yang beda konsekuensi (DP hanya nambah cicilan, Barang Datang
+     * mengubah Persediaan & Utang Usaha).
+     */
+    public string $panelTab = 'dp';
+
     // ── Form "Tambah DP" ─────────────────────────────────────────────────
+    public string $dp_tanggal = '';
+
     public string $dp_nominal = '';
 
     public string $dp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
@@ -48,7 +62,19 @@ class KedatanganBarangPembelian extends Page
 
     public ?string $dp_catatan = null;
 
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $dp_foto = [];
+
     // ── Form "Konfirmasi Barang Datang" (khusus sisa DP) ────────────────
+    public string $sisa_tanggal = '';
+
+    // Nota/surat jalan biasanya BELUM ada saat nota dibuat untuk transaksi
+    // BAYAR_DIMUKA/DP (baru dikirim setelah barang berangkat dari
+    // supplier). Field ini opsional diisi/direvisi begitu surat jalan
+    // fisik diterima saat barang datang — kalau diisi, akan menimpa
+    // nomor_nota Pembelian SEBELUM jurnal kedatangan barang dibuat.
+    public string $sisa_nomor_nota = '';
+
     public string $sisa_nominal = '';
 
     public string $sisa_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
@@ -57,7 +83,12 @@ class KedatanganBarangPembelian extends Page
 
     public ?string $sisa_reference_number = null;
 
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $sisa_foto = [];
+
     // ── Form "Bayar Hutang" (khusus NORMAL) ─────────────────────────────
+    public string $hutang_tanggal = '';
+
     public string $hutang_nominal = '';
 
     public string $hutang_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
@@ -67,6 +98,26 @@ class KedatanganBarangPembelian extends Page
     public ?string $hutang_reference_number = null;
 
     public ?string $hutang_catatan = null;
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $hutang_foto = [];
+
+    // ── Form "Bayar Hutang DP" (khusus DP yang barangnya SUDAH datang
+    //    tapi masih ada sisa tagihan) ────────────────────────────────────
+    public string $hutangdp_tanggal = '';
+
+    public string $hutangdp_nominal = '';
+
+    public string $hutangdp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
+
+    public ?int $hutangdp_rekening_perusahaan_id = null;
+
+    public ?string $hutangdp_reference_number = null;
+
+    public ?string $hutangdp_catatan = null;
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $hutangdp_foto = [];
 
     /** @var Collection<int, RekeningPerusahaan> */
     public Collection $rekeningPerusahaan;
@@ -109,8 +160,9 @@ class KedatanganBarangPembelian extends Page
 
         $bisaKonfirmasiBarang = $service->bisaDikonfirmasi($nota);
         $bisaBayarHutang = $service->bisaBayarHutang($nota);
+        $bisaBayarHutangDp = $service->bisaBayarHutangDp($nota);
 
-        if (! $bisaKonfirmasiBarang && ! $bisaBayarHutang) {
+        if (! $bisaKonfirmasiBarang && ! $bisaBayarHutang && ! $bisaBayarHutangDp) {
             Notification::make()
                 ->title('Tidak Bisa Diproses')
                 ->body('Nota ini tidak menunggu kedatangan barang maupun pelunasan hutang, atau sudah selesai diproses sebelumnya.')
@@ -123,12 +175,6 @@ class KedatanganBarangPembelian extends Page
         $this->pembelian_id = $id;
         $this->selectedNota = $nota;
         $this->resetFormFields();
-
-        // Prefill nominal sisa untuk DP supaya user tinggal cek "Bayar Pas"
-        // (tapi tetap wajib pas menutup sisa, tidak bisa diubah jadi kurang).
-        if ($nota->jenis_pembayaran === Pembelian::JENIS_DP) {
-            $this->sisa_nominal = $nota->sisaTagihan() > 0 ? (string) (int) $nota->sisaTagihan() : '0';
-        }
     }
 
     public function batalPilihNota(): void
@@ -140,22 +186,85 @@ class KedatanganBarangPembelian extends Page
 
     private function resetFormFields(): void
     {
+        $this->panelTab = 'dp';
+
+        $hariIni = now()->format('Y-m-d');
+
+        $this->dp_tanggal = $hariIni;
         $this->dp_nominal = '';
         $this->dp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->dp_rekening_perusahaan_id = null;
         $this->dp_reference_number = null;
         $this->dp_catatan = null;
+        $this->dp_foto = [];
 
+        $this->sisa_tanggal = $hariIni;
+        $this->sisa_nomor_nota = $this->selectedNota?->nomor_nota ?? '';
         $this->sisa_nominal = '';
         $this->sisa_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->sisa_rekening_perusahaan_id = null;
         $this->sisa_reference_number = null;
+        $this->sisa_foto = [];
 
+        $this->hutang_tanggal = $hariIni;
         $this->hutang_nominal = '';
         $this->hutang_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
         $this->hutang_rekening_perusahaan_id = null;
         $this->hutang_reference_number = null;
         $this->hutang_catatan = null;
+        $this->hutang_foto = [];
+
+        $this->hutangdp_tanggal = $hariIni;
+        $this->hutangdp_nominal = '';
+        $this->hutangdp_payment_method = PembelianMetodePembayaran::METODE_TUNAI;
+        $this->hutangdp_rekening_perusahaan_id = null;
+        $this->hutangdp_reference_number = null;
+        $this->hutangdp_catatan = null;
+        $this->hutangdp_foto = [];
+    }
+
+    /**
+     * Hapus satu foto dari preview SEBELUM disimpan, di salah satu dari 4
+     * form panel (dp_foto, sisa_foto, hutang_foto, hutangdp_foto). Dipakai
+     * oleh tombol "×" di setiap thumbnail foto pada form.
+     */
+    public function removeFoto(string $property, int $index): void
+    {
+        if (! in_array($property, ['dp_foto', 'sisa_foto', 'hutang_foto', 'hutangdp_foto'], true)) {
+            return;
+        }
+
+        $daftar = $this->{$property};
+
+        if (! isset($daftar[$index])) {
+            return;
+        }
+
+        unset($daftar[$index]);
+        $this->{$property} = array_values($daftar);
+    }
+
+    /**
+     * Simpan array TemporaryUploadedFile ke disk 'public' (folder
+     * jurnal-lampiran, sama seperti lampiran Jurnal Umum) dan kembalikan
+     * array path relatif-nya, siap dikirim ke service jurnal.
+     *
+     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $files
+     * @return array<int, string>
+     */
+    private function simpanFotoLampiran(array $files): array
+    {
+        $paths = [];
+
+        foreach ($files as $file) {
+            if (! $file) {
+                continue;
+            }
+
+            $paths[] = $file->store('jurnal-lampiran', 'public');
+        }
+
+        return $paths;
     }
 
     private function parseNumber(string $value): float
@@ -185,11 +294,13 @@ class KedatanganBarangPembelian extends Page
 
         try {
             $updated = $service->tambahDp($this->selectedNota, [
+                'tanggal'                => $this->dp_tanggal,
                 'nominal'                => $this->parseNumber($this->dp_nominal),
                 'payment_method'         => $this->dp_payment_method,
                 'rekening_perusahaan_id' => $this->dp_rekening_perusahaan_id,
                 'reference_number'       => $this->dp_reference_number,
                 'catatan'                => $this->dp_catatan,
+                'foto'                   => $this->simpanFotoLampiran($this->dp_foto),
             ], auth()->id());
 
             Notification::make()
@@ -204,7 +315,7 @@ class KedatanganBarangPembelian extends Page
             $this->dp_nominal = '';
             $this->dp_reference_number = null;
             $this->dp_catatan = null;
-            $this->sisa_nominal = $updated->sisaTagihan() > 0 ? (string) (int) $updated->sisaTagihan() : '0';
+            $this->dp_foto = [];
             unset($this->notaResults);
         } catch (InvalidArgumentException|RuntimeException $e) {
             Notification::make()
@@ -235,11 +346,13 @@ class KedatanganBarangPembelian extends Page
 
         try {
             $updated = $service->bayarHutang($this->selectedNota, [
+                'tanggal'                => $this->hutang_tanggal,
                 'nominal'                => $this->parseNumber($this->hutang_nominal),
                 'payment_method'         => $this->hutang_payment_method,
                 'rekening_perusahaan_id' => $this->hutang_rekening_perusahaan_id,
                 'reference_number'       => $this->hutang_reference_number,
                 'catatan'                => $this->hutang_catatan,
+                'foto'                   => $this->simpanFotoLampiran($this->hutang_foto),
             ], auth()->id());
 
             Notification::make()
@@ -258,6 +371,67 @@ class KedatanganBarangPembelian extends Page
                 $this->hutang_nominal = '';
                 $this->hutang_reference_number = null;
                 $this->hutang_catatan = null;
+                $this->hutang_foto = [];
+            }
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            Notification::make()
+                ->title('Gagal Membayar Hutang')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    /**
+     * Aksi "Bayar Hutang DP" — khusus nota jenis DP yang barangnya SUDAH
+     * dikonfirmasi datang (lewat "Konfirmasi Barang Datang" versi belum
+     * lunas) tapi masih ada sisa tagihan. Boleh dipanggil berkali-kali
+     * (cicilan), nominal bebas. Di cicilan yang menutup sisa ke 0, jurnal
+     * service otomatis ikut membalik Uang Muka Pembelian yang sudah
+     * terkumpul sejak awal.
+     */
+    public function bayarHutangDp(): void
+    {
+        if (! $this->selectedNota) {
+            Notification::make()
+                ->title('Error')
+                ->body('Silakan pilih nota pembelian terlebih dahulu.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $service = app(PembelianKedatanganService::class);
+
+        try {
+            $updated = $service->bayarHutangDp($this->selectedNota, [
+                'tanggal'                => $this->hutangdp_tanggal,
+                'nominal'                => $this->parseNumber($this->hutangdp_nominal),
+                'payment_method'         => $this->hutangdp_payment_method,
+                'rekening_perusahaan_id' => $this->hutangdp_rekening_perusahaan_id,
+                'reference_number'       => $this->hutangdp_reference_number,
+                'catatan'                => $this->hutangdp_catatan,
+                'foto'                   => $this->simpanFotoLampiran($this->hutangdp_foto),
+            ], auth()->id());
+
+            Notification::make()
+                ->title('Pembayaran Berhasil')
+                ->body('Jurnal pelunasan sudah tercatat. Sisa tagihan sekarang: Rp '.number_format($updated->sisaTagihan()).'.')
+                ->success()
+                ->send();
+
+            unset($this->notaResults);
+
+            if ($updated->sisaTagihan() <= 0) {
+                // Sudah lunas total -> keluar dari panel, nota hilang dari daftar.
+                $this->batalPilihNota();
+            } else {
+                $this->selectedNota = $updated->load('detailPembelians');
+                $this->hutangdp_nominal = '';
+                $this->hutangdp_reference_number = null;
+                $this->hutangdp_catatan = null;
+                $this->hutangdp_foto = [];
             }
         } catch (InvalidArgumentException|RuntimeException $e) {
             Notification::make()
@@ -282,14 +456,23 @@ class KedatanganBarangPembelian extends Page
 
         $service = app(PembelianKedatanganService::class);
 
-        $payload = [];
+        $fotoPaths = $this->simpanFotoLampiran($this->sisa_foto);
+
+        $payload = [
+            'tanggal'    => $this->sisa_tanggal,
+            'nomor_nota' => $this->sisa_nomor_nota,
+            'foto'       => $fotoPaths,
+        ];
 
         if ($this->selectedNota->jenis_pembayaran === Pembelian::JENIS_DP) {
             $payload = [
+                'tanggal'                => $this->sisa_tanggal,
+                'nomor_nota'             => $this->sisa_nomor_nota,
                 'nominal'                => $this->parseNumber($this->sisa_nominal),
                 'payment_method'         => $this->sisa_payment_method,
                 'rekening_perusahaan_id' => $this->sisa_rekening_perusahaan_id,
                 'reference_number'       => $this->sisa_reference_number,
+                'foto'                   => $fotoPaths,
             ];
         }
 

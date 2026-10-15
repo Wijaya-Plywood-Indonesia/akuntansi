@@ -7,6 +7,7 @@ use App\Models\JurnalUmum;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use UnitEnum;
+use Filament\Support\Enums\Width;
 
 class StokMatrix extends Page
 {
@@ -21,6 +22,10 @@ class StokMatrix extends Page
     protected $stok;
 
     protected int $pairs = 5;
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     public function mount(): void
     {
@@ -110,6 +115,12 @@ class StokMatrix extends Page
             'totalStokKosongCount' => $totalStokKosongCount,
             'totalAkumulasiStok' => $totalAkumulasiStok,
             'totalAkumulasiM3' => $totalAkumulasiM3,
+            'kategoris' => $this->barangs
+                ->pluck('kategori.nama_kategori')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values(),
         ];
     }
 }

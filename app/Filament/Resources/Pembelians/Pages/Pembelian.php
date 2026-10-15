@@ -88,6 +88,21 @@ class Pembelian extends Page
         $this->tanggal_bayar   = now()->format('Y-m-d');
     }
 
+    /**
+     * Hapus satu foto nota dari daftar preview SEBELUM disimpan (masih
+     * berupa file sementara Livewire, belum tersimpan ke storage/DB).
+     * Dipakai oleh tombol "×" di setiap thumbnail foto pada form.
+     */
+    public function removeFotoNota(int $index): void
+    {
+        if (! isset($this->foto_nota[$index])) {
+            return;
+        }
+
+        unset($this->foto_nota[$index]);
+        $this->foto_nota = array_values($this->foto_nota);
+    }
+
     public function updatedJenisPembayaran(): void
     {
         // Reset input pembayaran tiap ganti skema, biar tidak nyangkut nilai

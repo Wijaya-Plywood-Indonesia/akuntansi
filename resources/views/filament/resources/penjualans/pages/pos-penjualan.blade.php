@@ -61,7 +61,12 @@
                             <input type="text" wire:model.live.debounce.300ms="search"
                                 placeholder="Cari barang / barcode... (/)" id="pos-search-input"
                                 class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg !pl-8 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary-500/20 transition-all"
-                                @keydown.slash.window.prevent="document.getElementById('pos-search-input').focus()"
+                                x-on:keydown.slash.window="
+                                    if (!['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+                                        $event.preventDefault();
+                                        document.getElementById('pos-search-input').focus();
+                                    }
+                                "
                                 wire:focus="openDropdown" />
 
                             @if ($showDropdown)
@@ -622,6 +627,11 @@
                                             <label
                                                 class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1"
                                                 x-text="jenisTransaksi === 'DP' ? 'Nominal DP' : 'Nominal Bayar'"></label>
+                                            <template x-if="jenisTransaksi !== 'DP'">
+                                                <button type="button" @click="$wire.setBayar('pas')"
+                                                    class="text-[9px] font-bold text-primary-600 hover:underline uppercase tracking-wide">Bayar
+                                                    Pas</button>
+                                            </template>
                                         </div>
                                         <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
                                             <span class="text-lg font-bold text-primary-600">Rp</span>

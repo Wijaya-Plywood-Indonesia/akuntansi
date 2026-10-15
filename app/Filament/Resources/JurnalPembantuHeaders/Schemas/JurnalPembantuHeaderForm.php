@@ -2,16 +2,14 @@
 
 namespace App\Filament\Resources\JurnalPembantuHeaders\Schemas;
 
-use App\Models\Barang;
 use App\Models\JurnalPembantuHeader;
 use App\Models\SubAnakAkun;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -83,13 +81,13 @@ class JurnalPembantuHeaderForm
                         Select::make('modul_asal')
                             ->label('Modul Asal')
                             ->options([
-                                'penjualan'          => '🛒  Penjualan',
-                                'pembelian'          => '📦  Pembelian',
-                                'produksi_kupasan'   => '🪚  Produksi — Kupasan',
-                                'produksi_dryer'     => '🔥  Produksi — Dryer',
-                                'produksi_hotpress'  => '🗜️  Produksi — Hotpress',
-                                'penggajian'         => '💼  Penggajian',
-                                'lain'               => '📝  Lain-lain',
+                                'penjualan' => '🛒  Penjualan',
+                                'pembelian' => '📦  Pembelian',
+                                'produksi_kupasan' => '🪚  Produksi — Kupasan',
+                                'produksi_dryer' => '🔥  Produksi — Dryer',
+                                'produksi_hotpress' => '🗜️  Produksi — Hotpress',
+                                'penggajian' => '💼  Penggajian',
+                                'lain' => '📝  Lain-lain',
                             ])
                             ->nullable()
                             ->native(false)
@@ -110,11 +108,11 @@ class JurnalPembantuHeaderForm
                         Select::make('no_akun')
                             ->label('Akun Buku Besar')
                             ->options(
-                                fn() => SubAnakAkun::where('status', 'aktif')
+                                fn () => SubAnakAkun::where('status', 'aktif')
                                     ->orderBy('kode_sub_anak_akun')
                                     ->get()
-                                    ->mapWithKeys(fn($a) => [
-                                        $a->kode_sub_anak_akun => "[{$a->kode_sub_anak_akun}]  {$a->nama_sub_anak_akun}"
+                                    ->mapWithKeys(fn ($a) => [
+                                        $a->kode_sub_anak_akun => "[{$a->kode_sub_anak_akun}]  {$a->nama_sub_anak_akun}",
                                     ])
                             )
                             ->searchable()
@@ -169,7 +167,7 @@ class JurnalPembantuHeaderForm
                 ]),
 
             Hidden::make('dibuat_oleh')
-                ->default(fn() => Filament::auth()->id())
+                ->default(fn () => Filament::auth()->id())
                 ->dehydrated(),
         ]);
     }

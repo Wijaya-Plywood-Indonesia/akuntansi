@@ -30,6 +30,7 @@ class Pembelian extends Model
         'validated_by',
         'tanggal_validasi',
         'nomor_nota',
+        'nomor_nota_history',
         'tanggal',
         'foto',
         'supplier_id',
@@ -47,6 +48,7 @@ class Pembelian extends Model
         'jenis_pembayaran',
         'barang_diterima_at',
         'barang_diterima_by',
+        'dp_terkumpul_saat_barang_datang',
         'catatan',
     ];
 
@@ -55,12 +57,14 @@ class Pembelian extends Model
         'tanggal_validasi' => 'datetime',
         'barang_diterima_at' => 'datetime',
         'foto' => 'array',
+        'nomor_nota_history' => 'array',
         'sub_total' => 'decimal:2',
         'total_diskon' => 'decimal:2',
         'total_ppn' => 'decimal:2',
         'ongkir' => 'decimal:2',
         'biaya_lain' => 'decimal:2',
         'grand_total' => 'decimal:2',
+        'dp_terkumpul_saat_barang_datang' => 'decimal:2',
     ];
 
     // ==================
@@ -207,6 +211,23 @@ class Pembelian extends Model
         return $this->jenis_pembayaran === self::JENIS_DP
             && ! empty($this->validated_by)
             && ! $this->sudahDiterimaBarangnya()
+            && $this->sisaTagihan() > 0;
+    }
+
+    /**
+     * Khusus DP: boleh bayar/cicil hutang belakangan kalau barangnya SUDAH
+     * datang (dikonfirmasi lewat "Konfirmasi Barang Datang" dengan status
+     * belum lunas) tapi sisa tagihan masih > 0. Beda dari bisaBayarHutang()
+     * yang khusus jenis NORMAL — di sini hutang usaha baru diakui SETELAH
+     * barang datang (bukan sejak validasi awal), dan pelunasannya ikut
+     * menutup Uang Muka Pembelian di cicilan terakhir.
+     */
+    public function bisaBayarHutangDp(): bool
+    {
+        return $this->jenis_pembayaran === self::JENIS_DP
+            && ! empty($this->validated_by)
+            && $this->sudahDiterimaBarangnya()
+            && $this->status !== self::STATUS_BATAL
             && $this->sisaTagihan() > 0;
     }
 

@@ -52,6 +52,23 @@ class JurnalPembelianTriplekService
         private readonly BukuKitabJurnalService $engine,
     ) {}
 
+    private function syncLampiran(int $noJurnal, ?array $fotoPaths, int $userId): void
+    {
+        $paths = is_array($fotoPaths) ? array_values(array_filter($fotoPaths)) : [];
+
+        if (empty($paths)) {
+            return;
+        }
+
+        \App\Models\JurnalLampiran::updateOrCreate(
+            ['jurnal' => $noJurnal],
+            [
+                'paths'       => $paths,
+                'uploaded_by' => $userId,
+            ]
+        );
+    }
+
     public function buatJurnalPembelian(Pembelian $pembelian, int $userId): void
     {
         $pembelian->loadMissing([
@@ -66,6 +83,27 @@ class JurnalPembelianTriplekService
 
         DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $hutangUsahaPenuh) {
             $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            // ──────────────────────────────────────────────────────────────
+            // Sinkronkan Foto Nota dari Pembelian ke Lampiran Jurnal, supaya
+            // otomatis tampil di kolom Foto Jurnal Pembantu Header dan nanti
+            // tetap ikut setelah di-posting ke Jurnal Umum (nomor $noJurnal
+            // sama persis dipakai di keduanya). Berlaku untuk semua jenis
+            // pembayaran (NORMAL/BAYAR_DIMUKA/DP) karena diletakkan sebelum
+            // percabangannya.
+            // ──────────────────────────────────────────────────────────────
+            $fotoNota = $pembelian->foto ?? [];
+            $fotoNota = is_array($fotoNota) ? array_values(array_filter($fotoNota)) : (blank($fotoNota) ? [] : [$fotoNota]);
+
+            if (! empty($fotoNota)) {
+                \App\Models\JurnalLampiran::updateOrCreate(
+                    ['jurnal' => $noJurnal],
+                    [
+                        'paths'       => $fotoNota,
+                        'uploaded_by' => $userId,
+                    ]
+                );
+            }
 
             if ($pembelian->jenis_pembayaran === \App\Models\Pembelian::JENIS_BAYAR_DIMUKA) {
                 // ── BAYAR_DIMUKA: cuma catat DP keluar, barang BELUM diakui ──
@@ -162,7 +200,7 @@ class JurnalPembelianTriplekService
      * pakai. Mengakui Persediaan + PPN Masukan, dan menghabiskan Uang Muka
      * yang sudah dibayar sebelumnya.
      */
-    public function buatJurnalKedatanganBarangDimuka(Pembelian $pembelian, int $userId): void
+    public function buatJurnalKedatanganBarangDimuka(Pembelian $pembelian, int $userId, ?string $tanggal = null, ?array $fotoLampiranPaths = null): void
     {
         $pembelian->loadMissing(['detailPembelians.barang.subAnakAkun', 'metodePembayarans']);
 
@@ -171,8 +209,10 @@ class JurnalPembelianTriplekService
         $ppnMasukan = (float) $pembelian->total_ppn;
         $dpSudahDibayar = (float) $pembelian->metodePembayarans->sum('amount');
 
-        DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $dpSudahDibayar) {
+        DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $dpSudahDibayar, $tanggal, $fotoLampiranPaths) {
             $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
             $this->engine->buatJurnalDariKitab(
                 kodeKitab: 'pembelian_bayar_dimuka_bml',
@@ -182,7 +222,7 @@ class JurnalPembelianTriplekService
                     'dp_pembelian' => $dpSudahDibayar,
                 ],
                 noDokumen: $pembelian->nomor_nota,
-                tglTransaksi: $pembelian->tanggal,
+                tglTransaksi: $tanggal ?: $pembelian->tanggal,
                 modulAsal: 'pembelian_barang',
                 jenisTransaksi: 'bm',
                 userId: $userId,
@@ -205,7 +245,7 @@ class JurnalPembelianTriplekService
      * 'pembelian_down_payment_pembayaran_*'. Boleh dipanggil berkali-kali
      * selama barang belum datang.
      */
-    public function buatJurnalTambahDp(Pembelian $pembelian, PembelianMetodePembayaran $bayar, int $userId): void
+    public function buatJurnalTambahDp(Pembelian $pembelian, PembelianMetodePembayaran $bayar, int $userId, ?string $tanggal = null, ?array $fotoLampiranPaths = null): void
     {
         if ((float) $bayar->amount <= 0) {
             return;
@@ -213,8 +253,10 @@ class JurnalPembelianTriplekService
 
         $bayar->loadMissing('rekeningPerusahaan.subAnakAkun');
 
-        DB::transaction(function () use ($pembelian, $bayar, $userId) {
+        DB::transaction(function () use ($pembelian, $bayar, $userId, $tanggal, $fotoLampiranPaths) {
             $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
             $this->postingUangMukaGabungan(
                 $pembelian,
@@ -223,6 +265,124 @@ class JurnalPembelianTriplekService
                 $noJurnal,
                 'pembelian_down_payment_pembayaran',
                 'Pembayaran DP Pembelian (Tahap Lanjutan)',
+                $tanggal,
+            );
+        });
+    }
+
+    /**
+     * TAHAP "KEDATANGAN BARANG" untuk DP — kasus barang datang DULUAN,
+     * sisa tagihan BELUM dibayar sama sekali di titik ini (akan dicicil
+     * belakangan lewat buatJurnalBayarHutangDp()). Dipanggil dari menu
+     * "Kedatangan Barang" -> aksi "Konfirmasi Barang Datang" ketika nominal
+     * pelunasan yang diisi user TIDAK menutup penuh sisa tagihan.
+     *
+     * Beda dari buatJurnalKedatanganBarangDp(): di sini Uang Muka Pembelian
+     * yang sudah terkumpul TIDAK dibalik/disentuh sama sekali — Utang Usaha
+     * diakui PENUH sebesar grand_total (kitab
+     * 'pembelian_down_payment_barang_datang_belum_lunas' tidak punya baris
+     * 'dp_pembelian'). Baru nanti di cicilan TERAKHIR
+     * (buatJurnalBayarHutangDp()), Uang Muka Pembelian ini dibalik sekaligus
+     * untuk menutup Utang Usaha ke 0.
+     */
+    public function buatJurnalKedatanganBarangDpBelumLunas(Pembelian $pembelian, int $userId, ?string $tanggal = null, ?array $fotoLampiranPaths = null): void
+    {
+        $pembelian->loadMissing(['detailPembelians.barang.subAnakAkun']);
+
+        $breakdownPersediaan = $this->siapkanBreakdownPersediaan($pembelian);
+        $nilaiPersediaanTotal = $this->hitungTotalBreakdown($breakdownPersediaan);
+        $ppnMasukan = (float) $pembelian->total_ppn;
+        $hutangUsahaPenuh = (float) $pembelian->grand_total;
+
+        DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $hutangUsahaPenuh, $tanggal, $fotoLampiranPaths) {
+            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
+
+            $this->engine->buatJurnalDariKitab(
+                kodeKitab: 'pembelian_down_payment_barang_datang_belum_lunas',
+                context: [
+                    'nilai_persediaan_dinamis' => $nilaiPersediaanTotal,
+                    'ppn_masukan'  => $ppnMasukan,
+                    'hutang_usaha' => $hutangUsahaPenuh,
+                ],
+                noDokumen: $pembelian->nomor_nota,
+                tglTransaksi: $tanggal ?: $pembelian->tanggal,
+                modulAsal: 'pembelian_barang',
+                jenisTransaksi: 'bm',
+                userId: $userId,
+                jenisPihak: 'supplier',
+                namaPihak: $pembelian->supplier_name ?: 'Supplier',
+                keteranganDefault: 'Kedatangan Barang (DP, Belum Lunas — Sisa Dicicil Belakangan)',
+                itemBreakdown: [
+                    'nilai_persediaan_dinamis' => $breakdownPersediaan,
+                ],
+                splitHeaderPerBarang: ['nilai_persediaan_dinamis'],
+                noJurnalOverride: $noJurnal,
+            );
+        });
+    }
+
+    /**
+     * Pelunasan hutang untuk Pembelian jenis DP yang barangnya SUDAH datang
+     * (via buatJurnalKedatanganBarangDpBelumLunas()) tapi masih ada sisa
+     * tagihan — dipanggil dari menu "Kedatangan Barang" -> aksi "Bayar
+     * Hutang" khusus nota DP yang sudah menerima barang. Boleh dicicil
+     * berkali-kali seperti buatJurnalBayarHutang() punya NORMAL, TAPI di
+     * cicilan TERAKHIR (begitu sisaTagihan() jadi 0 setelah baris
+     * pembayaran $bayar ini disimpan) turut membalik SELURUH Uang Muka
+     * Pembelian yang sudah terkumpul ($pembelian->
+     * dp_terkumpul_saat_barang_datang) supaya Utang Usaha benar-benar
+     * tertutup ke 0 — bukan cuma tertutup sebesar kas yang dibayar.
+     *
+     * $bayar WAJIB sudah ter-save ke DB sebelum method ini dipanggil, supaya
+     * $pembelian->sisaTagihan() (query fresh ke metodePembayarans) sudah
+     * memperhitungkan pembayaran ini saat menentukan "apakah ini cicilan
+     * terakhir".
+     */
+    public function buatJurnalBayarHutangDp(Pembelian $pembelian, PembelianMetodePembayaran $bayar, int $userId, ?string $tanggal = null, ?array $fotoLampiranPaths = null): void
+    {
+        if ((float) $bayar->amount <= 0) {
+            return;
+        }
+
+        $bayar->loadMissing('rekeningPerusahaan.subAnakAkun');
+
+        DB::transaction(function () use ($pembelian, $bayar, $userId, $tanggal, $fotoLampiranPaths) {
+            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
+
+            $sisaSetelahBayar = $pembelian->sisaTagihan();
+            $iniCicilanTerakhir = $sisaSetelahBayar <= 0.0001;
+            $dpNetting = $iniCicilanTerakhir ? (float) ($pembelian->dp_terkumpul_saat_barang_datang ?? 0) : 0.0;
+            $nominalBayar = (float) $bayar->amount;
+
+            $kodeKitab = $this->resolveKodePembayaran($bayar, 'pembelian_down_payment_pelunasan');
+
+            $this->engine->buatJurnalDariKitab(
+                kodeKitab: $kodeKitab,
+                context: [
+                    // D: Utang Usaha wajib = jumlah SEMUA sisi K (kas + DP
+                    // yang dibalik), supaya jurnal tetap balance.
+                    'hutang_usaha' => $nominalBayar + $dpNetting,
+                    'nominal_kas'  => $nominalBayar,
+                    'dp_pembelian' => $dpNetting, // auto-skip kalau 0 (bukan cicilan terakhir)
+                ],
+                noDokumen: $pembelian->nomor_nota,
+                tglTransaksi: $tanggal ?: now(),
+                modulAsal: 'pembelian_barang',
+                jenisTransaksi: 'bm',
+                userId: $userId,
+                jenisPihak: 'supplier',
+                namaPihak: $pembelian->supplier_name ?: 'Supplier',
+                keteranganDefault: $iniCicilanTerakhir
+                    ? 'Pelunasan Hutang Pembelian (DP, Cicilan Terakhir — Tutup Uang Muka)'
+                    : 'Pelunasan Hutang Pembelian (DP, Cicilan)',
+                noJurnalOverride: $noJurnal,
+                catatanPerVariabel: [
+                    'nominal_kas' => $this->gabungCatatan($pembelian, $bayar),
+                ],
             );
         });
     }
@@ -243,6 +403,8 @@ class JurnalPembelianTriplekService
         float $dpSudahDibayar,
         PembelianMetodePembayaran $bayarSisa,
         int $userId,
+        ?string $tanggal = null,
+        ?array $fotoLampiranPaths = null,
     ): void {
         $pembelian->loadMissing(['detailPembelians.barang.subAnakAkun']);
         $bayarSisa->loadMissing('rekeningPerusahaan.subAnakAkun');
@@ -252,8 +414,10 @@ class JurnalPembelianTriplekService
         $ppnMasukan = (float) $pembelian->total_ppn;
         $nominalSisa = (float) $bayarSisa->amount;
 
-        DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $dpSudahDibayar, $bayarSisa, $nominalSisa) {
+        DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $dpSudahDibayar, $bayarSisa, $nominalSisa, $tanggal, $fotoLampiranPaths) {
             $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
             // Kalau sisa = 0 (DP sebelumnya sudah menutup 100% grand_total),
             // baris nominal_kas otomatis dilewati oleh engine (nilai <= 0),
@@ -270,7 +434,7 @@ class JurnalPembelianTriplekService
                     'nominal_kas'  => $nominalSisa,
                 ],
                 noDokumen: $pembelian->nomor_nota,
-                tglTransaksi: $pembelian->tanggal,
+                tglTransaksi: $tanggal ?: $pembelian->tanggal,
                 modulAsal: 'pembelian_barang',
                 jenisTransaksi: 'bm',
                 userId: $userId,
@@ -297,7 +461,7 @@ class JurnalPembelianTriplekService
      * di sini cuma jurnal pelunasan: D: Utang Usaha | K: Kas/Bank. Boleh
      * dipanggil berkali-kali (cicilan) sampai sisaTagihan() = 0.
      */
-    public function buatJurnalBayarHutang(Pembelian $pembelian, PembelianMetodePembayaran $bayar, int $userId): void
+    public function buatJurnalBayarHutang(Pembelian $pembelian, PembelianMetodePembayaran $bayar, int $userId, ?string $tanggal = null, ?array $fotoLampiranPaths = null): void
     {
         if ((float) $bayar->amount <= 0) {
             return;
@@ -305,8 +469,10 @@ class JurnalPembelianTriplekService
 
         $bayar->loadMissing('rekeningPerusahaan.subAnakAkun');
 
-        DB::transaction(function () use ($pembelian, $bayar, $userId) {
+        DB::transaction(function () use ($pembelian, $bayar, $userId, $tanggal, $fotoLampiranPaths) {
             $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+
+            $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
             $kodeKitab = $this->resolveKodePembayaran($bayar, 'pembelian_bayar_dibelakang_lunas');
 
@@ -317,7 +483,7 @@ class JurnalPembelianTriplekService
                     'nominal_kas'  => (float) $bayar->amount,
                 ],
                 noDokumen: $pembelian->nomor_nota,
-                tglTransaksi: now(),
+                tglTransaksi: $tanggal ?: now(),
                 modulAsal: 'pembelian_barang',
                 jenisTransaksi: 'bm',
                 userId: $userId,
@@ -356,6 +522,7 @@ class JurnalPembelianTriplekService
         int $noJurnal,
         string $prefixKitab,
         string $keteranganDefault,
+        ?string $tanggal = null,
     ): void {
         $pembayaranValid = $pembayarans->filter(fn ($b) => (float) $b->amount > 0)->values();
 
@@ -380,10 +547,18 @@ class JurnalPembelianTriplekService
             );
         }
 
+        // Tanggal transaksi jurnal ini HARUS ikut tanggal pembayaran yang
+        // sesungguhnya (mis. DP tahap lanjutan yang dibayar beberapa hari
+        // setelah nota dibuat), bukan selalu tanggal nota asli — supaya
+        // Rekap Arus Kas & Jurnal Umum mencerminkan kapan uang benar-benar
+        // keluar. Kalau tidak dikirim (dipanggil dari alur lama), fallback
+        // ke tanggal nota seperti sebelumnya.
+        $tglTransaksi = $tanggal ?: $pembelian->tanggal;
+
         // ── D: Uang Muka Pembelian (1 baris, TOTAL gabungan) ────────────
         $headerD = JurnalPembantuHeader::create([
             'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
-            'tgl_transaksi'      => $pembelian->tanggal,
+            'tgl_transaksi'      => $tglTransaksi,
             'jenis_transaksi'    => 'bm',
             'modul_asal'         => 'pembelian_barang',
             'jurnal'             => $noJurnal,
@@ -425,7 +600,7 @@ class JurnalPembelianTriplekService
 
             $headerK = JurnalPembantuHeader::create([
                 'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
-                'tgl_transaksi'      => $pembelian->tanggal,
+                'tgl_transaksi'      => $tglTransaksi,
                 'jenis_transaksi'    => 'bm',
                 'modul_asal'         => 'pembelian_barang',
                 'jurnal'             => $noJurnal,

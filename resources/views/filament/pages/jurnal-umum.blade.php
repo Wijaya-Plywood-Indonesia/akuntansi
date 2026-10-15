@@ -361,6 +361,9 @@
         id_barang: @entangle('id_barang'),
         showBarangPicker: @entangle('showBarangPicker'),
         barangOptions: @entangle('barangOptions'),
+        id_pembeli: @entangle('id_pembeli'),
+        showPembeliPicker: @entangle('showPembeliPicker'),
+        pembeliOptions: @entangle('pembeliOptions'),
         nama: @entangle('nama'),
         mm: @entangle('mm'),
         keterangan: @entangle('keterangan'),
@@ -378,6 +381,8 @@
         total_display: '',
         barangSearchTerm: '',
         isBarangDropdownOpen: false,
+        pembeliSearchTerm: '',
+        isPembeliDropdownOpen: false,
     
         get filteredAccounts() {
             if (this.searchTerm === '') return this.accounts;
@@ -392,6 +397,7 @@
             this.searchTerm = acc.no;
             this.isDropdownOpen = false;
             $wire.syncBarangPickerForAkun(acc.no);
+            $wire.syncPembeliPickerForAkun(acc.no);
         },
         get showBarangPickerSafe() {
             return this.showBarangPicker && Array.isArray(this.barangOptions) && this.barangOptions.length > 0;
@@ -413,6 +419,26 @@
             this.barangSearchTerm = '';
             this.isBarangDropdownOpen = false;
         },
+        get showPembeliPickerSafe() {
+            return this.showPembeliPicker && Array.isArray(this.pembeliOptions) && this.pembeliOptions.length > 0;
+        },
+        get filteredPembeliOptions() {
+            if (!Array.isArray(this.pembeliOptions)) return [];
+            if (this.pembeliSearchTerm === '') return this.pembeliOptions;
+            return this.pembeliOptions.filter(opt =>
+                (opt.nama ?? '').toLowerCase().includes(this.pembeliSearchTerm.toLowerCase())
+            );
+        },
+        selectPembeli(opt) {
+            this.id_pembeli = opt.id;
+            this.pembeliSearchTerm = opt.nama;
+            this.isPembeliDropdownOpen = false;
+        },
+        clearPembeli() {
+            this.id_pembeli = '';
+            this.pembeliSearchTerm = '';
+            this.isPembeliDropdownOpen = false;
+        },
         clearAccount() {
             this.no_akun = '';
             this.nama_akun = '';
@@ -422,7 +448,12 @@
             this.showBarangPicker = false;
             this.barangOptions = [];
             this.barangSearchTerm = '';
+            this.id_pembeli = '';
+            this.showPembeliPicker = false;
+            this.pembeliOptions = [];
+            this.pembeliSearchTerm = '';
             $wire.syncBarangPickerForAkun('');
+            $wire.syncPembeliPickerForAkun('');
         },
         formatRupiah(val) {
             if (val === null || val === undefined || val === '') return '';
@@ -537,6 +568,14 @@
         if (!value) { barangSearchTerm = ''; return; }
         const found = (barangOptions || []).find(o => o.id == value);
         if (found) barangSearchTerm = found.nama;
+    });
+    $watch('pembeliOptions', () => {
+        pembeliSearchTerm = '';
+    });
+    $watch('id_pembeli', value => {
+        if (!value) { pembeliSearchTerm = ''; return; }
+        const found = (pembeliOptions || []).find(o => o.id == value);
+        if (found) pembeliSearchTerm = found.nama;
     });
     
     const saveLocal = (key, val) => {
@@ -683,6 +722,32 @@
                         <input type="text" x-model="jurnal" disabled readonly
                             title="No. Jurnal digenerate otomatis oleh sistem dan akan diperbarui jika terjadi konflik nomor"
                             class="w-full px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-bold text-gray-500 dark:text-gray-400 cursor-not-allowed shadow-sm">
+
+                        @php
+                            $lampiranAktifSaatIni = \App\Models\JurnalLampiran::where('jurnal', (int) $jurnal)->first();
+                            $jmlLampiranAktifSaatIni = count($lampiranAktifSaatIni->paths ?? []);
+                        @endphp
+                        <button type="button"
+                            wire:click="mountAction('lampiran', { jurnal: {{ (int) $jurnal }} })"
+                            class="w-full mt-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-colors
+                                @if($jmlLampiranAktifSaatIni > 0)
+                                    text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40
+                                @else
+                                    text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40
+                                @endif">
+                            @if($jmlLampiranAktifSaatIni > 0)
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                </svg>
+                                {{ $jmlLampiranAktifSaatIni }} Foto Sudah Dilampirkan &mdash; Lihat/Ubah
+                            @else
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                </svg>
+                                Lampirkan Foto Nota untuk Jurnal Ini
+                            @endif
+                        </button>
                     </div>
                     <div class="space-y-1.5">
                         <label
@@ -785,6 +850,46 @@
                                             x-text="opt.nama"></button>
                                     </template>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ── Picker Pembeli, muncul kalau akun ditandai Buku Pembantu = Piutang ── --}}
+                <div x-show="showPembeliPickerSafe" style="display: none;"
+                    x-transition:enter="transition ease-out duration-300 delay-100"
+                    x-transition:enter-start="opacity-0 translate-y-2"
+                    x-transition:enter-end="opacity-100 translate-y-0"
+                    class="concept-b-section mt-2" @click.away="isPembeliDropdownOpen = false">
+                    <div class="space-y-1.5">
+                        <div class="flex items-center gap-1 mb-1">
+                            <span
+                                class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Pilih
+                                Pembeli (Piutang)</span>
+                            <span class="text-rose-500 text-[11px]">*</span>
+                        </div>
+                        <div class="relative">
+                            <input type="text" x-model="pembeliSearchTerm" @focus="isPembeliDropdownOpen = true"
+                                placeholder="Cari pembeli..."
+                                class="w-full px-3.5 py-2.5 pr-10 text-sm bg-indigo-50 dark:bg-gray-800 border border-indigo-300 dark:border-indigo-900 rounded-lg font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm">
+                            <button type="button" x-show="pembeliSearchTerm.length > 0 || id_pembeli"
+                                @click="clearPembeli()"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-rose-500 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                            <div x-show="isPembeliDropdownOpen" x-cloak
+                                class="absolute z-50 w-full mt-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-52 overflow-y-auto p-1.5 custom-scroll">
+                                <template x-if="filteredPembeliOptions.length === 0">
+                                    <div class="px-3 py-2 text-xs text-gray-400 italic">Tidak ditemukan</div>
+                                </template>
+                                <template x-for="opt in filteredPembeliOptions" :key="opt.id">
+                                    <button type="button" @click="selectPembeli(opt)"
+                                        class="w-full text-left px-3.5 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 rounded-md text-sm font-medium text-gray-800 dark:text-gray-200 transition-none"
+                                        x-text="opt.nama"></button>
+                                </template>
                             </div>
                         </div>
                     </div>
@@ -1330,6 +1435,7 @@
             showConfirm: false,
             modeLengkap: window.innerWidth < 768,
             modeLengkapTouched: false,
+            previewImage: null,
         
             get visibleIds() {
                 return Array.from(document.querySelectorAll('[data-row-id]'))
@@ -1431,6 +1537,34 @@
         });
         @endif">
 
+            {{-- MODAL PREVIEW FOTO LAMPIRAN (klik thumbnail di kolom Aksi) --}}
+            <div x-show="previewImage" x-cloak
+                x-transition.opacity
+                @keydown.escape.window="previewImage = null"
+                class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+                @click.self="previewImage = null">
+                <div class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                        <h3 class="text-sm font-black text-gray-800 dark:text-gray-100">Foto Lampiran</h3>
+                        <button type="button" @click="previewImage = null"
+                            class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+                        <img :src="previewImage" alt="Foto lampiran" class="max-w-full max-h-[80vh] rounded-lg object-contain">
+                    </div>
+                    <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+                        <button type="button" @click="previewImage = null"
+                            class="px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            Tutup
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             {{-- MODAL KONFIRMASI BULK DELETE --}}
             <div x-show="showConfirm" x-cloak
                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -1511,6 +1645,24 @@
                 <div
                     class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 w-full">
                     <div class="flex flex-wrap items-center gap-3">
+                        <div class="relative w-full sm:w-64">
+                            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input type="text" wire:model.live.debounce.400ms="search"
+                                placeholder="Cari nama akun, nama, keterangan, no. akun/dokumen, no. jurnal..."
+                                class="w-full pl-9 pr-8 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-200 outline-none focus:border-amber-400 shadow-xs">
+                            <button type="button" wire:click="$set('search', '')" wire:loading.remove
+                                wire:target="search" x-show="$wire.search.length > 0" x-cloak
+                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-rose-500">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
                         <div class="flex items-center gap-2 mr-1">
                             <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
@@ -1668,12 +1820,13 @@
 
                         {{-- Header hanya tampil di desktop (md ke atas) --}}
                         <div class="hidden md:grid gap-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md sticky top-0 z-10 px-4 py-3.5"
-                            style="grid-template-columns: 32px 1fr 90px 70px 150px 120px 120px 70px">
+                            style="grid-template-columns: 32px 1fr 44px 90px 70px 150px 120px 120px 70px">
                             <div>
                                 <input type="checkbox" class="row-checkbox" :checked="selectAll"
                                     @change="toggleSelectAll()" title="Pilih semua">
                             </div>
                             <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Akun & Detail</div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Foto</div>
                             <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Tanggal</div>
                             <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Jurnal</div>
                             <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Kuantitas / Harga</div>
@@ -1695,9 +1848,10 @@
                                     <div>
                                         {{-- skeleton desktop --}}
                                         <div class="hidden md:grid gap-3 px-4 py-4 items-center skeleton-row"
-                                            style="grid-template-columns: 32px 1fr 90px 70px 150px 120px 120px 70px">
+                                            style="grid-template-columns: 32px 1fr 44px 90px 70px 150px 120px 120px 70px">
                                             <div></div>
                                             <div class="h-3 rounded w-3/4 bg-gray-200 dark:bg-gray-700"></div>
+                                            <div class="h-8 w-8 rounded bg-gray-200 dark:bg-gray-700 mx-auto"></div>
                                             <div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div>
                                             <div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700"></div>
                                             <div class="h-3 rounded w-full bg-gray-200 dark:bg-gray-700"></div>
@@ -1727,7 +1881,7 @@
                                 <div data-row-id="{{ $hj->id }}"
                                     :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
                                     class="hidden md:grid gap-3 px-4 py-3.5 items-start hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
-                                    style="grid-template-columns: 32px 1fr 90px 70px 150px 120px 120px 70px; animation-delay: {{ min($index * 0.02, 0.4) }}s">
+                                    style="grid-template-columns: 32px 1fr 44px 90px 70px 150px 120px 120px 70px; animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                     <div class="pt-0.5">
                                         <input type="checkbox" class="row-checkbox"
@@ -1742,12 +1896,19 @@
                                             @if($hj->nama_barang)
                                                 <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-700 dark:text-blue-400">{{ $hj->nama_barang }}</span>
                                             @endif
+                                            @if(in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
+                                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400" title="Piutang atas nama pembeli ini">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                                    {{ $hj->nama }}
+                                                </span>
+                                            @endif
                                             @if($hj->mm)
                                                 <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }} mm</span>
                                             @endif
                                         </div>
                                         <div class="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 mt-0.5">
-                                            @if($hj->nama)
+                                            @php $sudahJadiBadgePiutang = in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama; @endphp
+                                            @if($hj->nama && ! $sudahJadiBadgePiutang)
                                                 <span class="font-semibold shrink-0">{{ $hj->nama }}</span>
                                                 @if($hj->keterangan)<span class="text-gray-400">&middot;</span>@endif
                                             @endif
@@ -1756,6 +1917,24 @@
                                             @endif
                                             {{-- No. Dokumen sengaja tidak ditampilkan di mode Ringkas, lihat di mode Lengkap --}}
                                         </div>
+                                    </div>
+
+                                    <div class="pt-0.5">
+                                        @php $thumbPathRingkas = $lampiranThumbs[(int) $hj->jurnal] ?? null; @endphp
+                                        @if ($thumbPathRingkas)
+                                            @php $urlLampiranRingkas = Illuminate\Support\Facades\Storage::disk('public')->url($thumbPathRingkas); @endphp
+                                            <button type="button"
+                                                @click="previewImage = '{{ $urlLampiranRingkas }}'"
+                                                title="Klik untuk lihat foto lampiran"
+                                                class="w-8 h-8 mx-auto rounded border border-gray-200 dark:border-gray-700 overflow-hidden block">
+                                                <img src="{{ $urlLampiranRingkas }}"
+                                                    alt="Lampiran jurnal {{ $hj->jurnal }}"
+                                                    onerror="this.closest('button').style.display='none'"
+                                                    class="w-full h-full object-cover">
+                                            </button>
+                                        @else
+                                            <span class="block text-center text-gray-300 dark:text-gray-600">-</span>
+                                        @endif
                                     </div>
 
                                     <div class="text-xs font-semibold text-gray-800 dark:text-gray-200 whitespace-nowrap pt-0.5">
@@ -1856,15 +2035,19 @@
                                                 @if($hj->nama_barang)
                                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-700 dark:text-blue-400">{{ $hj->nama_barang }}</span>
                                                 @endif
+                                                @if(in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400">{{ $hj->nama }}</span>
+                                                @endif
                                                 @if($hj->mm)
                                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }} mm</span>
                                                 @endif
                                             </div>
 
-                                            @if($hj->nama || $hj->keterangan)
+                                            @php $sudahJadiBadgePiutangCard = in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama; @endphp
+                                            @if(($hj->nama && ! $sudahJadiBadgePiutangCard) || $hj->keterangan)
                                                 <div class="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-snug">
-                                                    @if($hj->nama)<span class="font-semibold">{{ $hj->nama }}</span>@endif
-                                                    @if($hj->nama && $hj->keterangan) &middot; @endif
+                                                    @if($hj->nama && ! $sudahJadiBadgePiutangCard)<span class="font-semibold">{{ $hj->nama }}</span>@endif
+                                                    @if($hj->nama && ! $sudahJadiBadgePiutangCard && $hj->keterangan) &middot; @endif
                                                     @if($hj->keterangan)<span class="text-gray-400 dark:text-gray-500">{{ $hj->keterangan }}</span>@endif
                                                 </div>
                                             @endif
@@ -1925,7 +2108,8 @@
                         <div class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700">
                             {{-- Total desktop --}}
                             <div class="hidden md:grid gap-3 px-4 py-4"
-                                style="grid-template-columns: 32px 1fr 90px 70px 150px 120px 120px 70px">
+                                style="grid-template-columns: 32px 1fr 44px 90px 70px 150px 120px 120px 70px">
+                                <div></div>
                                 <div></div>
                                 <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest text-right" style="grid-column: span 4;">Total Akumulasi</div>
                                 <div class="text-right text-emerald-600 text-sm font-black whitespace-nowrap">
@@ -1969,6 +2153,7 @@
                                     <th class="px-4 py-4 text-center">No. Jurnal</th>
                                     <th class="px-4 py-4">No Akun</th>
                                     <th class="px-4 py-4">No. Dokumen</th>
+                                    <th class="px-4 py-4 text-center">Foto</th>
                                     <th class="px-4 py-4 text-center">MM</th>
                                     <th class="px-4 py-4">Nama</th>
                                     <th class="px-4 py-4 min-w-[240px]">Keterangan</th>
@@ -2035,8 +2220,35 @@
                                         <td class="px-4 py-4 text-center text-gray-700 dark:text-gray-300 font-medium">{{ $hj->jurnal }}</td>
                                         <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{{ $hj->no_akun }}</td>
                                         <td class="px-4 py-4 text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">{{ $hj->no_dokumen ?? '-' }}</td>
+
+                                        <td class="px-4 py-4 text-center">
+                                            @php $thumbPath = $lampiranThumbs[(int) $hj->jurnal] ?? null; @endphp
+                                            @if ($thumbPath)
+                                                @php $urlLampiran = Illuminate\Support\Facades\Storage::disk('public')->url($thumbPath); @endphp
+                                                <button type="button"
+                                                    @click="previewImage = '{{ $urlLampiran }}'"
+                                                    title="Klik untuk lihat foto lampiran"
+                                                    class="w-8 h-8 mx-auto rounded border border-gray-200 dark:border-gray-700 overflow-hidden block">
+                                                    <img src="{{ $urlLampiran }}"
+                                                        alt="Lampiran jurnal {{ $hj->jurnal }}"
+                                                        onerror="this.closest('button').style.display='none'"
+                                                        class="w-full h-full object-cover">
+                                                </button>
+                                            @else
+                                                <span class="text-gray-300 dark:text-gray-600">-</span>
+                                            @endif
+                                        </td>
+
                                         <td class="px-4 py-4 text-center font-bold text-gray-800 dark:text-gray-200">{{ $hj->mm ?? '-' }}</td>
-                                        <td class="px-4 py-4 text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">{{ $hj->nama ?? '-' }}</td>
+                                        <td class="px-4 py-4 whitespace-nowrap">
+                                            @if ($hj->nama && in_array($hj->no_akun, $piutangAkunCodes ?? []))
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/20 text-[10px] font-black text-violet-700 dark:text-violet-400 tracking-wider" title="Piutang atas nama pembeli ini">
+                                                    {{ $hj->nama }}
+                                                </span>
+                                            @else
+                                                <span class="text-gray-800 dark:text-gray-200 font-medium">{{ $hj->nama ?? '-' }}</span>
+                                            @endif
+                                        </td>
                                         <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 break-words whitespace-normal max-w-[300px]">{{ $hj->keterangan }}</td>
                                         <td class="px-4 py-4 text-center text-gray-700 dark:text-gray-300 font-bold lowercase tracking-wider">{{ $hj->hit_kbk ?? '-' }}</td>
                                         <td class="px-4 py-4 text-right font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
@@ -2066,8 +2278,25 @@
                                         </td>
 
                                         <td class="px-4 py-4 text-center">
-                                            @if (auth()->user()?->hasRole('super_admin'))
-                                                <div class="flex items-center justify-center gap-1">
+                                            <div class="flex items-center justify-center gap-1">
+                                                @php $jmlLampiran = $lampiranCounts[(int) $hj->jurnal] ?? 0; @endphp
+
+                                                <button type="button"
+                                                    wire:click="mountAction('lampiran', { jurnal: {{ $hj->jurnal }} })"
+                                                    class="relative p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-md transition-colors"
+                                                    title="Lampiran (foto nota/bukti) untuk No. Jurnal {{ $hj->jurnal }}">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                                    </svg>
+                                                    @if ($jmlLampiran > 0)
+                                                        <span class="absolute -top-1 -right-1 flex items-center justify-center w-3.5 h-3.5 text-[9px] font-black text-white bg-blue-600 rounded-full">
+                                                            {{ $jmlLampiran }}
+                                                        </span>
+                                                    @endif
+                                                </button>
+
+                                                @if (auth()->user()?->hasRole('super_admin'))
                                                     <button type="button"
                                                         wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
                                                         class="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-md transition-colors"
@@ -2086,10 +2315,8 @@
                                                                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                         </svg>
                                                     </button>
-                                                </div>
-                                            @else
-                                                -
-                                            @endif
+                                                @endif
+                                            </div>
                                         </td>
                                     </tr>
                                 @empty
@@ -2250,4 +2477,4 @@
             }, duration);
         };
     </script>
-</x-filament-panels::page> 
+</x-filament-panels::page>
