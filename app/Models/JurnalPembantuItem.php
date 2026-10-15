@@ -60,7 +60,7 @@ class JurnalPembantuItem extends Model
 
     public function barang(): BelongsTo
     {
-        return $this->belongsTo(Barang::class);
+        return $this->belongsTo(Barang::class, 'id_barang');
     }
 
     public function header(): BelongsTo
@@ -119,6 +119,5 @@ class JurnalPembantuItem extends Model
     //     }
     //     return $total;
     // }
-
 
 }
