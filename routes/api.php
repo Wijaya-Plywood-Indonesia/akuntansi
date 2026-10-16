@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\JurnalApiController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TerimaPressDryerController;
 use App\Http\Controllers\Api\AkuntansiRotaryJurnalController;
+use App\Http\Controllers\Api\JurnalProduksiApiController;
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/jurnal/store', [JurnalApiController::class, 'store']);
@@ -19,3 +20,6 @@ Route::post('/terima-produksi-dryer', [TerimaPressDryerController::class, 'terim
 
 Route::get('/barang/resolve-veneer', [\App\Http\Controllers\Api\BarangController::class, 'resolveVeneer']);
 Route::get('/barang/resolve-kayu', [\App\Http\Controllers\Api\BarangController::class, 'resolveKayu']);
+
+// API generik jurnal produksi dari ERP (semua jenis produksi). Auth: header X-API-KEY.
+Route::post('/jurnal/produksi', [JurnalProduksiApiController::class, 'store']);

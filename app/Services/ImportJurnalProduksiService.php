@@ -36,6 +36,8 @@ class ImportJurnalProduksiService
         $this->barangBaruDibuat = [];
         $this->currentJurnalNo = null;
         $this->currentPembantuNo = null;
+        $this->timpaDraft = false; // import Excel: jurnal yang sudah ada dilewati
+        $this->dokumen = [];
         $userId = $userId ?? 1;
 
         try {
@@ -77,6 +79,45 @@ class ImportJurnalProduksiService
             ];
         }
 
+        return $this->prosesJurnals($jurnals, $userId);
+    }
+
+    /**
+     * Import dari API (ERP). Struktur $jurnals sama dengan hasil parseJurnals():
+     *   [ ['no_dokumen' => 'DRY/20261014/PAGI', 'items' => [ [nama_akun, tgl (Y-m-d),
+     *       no_akun, nama, keterangan, map, hit_kbk, banyak, m3, harga, total,
+     *       barang_identifier], ... ]], ... ]
+     *
+     * Beda dengan import Excel: jurnal yang sudah ada TIDAK dilewati, tetapi
+     * ditimpa selama semua barisnya masih berstatus draft. Kalau sudah ada yang
+     * diposting, jurnal itu ditolak (tidak diubah).
+     */
+    public function importDariApi(array $jurnals, ?int $userId): array
+    {
+        $this->resetState();
+        $this->timpaDraft = true;
+
+        return $this->prosesJurnals($jurnals, $userId ?? 1);
+    }
+
+    private bool $timpaDraft = false;
+
+    /** Status per no_dokumen: dibuat | diperbarui | ditolak | dilewati */
+    private array $dokumen = [];
+
+    private function resetState(): void
+    {
+        $this->errors = [];
+        $this->warnings = [];
+        $this->results = [];
+        $this->dokumen = [];
+        $this->barangBaruDibuat = [];
+        $this->currentJurnalNo = null;
+        $this->currentPembantuNo = null;
+    }
+
+    private function prosesJurnals(array $jurnals, int $userId): array
+    {
         DB::transaction(function () use ($jurnals, $userId) {
             foreach ($jurnals as $jurnal) {
                 $this->simpanJurnal($jurnal, $userId);
@@ -95,6 +136,7 @@ class ImportJurnalProduksiService
             'errors' => $this->errors,
             'warnings' => $this->warnings,
             'results' => $this->results,
+            'dokumen' => $this->dokumen,
         ];
     }
 
@@ -224,18 +266,39 @@ class ImportJurnalProduksiService
     {
         $noDokumen = $jurnal['no_dokumen'];
 
-        $sudahAda = JurnalPembantuHeader::where('no_dokumen', $noDokumen)
+        $lama = JurnalPembantuHeader::where('no_dokumen', $noDokumen)
             ->where('modul_asal', 'produksi')
-            ->exists();
+            ->get();
 
-        if ($sudahAda) {
-            $this->errors[] = "Jurnal '{$noDokumen}' sudah pernah diimport, dilewati.";
+        $noJurnalLama = null;
 
-            return;
+        if ($lama->isNotEmpty()) {
+            if (! $this->timpaDraft) {
+                // Perilaku import Excel (tidak berubah): dilewati.
+                $this->errors[] = "Jurnal '{$noDokumen}' sudah pernah diimport, dilewati.";
+                $this->dokumen[$noDokumen] = ['status' => 'dilewati', 'message' => 'Sudah pernah diimport.'];
+
+                return;
+            }
+
+            $belumDraft = $lama->first(fn ($h) => $h->status !== JurnalPembantuHeader::STATUS_DRAFT);
+            if ($belumDraft) {
+                $pesan = "Jurnal '{$noDokumen}' sudah berstatus '{$belumDraft->status}' di akuntansi, tidak bisa ditimpa. "
+                    .'Batalkan/balik jurnal itu di akuntansi bila memang perlu dikirim ulang.';
+                $this->errors[] = $pesan;
+                $this->dokumen[$noDokumen] = ['status' => 'ditolak', 'message' => $pesan];
+
+                return;
+            }
+
+            // Masih draft semua: hapus versi lama (item ikut terhapus lewat cascade),
+            // nomor jurnal dipertahankan supaya tidak muncul nomor baru tiap kirim ulang.
+            $noJurnalLama = (int) $lama->first()->jurnal;
+            JurnalPembantuHeader::whereIn('id', $lama->pluck('id'))->delete();
         }
 
         $tglPertama = collect($jurnal['items'])->first()['tgl'] ?? now()->format('Y-m-d');
-        $noJurnal = $this->nextNomorJurnal();
+        $noJurnal = $noJurnalLama ?: $this->nextNomorJurnal();
 
         $headersDibuat = [];
         $akunTidakDitemukan = [];
@@ -357,6 +420,13 @@ class ImportJurnalProduksiService
             'no_dokumen' => $noDokumen,
             'headers' => $headersDibuat,
             'jumlah_baris' => count($jurnal['items']),
+        ];
+
+        $this->dokumen[$noDokumen] = [
+            'status' => $noJurnalLama ? 'diperbarui' : 'dibuat',
+            'no_jurnal' => $noJurnal,
+            'jumlah_baris' => count($jurnal['items']),
+            'message' => $noJurnalLama ? 'Jurnal draft lama ditimpa dengan data terbaru.' : 'Jurnal dibuat.',
         ];
     }
 
