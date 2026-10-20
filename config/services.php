@@ -40,6 +40,8 @@ return [
 
     'erp' => [
         'key' => env('ERP_API_KEY', ''),
+        // user pembuat jurnal yang masuk lewat API (dibuat_oleh)
+        'user_id' => env('ERP_API_USER_ID', 1),
     ],
 
 ];

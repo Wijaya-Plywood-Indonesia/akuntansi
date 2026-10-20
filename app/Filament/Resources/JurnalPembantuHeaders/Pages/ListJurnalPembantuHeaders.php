@@ -12,6 +12,8 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Tabs\Tab;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
@@ -23,6 +25,50 @@ class ListJurnalPembantuHeaders extends ListRecords
     public function getMaxContentWidth(): Width|string|null
     {
         return Width::Full;
+    }
+
+        // ════════════════════════════════════════════════════════
+    // TAB: pisahkan jurnal dari produksi (ERP) dan jurnal akuntansi biasa
+    // ════════════════════════════════════════════════════════
+    public function getDefaultActiveTab(): string|int|null
+    {
+        return 'semua';
+    }
+
+    public function getTabs(): array
+    {
+        return [
+            'semua' => Tab::make('Semua'),
+
+            'akuntansi' => Tab::make('Akuntansi')
+                ->icon('heroicon-o-calculator')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where(
+                    fn (Builder $q) => $q->whereNull('modul_asal')->orWhere(
+                        fn (Builder $x) => $this->bukanProduksi($x)
+                    )
+                )),
+
+            'produksi' => Tab::make('Produksi')
+                ->icon('heroicon-o-cog-6-tooth')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where(
+                    fn (Builder $q) => $this->hanyaProduksi($q)
+                )),
+        ];
+    }
+
+    /** Jurnal yang berasal dari web produksi: modul_asal 'produksi' (+ sisa API lama 'produksi_*' dan 'rotary'). */
+    private function hanyaProduksi(Builder $q): Builder
+    {
+        return $q->where('modul_asal', 'produksi')
+            ->orWhere('modul_asal', 'like', 'produksi\\_%')
+            ->orWhere('modul_asal', 'rotary');
+    }
+
+    private function bukanProduksi(Builder $q): Builder
+    {
+        return $q->where('modul_asal', '!=', 'produksi')
+            ->where('modul_asal', 'not like', 'produksi\\_%')
+            ->where('modul_asal', '!=', 'rotary');
     }
 
     protected function getHeaderActions(): array
