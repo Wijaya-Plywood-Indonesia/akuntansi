@@ -85,22 +85,28 @@ class ImportJurnalProduksiService
     /**
      * Import dari API (ERP). Struktur $jurnals sama dengan hasil parseJurnals():
      *   [ ['no_dokumen' => 'DRY/20261014/PAGI', 'items' => [ [nama_akun, tgl (Y-m-d),
-     *       no_akun, nama, keterangan, map, hit_kbk, banyak, m3, harga, total,
+     *       no_akun, no, nama, keterangan, map, hit_kbk, banyak, m3, harga, total,
      *       barang_identifier], ... ]], ... ]
      *
      * Beda dengan import Excel: jurnal yang sudah ada TIDAK dilewati, tetapi
      * ditimpa selama semua barisnya masih berstatus draft. Kalau sudah ada yang
      * diposting, jurnal itu ditolak (tidak diubah).
+     *
+     * $modulAsal: 'produksi' (bawaan) atau 'pembelian_kayu' (kayu masuk).
      */
-    public function importDariApi(array $jurnals, ?int $userId): array
+    public function importDariApi(array $jurnals, ?int $userId, string $modulAsal = 'produksi'): array
     {
         $this->resetState();
         $this->timpaDraft = true;
+        $this->modulAsal = $modulAsal;
 
         return $this->prosesJurnals($jurnals, $userId ?? 1);
     }
 
     private bool $timpaDraft = false;
+
+    /** modul_asal yang dipakai saat menyimpan header ('produksi' atau 'pembelian_kayu'). */
+    private string $modulAsal = 'produksi';
 
     /** Status per no_dokumen: dibuat | diperbarui | ditolak | dilewati */
     private array $dokumen = [];
@@ -111,6 +117,7 @@ class ImportJurnalProduksiService
         $this->warnings = [];
         $this->results = [];
         $this->dokumen = [];
+        $this->modulAsal = 'produksi';
         $this->barangBaruDibuat = [];
         $this->currentJurnalNo = null;
         $this->currentPembantuNo = null;
@@ -266,8 +273,10 @@ class ImportJurnalProduksiService
     {
         $noDokumen = $jurnal['no_dokumen'];
 
+        // 'produksi' ikut dicari supaya jurnal yang dulu tersimpan di modul itu
+        // (mis. Kayu Masuk sebelum dipisah) dipindahkan, bukan terduplikasi.
         $lama = JurnalPembantuHeader::where('no_dokumen', $noDokumen)
-            ->where('modul_asal', 'produksi')
+            ->whereIn('modul_asal', array_unique(['produksi', $this->modulAsal]))
             ->get();
 
         $noJurnalLama = null;
@@ -375,13 +384,15 @@ class ImportJurnalProduksiService
             $header = JurnalPembantuHeader::create([
                 'no_jurnal_pembantu' => $this->nextNomorPembantu(),
                 'tgl_transaksi' => $tglPertama,
-                'jenis_transaksi' => 'produksi',
-                'modul_asal' => 'produksi',
+                'jenis_transaksi' => $this->modulAsal === 'pembelian_kayu' ? 'bm' : 'produksi',
+                'modul_asal' => $this->modulAsal,
                 'jurnal' => $noJurnal,
                 'no_akun' => $akun['kode'],
                 'nama_akun' => $akun['nama'] ?: $item['nama_akun'],
                 'map' => $map,
-                'keterangan' => $keterangan.' | No.Jurnal: '.$noDokumen,
+                'keterangan' => $keterangan
+                    .(filled($item['no'] ?? null) ? ' | Seri: '.$item['no'] : '')
+                    .' | No.Jurnal: '.$noDokumen,
                 'no_dokumen' => $noDokumen,
                 'total_nilai' => 0,
                 'status' => JurnalPembantuHeader::STATUS_DRAFT,

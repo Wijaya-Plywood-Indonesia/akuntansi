@@ -5,12 +5,18 @@ namespace App\Services;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalUmum;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class PostingJurnalPembantuService
 {
+    /** Kelompok jurnal yang bisa difilter saat posting batch. */
+    public const KELOMPOK_AKUNTANSI = 'akuntansi';
+    public const KELOMPOK_PRODUKSI = 'produksi';
+    public const KELOMPOK_KAYU_MASUK = 'kayu_masuk';
+
     /**
      * Posting satu nomor jurnal pembantu ke Jurnal Umum.
      *
@@ -206,16 +212,17 @@ class PostingJurnalPembantuService
      * @param int $jumlahHari Jumlah hari ke belakang (1 = hari ini, 7 = 7 hari terakhir, 30 = 1 bulan terakhir)
      * @param Carbon|null $referenceDate Tanggal acuan (default hari ini)
      * @param int|null $userId
+     * @param string|null $kelompok null = semua, atau 'akuntansi' | 'produksi' | 'kayu_masuk'
      * @return array{total_jurnal: int, sukses: int, gagal: int, errors: array<string>}
      */
-    public function postingBatchPeriode(int $jumlahHari, ?Carbon $referenceDate = null, ?int $userId = null): array
+    public function postingBatchPeriode(int $jumlahHari, ?Carbon $referenceDate = null, ?int $userId = null, ?string $kelompok = null): array
     {
         $userId = $userId ?? Auth::id() ?? 1;
         $referenceDate = $referenceDate ? $referenceDate->copy() : now();
         $startDate = $referenceDate->copy()->subDays($jumlahHari - 1)->startOfDay();
         $endDate = $referenceDate->copy()->endOfDay();
 
-        return $this->postingBatchRentang($startDate, $endDate, $userId);
+        return $this->postingBatchRentang($startDate, $endDate, $userId, $kelompok);
     }
 
     /**
@@ -225,17 +232,20 @@ class PostingJurnalPembantuService
      * @param Carbon $startDate
      * @param Carbon $endDate
      * @param int|null $userId
+     * @param string|null $kelompok null = semua, atau 'akuntansi' | 'produksi' | 'kayu_masuk'
      * @return array{total_jurnal: int, sukses: int, gagal: int, errors: array<string>}
      */
-    public function postingBatchRentang(Carbon $startDate, Carbon $endDate, ?int $userId = null): array
+    public function postingBatchRentang(Carbon $startDate, Carbon $endDate, ?int $userId = null, ?string $kelompok = null): array
     {
         $userId = $userId ?? Auth::id() ?? 1;
 
         // Ambil nomor-nomor jurnal berstatus draft pada rentang tanggal tersebut
-        // Diurutkan dari nomor jurnal terkecil (ASC)
-        $nomorJurnals = JurnalPembantuHeader::query()
+        // (dan kelompok yang dipilih), diurutkan dari nomor jurnal terkecil (ASC)
+        $query = JurnalPembantuHeader::query()
             ->where('status', JurnalPembantuHeader::STATUS_DRAFT)
-            ->whereBetween('tgl_transaksi', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->whereBetween('tgl_transaksi', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+        $nomorJurnals = $this->filterKelompok($query, $kelompok)
             ->orderBy('jurnal', 'asc')
             ->distinct()
             ->pluck('jurnal')
@@ -261,5 +271,33 @@ class PostingJurnalPembantuService
             'gagal' => $gagal,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Batasi query header ke satu kelompok. Aturannya sama dengan tab di
+     * halaman Jurnal Pembantu Headers.
+     */
+    private function filterKelompok(Builder $query, ?string $kelompok): Builder
+    {
+        return match ($kelompok) {
+            self::KELOMPOK_KAYU_MASUK => $query->where('modul_asal', 'pembelian_kayu'),
+
+            self::KELOMPOK_PRODUKSI => $query->where(
+                fn (Builder $q) => $q->where('modul_asal', 'produksi')
+                    ->orWhere('modul_asal', 'like', 'produksi\\_%')
+                    ->orWhere('modul_asal', 'rotary')
+            ),
+
+            self::KELOMPOK_AKUNTANSI => $query->where(
+                fn (Builder $q) => $q->whereNull('modul_asal')->orWhere(
+                    fn (Builder $x) => $x->where('modul_asal', '!=', 'produksi')
+                        ->where('modul_asal', 'not like', 'produksi\\_%')
+                        ->where('modul_asal', '!=', 'rotary')
+                        ->where('modul_asal', '!=', 'pembelian_kayu')
+                )
+            ),
+
+            default => $query,
+        };
     }
 }

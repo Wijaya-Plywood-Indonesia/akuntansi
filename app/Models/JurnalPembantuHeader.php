@@ -186,7 +186,7 @@ class JurnalPembantuHeader extends Model
 
         // JALUR 1: Khusus untuk Import (Ambil bulat-bulat dari kolom 'jumlah')
         // Ini menghindari selisih desimal/floating-point antara Excel dan PHP
-        if (in_array($this->modul_asal, ['produksi', 'web_kayu', 'rotary', 'import'])) {
+        if (in_array($this->modul_asal, ['produksi', 'web_kayu', 'rotary', 'import', 'pembelian_kayu'])) {
             
             $total = $items->sum('jumlah');
             
