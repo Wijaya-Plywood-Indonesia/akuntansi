@@ -27,8 +27,8 @@ class ListJurnalPembantuHeaders extends ListRecords
         return Width::Full;
     }
 
-        // ════════════════════════════════════════════════════════
-    // TAB: pisahkan jurnal dari produksi (ERP) dan jurnal akuntansi biasa
+    // ════════════════════════════════════════════════════════
+    // TAB: pisahkan jurnal dari produksi (ERP), kayu masuk, dan jurnal akuntansi biasa
     // ════════════════════════════════════════════════════════
     public function getDefaultActiveTab(): string|int|null
     {
@@ -53,6 +53,10 @@ class ListJurnalPembantuHeaders extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query->where(
                     fn (Builder $q) => $this->hanyaProduksi($q)
                 )),
+
+            'kayu_masuk' => Tab::make('Kayu Masuk')
+                ->icon('heroicon-o-truck')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('modul_asal', 'pembelian_kayu')),
         ];
     }
 
@@ -68,7 +72,30 @@ class ListJurnalPembantuHeaders extends ListRecords
     {
         return $q->where('modul_asal', '!=', 'produksi')
             ->where('modul_asal', 'not like', 'produksi\\_%')
-            ->where('modul_asal', '!=', 'rotary');
+            ->where('modul_asal', '!=', 'rotary')
+            ->where('modul_asal', '!=', 'pembelian_kayu');
+    }
+
+    // ════════════════════════════════════════════════════════
+    // KELOMPOK POSTING: mengikuti tab yang sedang aktif
+    // ════════════════════════════════════════════════════════
+
+    /** Kelompok posting dari tab aktif; null = tab "Semua". */
+    protected function kelompokAktif(): ?string
+    {
+        $tab = (string) ($this->activeTab ?? 'semua');
+
+        return in_array($tab, ['akuntansi', 'produksi', 'kayu_masuk'], true) ? $tab : null;
+    }
+
+    protected function labelKelompok(): string
+    {
+        return match ($this->kelompokAktif()) {
+            'akuntansi' => 'Akuntansi',
+            'produksi' => 'Produksi',
+            'kayu_masuk' => 'Kayu Masuk',
+            default => 'Semua',
+        };
     }
 
     protected function getHeaderActions(): array
@@ -76,6 +103,8 @@ class ListJurnalPembantuHeaders extends ListRecords
         return [
             // ════════════════════════════════════════════════════════
             // TOMBOL POSTING BATCH (1 HARI, 7 HARI, 1 BULAN)
+            // Hanya tampil di tab Akuntansi / Produksi / Kayu Masuk, dan
+            // hanya memposting jurnal milik tab yang sedang dibuka.
             // ════════════════════════════════════════════════════════
             ActionGroup::make([
                 Action::make('posting_1_hari')
@@ -83,8 +112,8 @@ class ListJurnalPembantuHeaders extends ListRecords
                     ->icon('heroicon-o-calendar')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalHeading('Posting Jurnal Pembantu 1 Hari (Hari Ini)')
-                    ->modalDescription('Semua jurnal pembantu berstatus Draft pada hari ini akan diposting ke Jurnal Umum, berurutan dari nomor jurnal terkecil ke terbesar. Lanjutkan?')
+                    ->modalHeading(fn () => 'Posting Jurnal '.$this->labelKelompok().' — 1 Hari (Hari Ini)')
+                    ->modalDescription(fn () => 'Semua jurnal '.$this->labelKelompok().' berstatus Draft pada hari ini akan diposting ke Jurnal Umum, berurutan dari nomor jurnal terkecil ke terbesar. Jurnal dari tab lain tidak ikut. Lanjutkan?')
                     ->modalSubmitActionLabel('Ya, Posting Hari Ini')
                     ->action(fn () => $this->jalankanPostingBatch(1, '1 Hari (Hari Ini)')),
 
@@ -93,8 +122,8 @@ class ListJurnalPembantuHeaders extends ListRecords
                     ->icon('heroicon-o-calendar-days')
                     ->color('primary')
                     ->requiresConfirmation()
-                    ->modalHeading('Posting Jurnal Pembantu 7 Hari Terakhir')
-                    ->modalDescription('Semua jurnal pembantu berstatus Draft dalam 7 hari terakhir akan diposting ke Jurnal Umum, berurutan dari nomor jurnal terkecil ke terbesar. Lanjutkan?')
+                    ->modalHeading(fn () => 'Posting Jurnal '.$this->labelKelompok().' — 7 Hari Terakhir')
+                    ->modalDescription(fn () => 'Semua jurnal '.$this->labelKelompok().' berstatus Draft dalam 7 hari terakhir akan diposting ke Jurnal Umum, berurutan dari nomor jurnal terkecil ke terbesar. Jurnal dari tab lain tidak ikut. Lanjutkan?')
                     ->modalSubmitActionLabel('Ya, Posting 7 Hari')
                     ->action(fn () => $this->jalankanPostingBatch(7, '7 Hari Terakhir')),
 
@@ -103,15 +132,16 @@ class ListJurnalPembantuHeaders extends ListRecords
                     ->icon('heroicon-o-archive-box-arrow-down')
                     ->color('info')
                     ->requiresConfirmation()
-                    ->modalHeading('Posting Jurnal Pembantu 1 Bulan Terakhir (30 Hari)')
-                    ->modalDescription('Semua jurnal pembantu berstatus Draft dalam 30 hari terakhir akan diposting ke Jurnal Umum, berurutan dari nomor jurnal terkecil ke terbesar. Lanjutkan?')
+                    ->modalHeading(fn () => 'Posting Jurnal '.$this->labelKelompok().' — 1 Bulan Terakhir (30 Hari)')
+                    ->modalDescription(fn () => 'Semua jurnal '.$this->labelKelompok().' berstatus Draft dalam 30 hari terakhir akan diposting ke Jurnal Umum, berurutan dari nomor jurnal terkecil ke terbesar. Jurnal dari tab lain tidak ikut. Lanjutkan?')
                     ->modalSubmitActionLabel('Ya, Posting 1 Bulan')
                     ->action(fn () => $this->jalankanPostingBatch(30, '1 Bulan Terakhir')),
             ])
-                ->label('Posting Jurnal')
+                ->label(fn () => 'Posting Jurnal '.$this->labelKelompok())
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
-                ->button(),
+                ->button()
+                ->visible(fn () => $this->kelompokAktif() !== null),
 
             // ════════════════════════════════════════════════════════
             // TOMBOL IMPORT JURNAL PRODUKSI
@@ -220,19 +250,34 @@ class ListJurnalPembantuHeaders extends ListRecords
     }
 
     /**
-     * Eksekusi posting batch berdasarkan jumlah hari dan tampilkan notifikasi hasil
+     * Eksekusi posting batch berdasarkan jumlah hari dan tampilkan notifikasi hasil.
+     * Hanya memposting jurnal milik tab yang sedang aktif.
      */
     protected function jalankanPostingBatch(int $jumlahHari, string $labelPeriode): void
     {
+        $kelompok = $this->kelompokAktif();
+        $labelKelompok = $this->labelKelompok();
+
+        // Pengaman: dari tab "Semua" tidak boleh memposting apa pun.
+        if ($kelompok === null) {
+            Notification::make()
+                ->warning()
+                ->title('Pilih tab dulu')
+                ->body('Buka tab Akuntansi, Produksi, atau Kayu Masuk, lalu lakukan posting dari tab tersebut.')
+                ->send();
+
+            return;
+        }
+
         try {
             $service = app(PostingJurnalPembantuService::class);
-            $result = $service->postingBatchPeriode($jumlahHari, now(), Auth::id());
+            $result = $service->postingBatchPeriode($jumlahHari, now(), Auth::id(), $kelompok);
 
             if ($result['total_jurnal'] === 0) {
                 Notification::make()
                     ->info()
                     ->title('Tidak Ada Data Draft')
-                    ->body("Tidak ditemukan jurnal pembantu berstatus Draft pada periode {$labelPeriode}.")
+                    ->body("Tidak ditemukan jurnal {$labelKelompok} berstatus Draft pada periode {$labelPeriode}.")
                     ->send();
 
                 return;
@@ -241,7 +286,7 @@ class ListJurnalPembantuHeaders extends ListRecords
             if ($result['gagal'] === 0) {
                 Notification::make()
                     ->success()
-                    ->title("Posting Selesai ({$labelPeriode})")
+                    ->title("Posting {$labelKelompok} Selesai ({$labelPeriode})")
                     ->body("Berhasil memposting {$result['sukses']} nomor jurnal ke Jurnal Umum sesuai urutan nomor jurnal terkecil.")
                     ->persistent()
                     ->send();
@@ -254,7 +299,7 @@ class ListJurnalPembantuHeaders extends ListRecords
 
                 Notification::make()
                     ->warning()
-                    ->title("Posting Selesai dengan Sebagian Gagal ({$labelPeriode})")
+                    ->title("Posting {$labelKelompok} Selesai dengan Sebagian Gagal ({$labelPeriode})")
                     ->body("Berhasil: {$result['sukses']} jurnal. Gagal: {$result['gagal']} jurnal.\n\nRincian error:\n{$errorDetails}")
                     ->persistent()
                     ->send();

@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Log;
  *         { "no_akun": "1402.3", "nama_akun": "...", "tgl": "2026-10-14",
  *           "map": "d", "nama": "dryer pagi", "keterangan": "...",
  *           "hit_kbk": "m", "banyak": 659, "m3": 0.9809, "harga": 8000000,
- *           "total": 7847200, "id_barang": 123 }
+ *           "total": 7847200, "id_barang": 123, "no": "200" }
  *       ]
  *     }
  *   ]
@@ -37,6 +37,9 @@ use Illuminate\Support\Facades\Log;
  *   - belum ada                 -> dibuat
  *   - ada, semua baris draft    -> ditimpa (diperbarui)
  *   - ada, sudah diposting dll  -> ditolak (tidak diubah)
+ *
+ * jenis "kayu_masuk" disimpan sebagai pembelian (modul_asal 'pembelian_kayu'),
+ * jenis lain sebagai produksi.
  */
 class JurnalProduksiApiController extends Controller
 {
@@ -66,6 +69,7 @@ class JurnalProduksiApiController extends Controller
             'jurnals.*.rows.*.nama_akun' => 'required|string|max:255',
             'jurnals.*.rows.*.map' => 'required|in:d,k',
             'jurnals.*.rows.*.tgl' => 'nullable|date',
+            'jurnals.*.rows.*.no' => 'nullable|string|max:50',
             'jurnals.*.rows.*.nama' => 'nullable|string|max:255',
             'jurnals.*.rows.*.keterangan' => 'nullable|string|max:500',
             'jurnals.*.rows.*.hit_kbk' => 'nullable|in:m,b',
@@ -106,6 +110,7 @@ class JurnalProduksiApiController extends Controller
                     'nama_akun' => trim($r['nama_akun']),
                     'tgl' => $r['tgl'] ?? $data['tanggal'],
                     'no_akun' => trim($r['no_akun']),
+                    'no' => trim((string) ($r['no'] ?? '')), // mis. no seri kayu masuk
                     'nama' => trim((string) ($r['nama'] ?? '')),
                     'keterangan' => trim((string) ($r['keterangan'] ?? '')),
                     'map' => $r['map'],
@@ -128,7 +133,10 @@ class JurnalProduksiApiController extends Controller
         [$userId, $userNama, $userCocok] = $this->resolveUser($data['dikirim_oleh'] ?? null);
 
         try {
-            $hasil = $this->service->importDariApi($jurnals, $userId);
+            // Kayu masuk = pembelian, bukan produksi: modul tersendiri supaya tab-nya terpisah.
+            $modulAsal = $data['jenis'] === 'kayu_masuk' ? 'pembelian_kayu' : 'produksi';
+
+            $hasil = $this->service->importDariApi($jurnals, $userId, $modulAsal);
         } catch (\Throwable $e) {
             Log::error('[JurnalProduksiApi] Gagal simpan', [
                 'jenis' => $data['jenis'],
