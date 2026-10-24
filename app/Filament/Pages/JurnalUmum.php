@@ -232,7 +232,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         $modeJurnalTunggal = filled($this->filterJurnalNomor);
 
-        $query = JurnalModel::latest('id');
+        // ── URUTAN: nomor jurnal terbaru di atas (1 jurnal tetap menyatu),
+        //    di dalam 1 nomor jurnal DEBIT dulu semua baru KREDIT,
+        //    lalu urutan input asli (id).
+        $query = JurnalModel::query()
+            ->orderByDesc('jurnal')
+            ->orderByRaw("CASE WHEN LOWER(map) IN ('d','debit') THEN 0 ELSE 1 END")
+            ->orderBy('id');
 
         if ($modeJurnalTunggal) {
             $query->where('jurnal', $this->filterJurnalNomor);
@@ -368,10 +374,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         // Kode akun mana saja yang tipe_buku_pembantu = 'piutang' — dipakai
         // di blade untuk nge-badge-in nama pembeli KHUSUS di baris akun
-        // piutang (mis. 1122.0), bukan di semua baris transaksi. Sebelumnya
-        // $hj->nama ditampilkan generik di semua baris (termasuk Hutang
-        // Gaji, Persediaan, dst — yang bukan piutang ke pembeli itu),
-        // jadinya membingungkan seolah semua akun itu terkait ke pembeli.
+        // piutang (mis. 1122.0), bukan di semua baris transaksi.
         $piutangAkunCodes = cache()->remember('sub_anak_akun_piutang_codes_v1', 600, function () {
             return SubAnakAkun::where('tipe_buku_pembantu', 'piutang')
                 ->pluck('kode_sub_anak_akun')
@@ -740,7 +743,19 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         try {
             DB::transaction(function () {
-                foreach ($this->items as $item) {
+                // ── Insert DEBIT dulu semua, baru KREDIT (urutan input asli
+                //    tetap dijaga di dalam masing-masing grup) agar id di DB
+                //    juga berurutan debit → kredit.
+                $sorted = collect($this->items)
+                    ->map(fn ($item, $idx) => ['item' => $item, 'idx' => $idx])
+                    ->sortBy(fn ($row) => [
+                        strtolower($row['item']['map']) === 'd' ? 0 : 1,
+                        $row['idx'],
+                    ])
+                    ->pluck('item')
+                    ->values();
+
+                foreach ($sorted as $item) {
                     $insertData = $item;
                     unset($insertData['total']);
                     unset($insertData['nama_barang']);
@@ -1123,18 +1138,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->reorderable()
                     ->downloadable()
                     ->openable()
-                    // Kompres/perkecil resolusi foto SEBELUM diupload (bukan
-                    // dipotong kotak seperti foto pegawai — mode 'contain'
-                    // supaya seluruh isi nota tetap utuh, cuma dimuat ulang
-                    // ke resolusi maksimal 1600x1600, aspect ratio asli
-                    // dipertahankan). Foto HP yang aslinya 8-10 MB biasanya
-                    // jadi hanya beberapa ratus KB setelah ini.
+                    // Kompres/perkecil resolusi foto SEBELUM diupload (mode
+                    // 'contain' supaya seluruh isi nota tetap utuh, maksimal
+                    // 1600x1600, aspect ratio asli dipertahankan).
                     ->imageResizeMode('contain')
                     ->imageResizeTargetWidth('1600')
                     ->imageResizeTargetHeight('1600')
                     // Batas ukuran file SEBELUM di-resize oleh browser (dalam KB).
-                    // Set eksplisit supaya ada pesan error yang jelas ke user kalau
-                    // kelebihan, bukan macet diam-diam di livewire/php upload limit.
                     ->maxSize(15360),
             ])
             ->fillForm(function (array $arguments): array {
@@ -1148,7 +1158,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 JurnalLampiran::updateOrCreate(
                     ['jurnal' => $jurnal],
                     [
-                        'paths'       => $data['paths'] ?? [],
+                        'paths' => $data['paths'] ?? [],
                         'uploaded_by' => auth()->id(),
                     ]
                 );
