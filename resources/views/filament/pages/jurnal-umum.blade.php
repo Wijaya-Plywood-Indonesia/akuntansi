@@ -539,6 +539,14 @@
         },
         get isBalanced() {
             return Math.abs(this.totalDebit - this.totalKredit) < 0.01 && this.items.length > 0;
+        },
+        {{-- Urutan tampilan draft: DEBIT dulu semua, baru KREDIT. Index asli (i)
+             tetap disimpan supaya tombol edit/hapus menunjuk item yang benar. --}}
+        get sortedItems() {
+            const rank = r => (String(r.map).toLowerCase() === 'd' ? 0 : 1);
+            return this.items
+                .map((row, i) => ({ row, i }))
+                .sort((a, b) => rank(a.row) - rank(b.row) || a.i - b.i);
         }
     }" x-init="initFlatpickr();
     
@@ -732,17 +740,15 @@
                             $lampiranAktifSaatIni = \App\Models\JurnalLampiran::where('jurnal', (int) $jurnal)->first();
                             $jmlLampiranAktifSaatIni = count($lampiranAktifSaatIni->paths ?? []);
                         @endphp
-                        <button type="button"
-                            wire:click="mountAction('lampiran', { jurnal: {{ (int) $jurnal }} })"
+                        <button type="button" wire:click="mountAction('lampiran', { jurnal: {{ (int) $jurnal }} })"
                             class="w-full mt-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-colors
-                                @if($jmlLampiranAktifSaatIni > 0)
-                                    text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40
+                                @if ($jmlLampiranAktifSaatIni > 0) text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40
                                 @else
-                                    text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40
-                                @endif">
-                            @if($jmlLampiranAktifSaatIni > 0)
+                                    text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 @endif">
+                            @if ($jmlLampiranAktifSaatIni > 0)
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                        d="M5 13l4 4L19 7" />
                                 </svg>
                                 {{ $jmlLampiranAktifSaatIni }} Foto Sudah Dilampirkan &mdash; Lihat/Ubah
                             @else
@@ -864,8 +870,8 @@
                 <div x-show="showPembeliPickerSafe" style="display: none;"
                     x-transition:enter="transition ease-out duration-300 delay-100"
                     x-transition:enter-start="opacity-0 translate-y-2"
-                    x-transition:enter-end="opacity-100 translate-y-0"
-                    class="concept-b-section mt-2" @click.away="isPembeliDropdownOpen = false">
+                    x-transition:enter-end="opacity-100 translate-y-0" class="concept-b-section mt-2"
+                    @click.away="isPembeliDropdownOpen = false">
                     <div class="space-y-1.5">
                         <div class="flex items-center gap-1 mb-1">
                             <span
@@ -1309,9 +1315,13 @@
                 </div>
 
                 <div class="divide-y divide-gray-100 dark:divide-gray-800">
-                    <template x-for="(row, i) in items" :key="i">
-                        <template x-if="row && row.no_akun && row.nama_akun">
-                            <div class="grid gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 items-center group transition-colors"
+                    {{-- Ditampilkan lewat sortedItems (debit dulu, baru kredit).
+                         `row` & `i` di-alias dari entry supaya isi baris di bawah tidak berubah,
+                         dan `i` tetap index ASLI di array items (dipakai edit/hapus). --}}
+                    <template x-for="entry in sortedItems" :key="entry.i">
+                        <template x-if="entry.row && entry.row.no_akun && entry.row.nama_akun">
+                            <div x-data="{ get row() { return entry.row }, get i() { return entry.i } }"
+                                class="grid gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 items-center group transition-colors"
                                 style="grid-template-columns: 1fr 120px 70px 110px 130px 60px 190px">
 
                                 <div class="min-w-0 pr-4">
@@ -1532,7 +1542,7 @@
                     }, 200);
                 });
             }
-                }" x-init="initFilterDatepickers();
+        }" x-init="initFilterDatepickers();
         initInfiniteScroll();
         initResponsiveModeSwitch();
         $wire.on('bulk-delete-done', () => { showConfirm = false; });
@@ -1543,23 +1553,25 @@
         @endif">
 
             {{-- MODAL PREVIEW FOTO LAMPIRAN (klik thumbnail di kolom Aksi) --}}
-            <div x-show="previewImage" x-cloak
-                x-transition.opacity
-                @keydown.escape.window="previewImage = null"
+            <div x-show="previewImage" x-cloak x-transition.opacity @keydown.escape.window="previewImage = null"
                 class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
                 @click.self="previewImage = null">
-                <div class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-                    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                <div
+                    class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                    <div
+                        class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
                         <h3 class="text-sm font-black text-gray-800 dark:text-gray-100">Foto Lampiran</h3>
                         <button type="button" @click="previewImage = null"
                             class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     </div>
                     <div class="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-                        <img :src="previewImage" alt="Foto lampiran" class="max-w-full max-h-[80vh] rounded-lg object-contain">
+                        <img :src="previewImage" alt="Foto lampiran"
+                            class="max-w-full max-h-[80vh] rounded-lg object-contain">
                     </div>
                     <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex justify-end">
                         <button type="button" @click="previewImage = null"
@@ -1632,19 +1644,22 @@
                     </div>
                 </div>
 
-                @if($modeJurnalTunggal)
-                <div class="flex items-center justify-between gap-3 px-4 py-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl">
-                    <div class="flex items-center gap-2 text-sky-600 dark:text-sky-400 text-xs font-bold">
-                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z" />
-                        </svg>
-                        Menampilkan hanya Nomor Jurnal #{{ $nomorJurnalDitampilkan }} (dari Rekap Arus Kas)
+                @if ($modeJurnalTunggal)
+                    <div
+                        class="flex items-center justify-between gap-3 px-4 py-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl">
+                        <div class="flex items-center gap-2 text-sky-600 dark:text-sky-400 text-xs font-bold">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z" />
+                            </svg>
+                            Menampilkan hanya Nomor Jurnal #{{ $nomorJurnalDitampilkan }} (dari Rekap Arus Kas)
+                        </div>
+                        <button type="button" wire:click="tampilkanSemuaJurnal"
+                            class="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-none whitespace-nowrap">
+                            Tampilkan Semua Jurnal
+                        </button>
                     </div>
-                    <button type="button" wire:click="tampilkanSemuaJurnal"
-                        class="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-none whitespace-nowrap">
-                        Tampilkan Semua Jurnal
-                    </button>
-                </div>
                 @endif
 
                 <div
@@ -1663,7 +1678,8 @@
                                 wire:target="search" x-show="$wire.search.length > 0" x-cloak
                                 class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-rose-500">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                        d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
@@ -1798,12 +1814,14 @@
             <div class="space-y-2">
 
                 <div class="flex justify-end">
-                    <div class="inline-flex items-center bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-1 shadow-xs">
+                    <div
+                        class="inline-flex items-center bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-1 shadow-xs">
                         <button type="button" @click="modeLengkap = false; modeLengkapTouched = true"
                             class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-none"
                             :class="!modeLengkap ? 'bg-amber-600 text-white' : 'text-gray-500 dark:text-gray-400'">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 6h16M4 12h16M4 18h7" />
                             </svg>
                             Ringkas
                         </button>
@@ -1811,7 +1829,8 @@
                             class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-none"
                             :class="modeLengkap ? 'bg-amber-600 text-white' : 'text-gray-500 dark:text-gray-400'">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 6h18M3 18h18" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 10h18M3 14h18M3 6h18M3 18h18" />
                             </svg>
                             Lengkap (Semua Kolom)
                         </button>
@@ -1830,20 +1849,30 @@
                                 <input type="checkbox" class="row-checkbox" :checked="selectAll"
                                     @change="toggleSelectAll()" title="Pilih semua">
                             </div>
-                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Akun & Detail</div>
-                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Foto</div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Akun & Detail
+                            </div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">
+                                Foto</div>
                             <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Tanggal</div>
-                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Jurnal</div>
-                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Kuantitas / Harga</div>
-                            <div class="text-[10px] font-black text-green-600 uppercase tracking-widest text-right">Debit (Rp)</div>
-                            <div class="text-[10px] font-black text-rose-600 uppercase tracking-widest text-right">Kredit (Rp)</div>
-                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Aksi</div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">
+                                Jurnal</div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">
+                                Kuantitas / Harga</div>
+                            <div class="text-[10px] font-black text-green-600 uppercase tracking-widest text-right">
+                                Debit (Rp)</div>
+                            <div class="text-[10px] font-black text-rose-600 uppercase tracking-widest text-right">
+                                Kredit (Rp)</div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">
+                                Aksi</div>
                         </div>
 
                         {{-- Toolbar pilih-semua khusus mobile (karena header grid disembunyikan) --}}
-                        <div class="md:hidden flex items-center gap-2 px-4 py-2.5 border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/80">
-                            <input type="checkbox" class="row-checkbox" :checked="selectAll" @change="toggleSelectAll()">
-                            <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Pilih Semua</span>
+                        <div
+                            class="md:hidden flex items-center gap-2 px-4 py-2.5 border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/80">
+                            <input type="checkbox" class="row-checkbox" :checked="selectAll"
+                                @change="toggleSelectAll()">
+                            <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Pilih
+                                Semua</span>
                         </div>
 
                         {{-- Skeleton loading --}}
@@ -1885,7 +1914,7 @@
                                 {{-- ══ BARIS DESKTOP (grid) ══ --}}
                                 <div data-row-id="{{ $hj->id }}"
                                     :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                    class="hidden md:grid gap-3 px-4 py-3.5 items-start hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
+                                    class="hidden md:grid gap-3 px-4 py-3.5 items-start hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
                                     style="grid-template-columns: 32px 1fr 44px 90px 70px 150px 120px 120px 70px; animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                     <div class="pt-0.5">
@@ -1896,29 +1925,45 @@
 
                                     <div class="min-w-0">
                                         <div class="flex items-center gap-2 flex-wrap">
-                                            <span class="font-mono font-black text-amber-600 dark:text-amber-500 text-xs">{{ $hj->no_akun }}</span>
-                                            <span class="font-bold text-gray-900 dark:text-gray-100 text-sm truncate">{{ $hj->nama_akun }}</span>
-                                            @if($hj->nama_barang)
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-700 dark:text-blue-400">{{ $hj->nama_barang }}</span>
+                                            <span
+                                                class="font-mono font-black text-amber-600 dark:text-amber-500 text-xs">{{ $hj->no_akun }}</span>
+                                            <span
+                                                class="font-bold text-gray-900 dark:text-gray-100 text-sm truncate">{{ $hj->nama_akun }}</span>
+                                            @if ($hj->nama_barang)
+                                                <span
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-700 dark:text-blue-400">{{ $hj->nama_barang }}</span>
                                             @endif
-                                            @if(in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
-                                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400" title="Piutang atas nama pembeli ini">
-                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                            @if (in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
+                                                <span
+                                                    class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400"
+                                                    title="Piutang atas nama pembeli ini">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor"
+                                                        viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                    </svg>
                                                     {{ $hj->nama }}
                                                 </span>
                                             @endif
-                                            @if($hj->mm)
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }} mm</span>
+                                            @if ($hj->mm)
+                                                <span
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }}
+                                                    mm</span>
                                             @endif
                                         </div>
-                                        <div class="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 mt-0.5">
+                                        <div
+                                            class="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 mt-0.5">
                                             @php $sudahJadiBadgePiutang = in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama; @endphp
-                                            @if($hj->nama && ! $sudahJadiBadgePiutang)
+                                            @if ($hj->nama && !$sudahJadiBadgePiutang)
                                                 <span class="font-semibold shrink-0">{{ $hj->nama }}</span>
-                                                @if($hj->keterangan)<span class="text-gray-400">&middot;</span>@endif
+                                                @if ($hj->keterangan)
+                                                    <span class="text-gray-400">&middot;</span>
+                                                @endif
                                             @endif
-                                            @if($hj->keterangan)
-                                                <span class="truncate" title="{{ $hj->keterangan }}">{{ $hj->keterangan }}</span>
+                                            @if ($hj->keterangan)
+                                                <span class="truncate"
+                                                    title="{{ $hj->keterangan }}">{{ $hj->keterangan }}</span>
                                             @endif
                                             {{-- No. Dokumen sengaja tidak ditampilkan di mode Ringkas, lihat di mode Lengkap --}}
                                         </div>
@@ -1942,16 +1987,18 @@
                                         @endif
                                     </div>
 
-                                    <div class="text-xs font-semibold text-gray-800 dark:text-gray-200 whitespace-nowrap pt-0.5">
+                                    <div
+                                        class="text-xs font-semibold text-gray-800 dark:text-gray-200 whitespace-nowrap pt-0.5">
                                         {{ $hj->tgl->format('d-m-Y') }}
                                     </div>
 
                                     <div class="text-center pt-0.5">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-[10px] font-black text-gray-600 dark:text-gray-300">#{{ $hj->jurnal }}</span>
+                                        <span
+                                            class="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-[10px] font-black text-gray-600 dark:text-gray-300">#{{ $hj->jurnal }}</span>
                                     </div>
 
                                     <div class="text-right text-xs pt-0.5">
-                                        @if($hj->hit_kbk === 'b' && $hj->banyak !== null && $hj->banyak !== '')
+                                        @if ($hj->hit_kbk === 'b' && $hj->banyak !== null && $hj->banyak !== '')
                                             <div class="font-bold text-gray-800 dark:text-gray-200 tabular-nums">
                                                 {{ $hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.') }}×
                                                 {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
@@ -1963,16 +2010,19 @@
                                             </div>
                                         @else
                                             <div class="font-bold text-gray-800 dark:text-gray-200 tabular-nums">
-                                                Rp {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
+                                                Rp
+                                                {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
                                             </div>
                                         @endif
                                     </div>
 
-                                    <div class="text-right font-bold whitespace-nowrap pt-0.5 {{ $isDebit ? 'text-emerald-600' : 'text-gray-300 dark:text-gray-700' }}">
+                                    <div
+                                        class="text-right font-bold whitespace-nowrap pt-0.5 {{ $isDebit ? 'text-emerald-600' : 'text-gray-300 dark:text-gray-700' }}">
                                         {{ $isDebit ? ($totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.')) : '0' }}
                                     </div>
 
-                                    <div class="text-right font-bold whitespace-nowrap pt-0.5 {{ !$isDebit ? 'text-rose-600' : 'text-gray-300 dark:text-gray-700' }}">
+                                    <div
+                                        class="text-right font-bold whitespace-nowrap pt-0.5 {{ !$isDebit ? 'text-rose-600' : 'text-gray-300 dark:text-gray-700' }}">
                                         {{ !$isDebit ? ($totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.')) : '0' }}
                                     </div>
 
@@ -1982,8 +2032,10 @@
                                                 wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
                                                 class="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-md transition-colors"
                                                 title="Edit">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
                                                         d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                 </svg>
                                             </button>
@@ -1991,8 +2043,10 @@
                                                 wire:click="mountAction('deleteHistory', { id: {{ $hj->id }} })"
                                                 class="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-md transition-colors"
                                                 title="Hapus">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
                                                         d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                 </svg>
                                             </button>
@@ -2005,7 +2059,7 @@
                                 {{-- ══ KARTU MOBILE ══ --}}
                                 <div data-row-id="{{ $hj->id }}"
                                     :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                    class="md:hidden p-4 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
+                                    class="md:hidden p-4 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
                                     style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                     <div class="flex items-start gap-3">
@@ -2017,55 +2071,79 @@
                                             <div class="flex items-start justify-between gap-2">
                                                 <div class="min-w-0">
                                                     <div class="flex items-center gap-1.5 flex-wrap">
-                                                        <span class="font-mono font-black text-amber-600 dark:text-amber-500 text-xs">{{ $hj->no_akun }}</span>
-                                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-[9px] font-black text-gray-600 dark:text-gray-300">#{{ $hj->jurnal }}</span>
+                                                        <span
+                                                            class="font-mono font-black text-amber-600 dark:text-amber-500 text-xs">{{ $hj->no_akun }}</span>
+                                                        <span
+                                                            class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-[9px] font-black text-gray-600 dark:text-gray-300">#{{ $hj->jurnal }}</span>
                                                     </div>
-                                                    <div class="font-bold text-gray-900 dark:text-gray-100 text-sm mt-0.5">{{ $hj->nama_akun }}</div>
+                                                    <div
+                                                        class="font-bold text-gray-900 dark:text-gray-100 text-sm mt-0.5">
+                                                        {{ $hj->nama_akun }}</div>
                                                 </div>
                                                 <div class="text-right shrink-0">
-                                                    @if($isDebit)
-                                                        <div class="text-emerald-600 font-black text-sm tabular-nums whitespace-nowrap">
+                                                    {{-- Mendukung nilai MINUS (koreksi/retur): debit minus tampil
+                                                         tanpa tanda '+', kredit minus tampil dengan tanda '+'. --}}
+                                                    @if ($isDebit)
+                                                        <div
+                                                            class="text-emerald-600 font-black text-sm tabular-nums whitespace-nowrap">
                                                             {{ $totalRow < 0 ? '' : '+' }}{{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
                                                         </div>
                                                     @else
-                                                        <div class="text-rose-600 font-black text-sm tabular-nums whitespace-nowrap">
+                                                        <div
+                                                            class="text-rose-600 font-black text-sm tabular-nums whitespace-nowrap">
                                                             {{ $totalRow < 0 ? '+' : '-' }}{{ number_format(abs($totalRow), $totalRow == intval($totalRow) ? 0 : 2, ',', '.') }}
                                                         </div>
                                                     @endif
-                                                    <div class="text-[10px] font-bold text-gray-400 dark:text-gray-500 mt-0.5">{{ $hj->tgl->format('d-m-Y') }}</div>
+                                                    <div
+                                                        class="text-[10px] font-bold text-gray-400 dark:text-gray-500 mt-0.5">
+                                                        {{ $hj->tgl->format('d-m-Y') }}</div>
                                                 </div>
                                             </div>
 
                                             <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
-                                                @if($hj->nama_barang)
-                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-700 dark:text-blue-400">{{ $hj->nama_barang }}</span>
+                                                @if ($hj->nama_barang)
+                                                    <span
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-700 dark:text-blue-400">{{ $hj->nama_barang }}</span>
                                                 @endif
-                                                @if(in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
-                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400">{{ $hj->nama }}</span>
+                                                @if (in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
+                                                    <span
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400">{{ $hj->nama }}</span>
                                                 @endif
-                                                @if($hj->mm)
-                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }} mm</span>
+                                                @if ($hj->mm)
+                                                    <span
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }}
+                                                        mm</span>
                                                 @endif
                                             </div>
 
                                             @php $sudahJadiBadgePiutangCard = in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama; @endphp
-                                            @if(($hj->nama && ! $sudahJadiBadgePiutangCard) || $hj->keterangan)
-                                                <div class="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-snug">
-                                                    @if($hj->nama && ! $sudahJadiBadgePiutangCard)<span class="font-semibold">{{ $hj->nama }}</span>@endif
-                                                    @if($hj->nama && ! $sudahJadiBadgePiutangCard && $hj->keterangan) &middot; @endif
-                                                    @if($hj->keterangan)<span class="text-gray-400 dark:text-gray-500">{{ $hj->keterangan }}</span>@endif
+                                            @if (($hj->nama && !$sudahJadiBadgePiutangCard) || $hj->keterangan)
+                                                <div
+                                                    class="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-snug">
+                                                    @if ($hj->nama && !$sudahJadiBadgePiutangCard)
+                                                        <span class="font-semibold">{{ $hj->nama }}</span>
+                                                    @endif
+                                                    @if ($hj->nama && !$sudahJadiBadgePiutangCard && $hj->keterangan)
+                                                        &middot;
+                                                    @endif
+                                                    @if ($hj->keterangan)
+                                                        <span
+                                                            class="text-gray-400 dark:text-gray-500">{{ $hj->keterangan }}</span>
+                                                    @endif
                                                 </div>
                                             @endif
 
-                                            <div class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mt-1.5 tabular-nums">
-                                                @if($hj->hit_kbk === 'b' && $hj->banyak !== null && $hj->banyak !== '')
+                                            <div
+                                                class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mt-1.5 tabular-nums">
+                                                @if ($hj->hit_kbk === 'b' && $hj->banyak !== null && $hj->banyak !== '')
                                                     {{ $hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.') }}×
                                                     {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
                                                 @elseif($hj->hit_kbk === 'm' && (float) $hj->m3 != 0)
                                                     {{ rtrim(rtrim(number_format((float) $hj->m3, 6, ',', '.'), '0'), ',') }}m³×
                                                     {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
                                                 @else
-                                                    Rp {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
+                                                    Rp
+                                                    {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
                                                 @endif
                                             </div>
 
@@ -2074,8 +2152,10 @@
                                                     <button type="button"
                                                         wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
                                                         class="flex items-center gap-1 px-2.5 py-1 text-amber-600 bg-amber-50 dark:bg-amber-900/30 rounded-md text-[10px] font-black uppercase tracking-wider">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor"
+                                                            viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2"
                                                                 d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                         </svg>
                                                         Edit
@@ -2083,8 +2163,10 @@
                                                     <button type="button"
                                                         wire:click="mountAction('deleteHistory', { id: {{ $hj->id }} })"
                                                         class="flex items-center gap-1 px-2.5 py-1 text-rose-600 bg-rose-50 dark:bg-rose-900/30 rounded-md text-[10px] font-black uppercase tracking-wider">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor"
+                                                            viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2"
                                                                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                         </svg>
                                                         Hapus
@@ -2097,7 +2179,8 @@
                             @empty
                                 <div class="px-6 py-16 text-center">
                                     <div class="flex flex-col items-center gap-3 text-gray-400">
-                                        <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
@@ -2109,31 +2192,36 @@
                             @endforelse
                         </div>
 
-                        @if($historyJurnals->count() > 0)
-                        <div class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700">
-                            {{-- Total desktop --}}
-                            <div class="hidden md:grid gap-3 px-4 py-4"
-                                style="grid-template-columns: 32px 1fr 44px 90px 70px 150px 120px 120px 70px">
-                                <div></div>
-                                <div></div>
-                                <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest text-right" style="grid-column: span 4;">Total Akumulasi</div>
-                                <div class="text-right text-emerald-600 text-sm font-black whitespace-nowrap">
-                                    Rp {{ number_format($totalDebitDB, 0, ',', '.') }}
+                        @if ($historyJurnals->count() > 0)
+                            <div
+                                class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700">
+                                {{-- Total desktop --}}
+                                <div class="hidden md:grid gap-3 px-4 py-4"
+                                    style="grid-template-columns: 32px 1fr 44px 90px 70px 150px 120px 120px 70px">
+                                    <div></div>
+                                    <div></div>
+                                    <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest text-right"
+                                        style="grid-column: span 4;">Total Akumulasi</div>
+                                    <div class="text-right text-emerald-600 text-sm font-black whitespace-nowrap">
+                                        Rp {{ number_format($totalDebitDB, 0, ',', '.') }}
+                                    </div>
+                                    <div class="text-right text-rose-600 text-sm font-black whitespace-nowrap">
+                                        Rp {{ number_format($totalKreditDB, 0, ',', '.') }}
+                                    </div>
+                                    <div></div>
                                 </div>
-                                <div class="text-right text-rose-600 text-sm font-black whitespace-nowrap">
-                                    Rp {{ number_format($totalKreditDB, 0, ',', '.') }}
+                                {{-- Total mobile --}}
+                                <div class="md:hidden flex items-center justify-between px-4 py-3">
+                                    <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Total
+                                        Akumulasi</span>
+                                    <div class="text-right">
+                                        <div class="text-emerald-600 text-xs font-black whitespace-nowrap">D: Rp
+                                            {{ number_format($totalDebitDB, 0, ',', '.') }}</div>
+                                        <div class="text-rose-600 text-xs font-black whitespace-nowrap">K: Rp
+                                            {{ number_format($totalKreditDB, 0, ',', '.') }}</div>
+                                    </div>
                                 </div>
-                                <div></div>
                             </div>
-                            {{-- Total mobile --}}
-                            <div class="md:hidden flex items-center justify-between px-4 py-3">
-                                <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Total Akumulasi</span>
-                                <div class="text-right">
-                                    <div class="text-emerald-600 text-xs font-black whitespace-nowrap">D: Rp {{ number_format($totalDebitDB, 0, ',', '.') }}</div>
-                                    <div class="text-rose-600 text-xs font-black whitespace-nowrap">K: Rp {{ number_format($totalKreditDB, 0, ',', '.') }}</div>
-                                </div>
-                            </div>
-                        </div>
                         @endif
 
                         <div x-ref="scrollSentinelRingkas" class="h-1"></div>
@@ -2146,8 +2234,10 @@
                     <div class="table-body-scroll" x-ref="tableScrollBodyLengkap">
                         <table class="w-full text-left text-sm border-collapse"
                             style="table-layout: auto; min-width: max-content;">
-                            <thead class="bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
-                                <tr class="text-[10px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-widest whitespace-nowrap">
+                            <thead
+                                class="bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
+                                <tr
+                                    class="text-[10px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-widest whitespace-nowrap">
                                     <th class="px-4 py-4">
                                         <input type="checkbox" class="row-checkbox" :checked="selectAll"
                                             @change="toggleSelectAll()" title="Pilih semua">
@@ -2166,8 +2256,10 @@
                                     <th class="px-4 py-4 text-right">Kuantitas</th>
                                     <th class="px-4 py-4 text-right">M3</th>
                                     <th class="px-4 py-4 text-right">Harga</th>
-                                    <th class="px-4 py-4 text-right text-green-600 bg-green-50/10 font-black">Debit (Rp)</th>
-                                    <th class="px-4 py-4 text-right text-rose-600 bg-rose-50/10 font-black">Kredit (Rp)</th>
+                                    <th class="px-4 py-4 text-right text-green-600 bg-green-50/10 font-black">Debit
+                                        (Rp)</th>
+                                    <th class="px-4 py-4 text-right text-rose-600 bg-rose-50/10 font-black">Kredit (Rp)
+                                    </th>
                                     <th class="px-4 py-4 text-center">Aksi</th>
                                 </tr>
                             </thead>
@@ -2177,21 +2269,60 @@
                                     <template x-for="n in 8" :key="n">
                                         <tr class="skeleton-row">
                                             <td class="px-4 py-5"></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-24 bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-28 bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-12 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-36 bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-6 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-10 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-10 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-12 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-16 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700"></div></td>
-                                            <td class="px-4 py-5"><div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700"></div></td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-24 bg-gray-200 dark:bg-gray-700"></div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-28 bg-gray-200 dark:bg-gray-700"></div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-12 mx-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-36 bg-gray-200 dark:bg-gray-700"></div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-6 mx-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-20 bg-gray-200 dark:bg-gray-700"></div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-10 mx-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-10 ml-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-12 ml-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-16 ml-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-20 ml-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700">
+                                                </div>
+                                            </td>
                                             <td class="px-4 py-5"></td>
                                         </tr>
                                     </template>
@@ -2202,7 +2333,7 @@
 
                                     <tr data-row-id="{{ $hj->id }}"
                                         :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                        class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein @if($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
+                                        class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
                                         style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                         <td class="px-4 py-4 text-center">
@@ -2211,27 +2342,36 @@
                                                 @change="toggleRow({{ $hj->id }})">
                                         </td>
 
-                                        <td class="px-4 py-4 font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">{{ $hj->nama_akun }}</td>
+                                        <td
+                                            class="px-4 py-4 font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                                            {{ $hj->nama_akun }}</td>
                                         <td class="px-4 py-4 whitespace-nowrap">
                                             @if ($hj->nama_barang)
-                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-[10px] font-black text-blue-700 dark:text-blue-400 tracking-wider">
+                                                <span
+                                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-[10px] font-black text-blue-700 dark:text-blue-400 tracking-wider">
                                                     {{ $hj->nama_barang }}
                                                 </span>
                                             @else
                                                 <span class="text-gray-300 dark:text-gray-600">-</span>
                                             @endif
                                         </td>
-                                        <td class="px-4 py-4 text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">{{ $hj->tgl->format('d-m-Y') }}</td>
-                                        <td class="px-4 py-4 text-center text-gray-700 dark:text-gray-300 font-medium">{{ $hj->jurnal }}</td>
-                                        <td class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{{ $hj->no_akun }}</td>
-                                        <td class="px-4 py-4 text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">{{ $hj->no_dokumen ?? '-' }}</td>
+                                        <td
+                                            class="px-4 py-4 text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">
+                                            {{ $hj->tgl->format('d-m-Y') }}</td>
+                                        <td class="px-4 py-4 text-center text-gray-700 dark:text-gray-300 font-medium">
+                                            {{ $hj->jurnal }}</td>
+                                        <td
+                                            class="px-4 py-4 font-mono font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">
+                                            {{ $hj->no_akun }}</td>
+                                        <td
+                                            class="px-4 py-4 text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">
+                                            {{ $hj->no_dokumen ?? '-' }}</td>
 
                                         <td class="px-4 py-4 text-center">
                                             @php $thumbPath = $lampiranThumbs[(int) $hj->jurnal] ?? null; @endphp
                                             @if ($thumbPath)
                                                 @php $urlLampiran = Illuminate\Support\Facades\Storage::disk('public')->url($thumbPath); @endphp
-                                                <button type="button"
-                                                    @click="previewImage = '{{ $urlLampiran }}'"
+                                                <button type="button" @click="previewImage = '{{ $urlLampiran }}'"
                                                     title="Klik untuk lihat foto lampiran"
                                                     class="w-8 h-8 mx-auto rounded border border-gray-200 dark:border-gray-700 overflow-hidden block">
                                                     <img src="{{ $urlLampiran }}"
@@ -2244,29 +2384,41 @@
                                             @endif
                                         </td>
 
-                                        <td class="px-4 py-4 text-center font-bold text-gray-800 dark:text-gray-200">{{ $hj->mm ?? '-' }}</td>
+                                        <td class="px-4 py-4 text-center font-bold text-gray-800 dark:text-gray-200">
+                                            {{ $hj->mm ?? '-' }}</td>
                                         <td class="px-4 py-4 whitespace-nowrap">
                                             @if ($hj->nama && in_array($hj->no_akun, $piutangAkunCodes ?? []))
-                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/20 text-[10px] font-black text-violet-700 dark:text-violet-400 tracking-wider" title="Piutang atas nama pembeli ini">
+                                                <span
+                                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/20 text-[10px] font-black text-violet-700 dark:text-violet-400 tracking-wider"
+                                                    title="Piutang atas nama pembeli ini">
                                                     {{ $hj->nama }}
                                                 </span>
                                             @else
-                                                <span class="text-gray-800 dark:text-gray-200 font-medium">{{ $hj->nama ?? '-' }}</span>
+                                                <span
+                                                    class="text-gray-800 dark:text-gray-200 font-medium">{{ $hj->nama ?? '-' }}</span>
                                             @endif
                                         </td>
-                                        <td class="px-4 py-4 text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 break-words whitespace-normal max-w-[300px]">{{ $hj->keterangan }}</td>
-                                        <td class="px-4 py-4 text-center text-gray-700 dark:text-gray-300 font-bold lowercase tracking-wider">{{ $hj->hit_kbk ?? '-' }}</td>
-                                        <td class="px-4 py-4 text-right font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                                        <td
+                                            class="px-4 py-4 text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 break-words whitespace-normal max-w-[300px]">
+                                            {{ $hj->keterangan }}</td>
+                                        <td
+                                            class="px-4 py-4 text-center text-gray-700 dark:text-gray-300 font-bold lowercase tracking-wider">
+                                            {{ $hj->hit_kbk ?? '-' }}</td>
+                                        <td
+                                            class="px-4 py-4 text-right font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
                                             {{ $hj->banyak !== null && $hj->banyak !== '' ? ($hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.')) : '-' }}
                                         </td>
-                                        <td class="px-4 py-4 text-right font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                                        <td
+                                            class="px-4 py-4 text-right font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
                                             {{ (float) $hj->m3 != 0 ? rtrim(rtrim(number_format((float) $hj->m3, 6, ',', '.'), '0'), ',') : '-' }}
                                         </td>
-                                        <td class="px-4 py-4 text-right text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap">
+                                        <td
+                                            class="px-4 py-4 text-right text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap">
                                             {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
                                         </td>
 
-                                        <td class="px-4 py-4 text-right font-bold text-emerald-600 bg-emerald-50/5 whitespace-nowrap">
+                                        <td
+                                            class="px-4 py-4 text-right font-bold text-emerald-600 bg-emerald-50/5 whitespace-nowrap">
                                             @if (in_array(strtolower($hj->map), ['d', 'debit']))
                                                 {{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
                                             @else
@@ -2274,7 +2426,8 @@
                                             @endif
                                         </td>
 
-                                        <td class="px-4 py-4 text-right font-bold text-rose-600 bg-rose-50/5 whitespace-nowrap">
+                                        <td
+                                            class="px-4 py-4 text-right font-bold text-rose-600 bg-rose-50/5 whitespace-nowrap">
                                             @if (in_array(strtolower($hj->map), ['k', 'kredit']))
                                                 {{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
                                             @else
@@ -2290,12 +2443,15 @@
                                                     wire:click="mountAction('lampiran', { jurnal: {{ $hj->jurnal }} })"
                                                     class="relative p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-md transition-colors"
                                                     title="Lampiran (foto nota/bukti) untuk No. Jurnal {{ $hj->jurnal }}">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                        viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2"
                                                             d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                                                     </svg>
                                                     @if ($jmlLampiran > 0)
-                                                        <span class="absolute -top-1 -right-1 flex items-center justify-center w-3.5 h-3.5 text-[9px] font-black text-white bg-blue-600 rounded-full">
+                                                        <span
+                                                            class="absolute -top-1 -right-1 flex items-center justify-center w-3.5 h-3.5 text-[9px] font-black text-white bg-blue-600 rounded-full">
                                                             {{ $jmlLampiran }}
                                                         </span>
                                                     @endif
@@ -2306,8 +2462,10 @@
                                                         wire:click="mountAction('editHistory', { id: {{ $hj->id }} })"
                                                         class="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/40 rounded-md transition-colors"
                                                         title="Edit">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                            viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2"
                                                                 d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                         </svg>
                                                     </button>
@@ -2315,8 +2473,10 @@
                                                         wire:click="mountAction('deleteHistory', { id: {{ $hj->id }} })"
                                                         class="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-md transition-colors"
                                                         title="Hapus">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                            viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2"
                                                                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                         </svg>
                                                     </button>
@@ -2328,8 +2488,10 @@
                                     <tr>
                                         <td colspan="17" class="px-6 py-16 text-center">
                                             <div class="flex flex-col items-center gap-3 text-gray-400">
-                                                <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                                <svg class="w-10 h-10 opacity-30" fill="none"
+                                                    stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="1.5"
                                                         d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                 </svg>
                                                 <span class="text-xs italic font-medium">
@@ -2341,13 +2503,18 @@
                                 @endforelse
                             </tbody>
 
-                            <tfoot class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
+                            <tfoot
+                                class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                                 <tr>
-                                    <td colspan="14" class="px-4 py-5 text-right text-gray-600 tracking-widest uppercase">Total Akumulasi</td>
-                                    <td class="px-4 py-5 text-right text-emerald-600 bg-emerald-50/10 text-base font-black whitespace-nowrap">
+                                    <td colspan="14"
+                                        class="px-4 py-5 text-right text-gray-600 tracking-widest uppercase">Total
+                                        Akumulasi</td>
+                                    <td
+                                        class="px-4 py-5 text-right text-emerald-600 bg-emerald-50/10 text-base font-black whitespace-nowrap">
                                         {{ number_format($totalDebitDB, 0, ',', '.') }}
                                     </td>
-                                    <td class="px-4 py-5 text-right text-rose-600 bg-rose-50/10 text-base font-black whitespace-nowrap">
+                                    <td
+                                        class="px-4 py-5 text-right text-rose-600 bg-rose-50/10 text-base font-black whitespace-nowrap">
                                         {{ number_format($totalKreditDB, 0, ',', '.') }}
                                     </td>
                                     <td></td>
@@ -2356,25 +2523,41 @@
                                     <td colspan="17" class="px-4 py-3">
                                         @if ($isHistoryBalanced)
                                             <div class="flex items-center justify-end gap-2">
-                                                <div class="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg shadow-xs">
-                                                    <svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                                <div
+                                                    class="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg shadow-xs">
+                                                    <svg class="w-3.5 h-3.5 text-green-600" fill="none"
+                                                        stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2.5" d="M5 13l4 4L19 7" />
                                                     </svg>
-                                                    <span class="text-[10px] font-black text-green-700 dark:text-green-400 uppercase tracking-[0.2em]">Jurnal Balanced</span>
-                                                    <span class="text-[10px] text-green-600 font-medium normal-case tracking-normal">— Debit = Kredit</span>
+                                                    <span
+                                                        class="text-[10px] font-black text-green-700 dark:text-green-400 uppercase tracking-[0.2em]">Jurnal
+                                                        Balanced</span>
+                                                    <span
+                                                        class="text-[10px] text-green-600 font-medium normal-case tracking-normal">—
+                                                        Debit = Kredit</span>
                                                 </div>
                                             </div>
                                         @else
                                             <div class="flex items-center justify-end gap-3">
-                                                <div class="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg shadow-xs">
+                                                <div
+                                                    class="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg shadow-xs">
                                                     <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                                                    <span class="text-[10px] font-black text-red-700 dark:text-red-400 uppercase tracking-[0.2em]">Jurnal Unbalanced</span>
+                                                    <span
+                                                        class="text-[10px] font-black text-red-700 dark:text-red-400 uppercase tracking-[0.2em]">Jurnal
+                                                        Unbalanced</span>
                                                 </div>
-                                                <div class="flex items-center gap-1.5 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg shadow-xs">
-                                                    <svg class="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                <div
+                                                    class="flex items-center gap-1.5 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg shadow-xs">
+                                                    <svg class="w-3 h-3 text-amber-600" fill="none"
+                                                        stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                     </svg>
-                                                    <span class="text-[10px] text-amber-700 dark:text-amber-400 font-bold normal-case tracking-normal whitespace-nowrap">Selisih: Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
+                                                    <span
+                                                        class="text-[10px] text-amber-700 dark:text-amber-400 font-bold normal-case tracking-normal whitespace-nowrap">Selisih:
+                                                        Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
                                                 </div>
                                             </div>
                                         @endif
@@ -2391,28 +2574,42 @@
                 <div wire:loading wire:target="loadMore"
                     style="position: sticky; bottom: 0; left: 0; right: 0; z-index: 20; pointer-events: none;"
                     class="flex items-center justify-center py-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-t border-amber-100 dark:border-amber-900/40">
-                    <div class="flex items-center gap-3 px-5 py-2.5 bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded-full shadow-md">
-                        <svg class="w-4 h-4 text-amber-500 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4" stroke-dashoffset="10" opacity="0.25" />
-                            <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+                    <div
+                        class="flex items-center gap-3 px-5 py-2.5 bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded-full shadow-md">
+                        <svg class="w-4 h-4 text-amber-500 animate-spin flex-shrink-0" viewBox="0 0 24 24"
+                            fill="none">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"
+                                stroke-dasharray="31.4" stroke-dashoffset="10" opacity="0.25" />
+                            <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3"
+                                stroke-linecap="round" />
                         </svg>
-                        <span class="text-[10px] font-black text-gray-700 dark:text-gray-300 uppercase tracking-[0.2em]">Memuat data jurnal</span>
+                        <span
+                            class="text-[10px] font-black text-gray-700 dark:text-gray-300 uppercase tracking-[0.2em]">Memuat
+                            data jurnal</span>
                         <span class="text-[10px] font-black text-amber-600 dark:text-amber-400">+50 baris</span>
                     </div>
                 </div>
 
                 @if (!$hasMorePages && $historyJurnals->count() > 0)
                     <div class="flex items-center justify-center gap-3 py-3">
-                        <div class="flex-1 max-w-[60px] h-px bg-gradient-to-r from-transparent to-gray-200 dark:to-gray-700"></div>
+                        <div
+                            class="flex-1 max-w-[60px] h-px bg-gradient-to-r from-transparent to-gray-200 dark:to-gray-700">
+                        </div>
                         <div class="flex items-center gap-2 text-gray-400">
-                            <div class="w-4 h-4 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center justify-center">
-                                <svg class="w-2.5 h-2.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <polyline stroke-linecap="round" stroke-linejoin="round" stroke-width="3" points="20 6 9 17 4 12" />
+                            <div
+                                class="w-4 h-4 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center justify-center">
+                                <svg class="w-2.5 h-2.5 text-green-500" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <polyline stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                                        points="20 6 9 17 4 12" />
                                 </svg>
                             </div>
-                            <span class="text-[10px] font-black uppercase tracking-[0.3em]">Semua data sudah dimuat</span>
+                            <span class="text-[10px] font-black uppercase tracking-[0.3em]">Semua data sudah
+                                dimuat</span>
                         </div>
-                        <div class="flex-1 max-w-[60px] h-px bg-gradient-to-l from-transparent to-gray-200 dark:to-gray-700"></div>
+                        <div
+                            class="flex-1 max-w-[60px] h-px bg-gradient-to-l from-transparent to-gray-200 dark:to-gray-700">
+                        </div>
                     </div>
                 @endif
             </div>
