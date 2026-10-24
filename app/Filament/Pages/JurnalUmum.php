@@ -47,6 +47,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
     public $jurnal;
 
+    // true jika No. Jurnal diketik manual oleh user (tidak otomatis diganti
+    // saat simpan walau nomor itu sudah dipakai jurnal lain).
+    public bool $jurnalManual = false;
+
     public $no_dokumen;
 
     public $no_akun;
@@ -141,6 +145,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->m3 = $draft['m3'] ?? '';
         $this->hit_kbk = $draft['hitkbk'] ?? '';
         $this->jurnal = $draft['kode'] ?? $this->getNextJurnalNumber();
+        $this->jurnalManual = (bool) ($draft['jurnal_manual'] ?? false);
         $this->total = $draft['total'] ?? '';
         $this->banyak = $draft['banyak'] ?? (strtolower($this->hit_kbk) === 'b' ? 1 : '');
 
@@ -169,6 +174,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         session()->put('jurnal_draft', [
             'items' => $this->items,
             'kode' => $this->jurnal,
+            'jurnal_manual' => $this->jurnalManual,
             'tgl' => $this->tgl,
             'map' => $this->map,
             'harga' => $this->harga,
@@ -180,6 +186,32 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'hitkbk' => $this->hit_kbk,
             'total' => $this->total,
         ]);
+    }
+
+    /**
+     * No. Jurnal bisa diedit manual. Nilai harus angka bulat > 0; jika tidak
+     * valid, dikembalikan ke nomor berikutnya otomatis. Semua item draft ikut
+     * diperbarui ke nomor yang baru.
+     */
+    public function updatedJurnal($value): void
+    {
+        $value = trim((string) $value);
+
+        if ($value === '' || ! ctype_digit($value) || (int) $value < 1) {
+            $this->jurnal = $this->getNextJurnalNumber();
+            $this->jurnalManual = false;
+            $this->dispatch('toast', type: 'error', title: 'No. Jurnal tidak valid', msg: 'Isi dengan angka bulat lebih dari 0.');
+        } else {
+            $this->jurnal = (int) $value;
+            $this->jurnalManual = true;
+        }
+
+        foreach ($this->items as &$item) {
+            $item['jurnal'] = $this->jurnal;
+        }
+        unset($item);
+
+        $this->persistDraftState();
     }
 
     /**
@@ -615,8 +647,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
         if ($this->showPembeliPicker && blank($this->id_pembeli)) {
             $errors[] = 'Akun ini pakai Buku Pembantu Piutang, pilih pembelinya terlebih dahulu.';
         }
-        if (blank($this->harga) || (float) $this->harga < 0.01) {
-            $errors[] = 'Harga wajib diisi (minimal Rp 1).';
+        // Harga boleh minus; yang tidak boleh hanya kosong / 0.
+        if (blank($this->harga) || abs((float) $this->harga) < 0.01) {
+            $errors[] = 'Harga wajib diisi (tidak boleh 0, boleh minus).';
         }
 
         if (! empty($errors)) {
@@ -637,11 +670,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
             default => $harga,
         };
 
-        if ($total < 0.01) {
+        if (abs($total) < 0.01) {
             $this->dispatch('toast', type: 'error', title: 'Validasi Gagal', msg: match ($this->hit_kbk) {
-                'b' => 'Kuantitas harus lebih dari 0.',
-                'm' => 'Kubikasi (M3) harus lebih dari 0.',
-                default => 'Harga harus lebih dari 0.',
+                'b' => 'Kuantitas tidak boleh 0.',
+                'm' => 'Kubikasi (M3) tidak boleh 0.',
+                default => 'Harga tidak boleh 0.',
             });
 
             return;
@@ -722,8 +755,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
             return;
         }
 
-        // ── Auto-resolve jika No. Jurnal ternyata sudah dipakai transaksi lain ──
-        if (JurnalModel::where('jurnal', $this->jurnal)->exists()) {
+        // ── Auto-resolve jika No. Jurnal ternyata sudah dipakai transaksi lain.
+        //    Dilewati kalau No. Jurnal diketik manual oleh user (disengaja,
+        //    mis. menambah baris ke nomor jurnal yang sudah ada). ──
+        if (! $this->jurnalManual && JurnalModel::where('jurnal', $this->jurnal)->exists()) {
             $this->jurnal = $this->getNextJurnalNumber();
 
             foreach ($this->items as &$item) {
@@ -776,6 +811,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             // Fallback kalau ternyata masih bentrok di level DB (unique constraint / race condition)
             if ((int) $e->getCode() === 23000) {
                 $this->jurnal = $this->getNextJurnalNumber();
+                $this->jurnalManual = false;
                 foreach ($this->items as &$item) {
                     $item['jurnal'] = $this->jurnal;
                 }
@@ -808,6 +844,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $this->total = '';
         $this->perPage = 50;
         $this->hasMorePages = true;
+        $this->jurnalManual = false;
         $this->jurnal = $this->getNextJurnalNumber();
 
         $this->dispatch('toast', type: 'success', title: 'Jurnal Diposting!', msg: 'Semua entri berhasil disimpan ke database.');
@@ -965,6 +1002,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->options(['d' => 'Debit', 'k' => 'Kredit'])
                     ->required(),
 
+                // numeric() Filament tidak membatasi nilai minus (tanpa minValue).
                 TextInput::make('banyak')->label('Kuantitas (Banyak)')->numeric(),
                 TextInput::make('m3')->label('Kubikasi (M3)')->numeric(),
 
@@ -1138,13 +1176,18 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->reorderable()
                     ->downloadable()
                     ->openable()
-                    // Kompres/perkecil resolusi foto SEBELUM diupload (mode
-                    // 'contain' supaya seluruh isi nota tetap utuh, maksimal
-                    // 1600x1600, aspect ratio asli dipertahankan).
+                    // Kompres/perkecil resolusi foto SEBELUM diupload (bukan
+                    // dipotong kotak seperti foto pegawai — mode 'contain'
+                    // supaya seluruh isi nota tetap utuh, cuma dimuat ulang
+                    // ke resolusi maksimal 1600x1600, aspect ratio asli
+                    // dipertahankan). Foto HP yang aslinya 8-10 MB biasanya
+                    // jadi hanya beberapa ratus KB setelah ini.
                     ->imageResizeMode('contain')
                     ->imageResizeTargetWidth('1600')
                     ->imageResizeTargetHeight('1600')
                     // Batas ukuran file SEBELUM di-resize oleh browser (dalam KB).
+                    // Set eksplisit supaya ada pesan error yang jelas ke user kalau
+                    // kelebihan, bukan macet diam-diam di livewire/php upload limit.
                     ->maxSize(15360),
             ])
             ->fillForm(function (array $arguments): array {
@@ -1167,13 +1210,17 @@ class JurnalUmum extends Page implements HasActions, HasForms
             });
     }
 
+    /**
+     * Validasi harga/kuantitas/kubikasi/total. Nilai MINUS diperbolehkan
+     * (mis. koreksi/retur); yang ditolak hanya nilai 0 / kosong.
+     */
     protected function validateJurnalData(string $hit_kbk, float &$harga, float &$total, ?float &$banyak, ?float &$m3): array
     {
         $errors = [];
         if (blank($hit_kbk)) {
-            if ($harga < 0.01 && $total >= 0.01) {
+            if (abs($harga) < 0.01 && abs($total) >= 0.01) {
                 $harga = $total;
-            } elseif ($total < 0.01 && $harga >= 0.01) {
+            } elseif (abs($total) < 0.01 && abs($harga) >= 0.01) {
                 $total = $harga;
             }
             if ($banyak === '' || $banyak === null) {
@@ -1182,20 +1229,20 @@ class JurnalUmum extends Page implements HasActions, HasForms
             if ($m3 === '' || $m3 === null) {
                 $m3 = null;
             }
-            if ($harga < 0.01) {
-                $errors[] = 'Harga atau Total wajib diisi (minimal Rp 1).';
+            if (abs($harga) < 0.01) {
+                $errors[] = 'Harga atau Total wajib diisi (tidak boleh 0, boleh minus).';
             }
             if (abs($total - $harga) >= 0.01) {
                 $errors[] = 'Data tidak sesuai: Karena Hit KBK kosong, Total harus sama dengan Harga (Rp '.number_format($harga, 0, ',', '.').'), sedangkan Total diisi Rp '.number_format($total, 0, ',', '.').'.';
             }
         } else {
-            if ($harga < 0.01) {
-                $errors[] = 'Harga wajib diisi (minimal Rp 1).';
+            if (abs($harga) < 0.01) {
+                $errors[] = 'Harga wajib diisi (tidak boleh 0, boleh minus).';
             }
 
             if ($hit_kbk === 'b') {
-                if ($banyak === null || $banyak < 0.0001) {
-                    $errors[] = 'Kuantitas (Banyak) harus diisi dan lebih dari 0.';
+                if ($banyak === null || abs($banyak) < 0.0001) {
+                    $errors[] = 'Kuantitas (Banyak) harus diisi dan tidak boleh 0.';
                 } else {
                     $expected = $banyak * $harga;
                     if (abs($total - $expected) >= 0.01) {
@@ -1203,8 +1250,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     }
                 }
             } elseif ($hit_kbk === 'm') {
-                if ($m3 === null || $m3 < 0.000001) {
-                    $errors[] = 'Kubikasi (M3) harus diisi dan lebih dari 0.';
+                if ($m3 === null || abs($m3) < 0.000001) {
+                    $errors[] = 'Kubikasi (M3) harus diisi dan tidak boleh 0.';
                 } else {
                     $expected = $m3 * $harga;
                     if (abs($total - $expected) >= 0.01) {

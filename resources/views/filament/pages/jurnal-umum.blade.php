@@ -458,14 +458,15 @@
         formatRupiah(val) {
             if (val === null || val === undefined || val === '') return '';
             let str = val.toString();
-            let parts = str.split('.');
+            let neg = str.trim().startsWith('-');
+            let parts = str.replace('-', '').split('.');
             let intPart = parts[0].replace(/[^0-9]/g, '');
             let decPart = parts.length > 1 ? parts[1] : '';
             let formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
             if (decPart !== '') {
                 formatted = formatted + ',' + decPart;
             }
-            return formatted;
+            return (neg ? '-' : '') + formatted;
         },
         formatTotal(val) {
             if (val === null || val === undefined || val === '') return '0';
@@ -486,6 +487,7 @@
         },
         formatHargaInput(inputVal) {
             let str = inputVal.toString();
+            let sign = str.trim().startsWith('-') ? '-' : '';
             let hasKoma = str.includes(',');
             let parts = str.split(',');
     
@@ -494,23 +496,24 @@
     
             if (hasKoma) {
                 let decPart = (parts[1] || '').replace(/[^0-9]/g, '').substring(0, 2);
-                return intFormatted + ',' + decPart;
+                return sign + intFormatted + ',' + decPart;
             }
     
-            return intFormatted;
+            return sign + intFormatted;
         },
         formatBanyakInput(inputVal) {
             let str = inputVal.toString();
+            let sign = str.trim().startsWith('-') ? '-' : '';
             let komaIndex = str.lastIndexOf(',');
             let hasKoma = komaIndex !== -1;
     
             if (hasKoma) {
                 let intPart = str.substring(0, komaIndex).replace(/[^0-9]/g, '');
                 let decPart = str.substring(komaIndex + 1).replace(/[^0-9]/g, '').substring(0, 4);
-                return intPart + ',' + decPart;
+                return sign + intPart + ',' + decPart;
             }
     
-            return str.replace(/[^0-9]/g, '');
+            return sign + str.replace(/[^0-9]/g, '');
         },
         parseInputID(val) {
             if (val === null || val === undefined || val === '') return '';
@@ -727,9 +730,11 @@
                         <label
                             class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">No.
                             Jurnal</label>
-                        <input type="text" x-model="jurnal" disabled readonly
-                            title="No. Jurnal digenerate otomatis oleh sistem dan akan diperbarui jika terjadi konflik nomor"
-                            class="w-full px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-bold text-gray-500 dark:text-gray-400 cursor-not-allowed shadow-sm">
+                        {{-- No. Jurnal bisa diedit manual. Disimpan ke server saat selesai mengetik (change/blur). --}}
+                        <input type="text" inputmode="numeric" :value="jurnal"
+                            @change="$wire.set('jurnal', $event.target.value.replace(/\D/g, ''))"
+                            title="No. Jurnal bisa diubah manual. Jika nomor sudah dipakai, baris akan ditambahkan ke jurnal tersebut."
+                            class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-bold text-gray-800 dark:text-gray-200 shadow-sm focus:border-amber-400">
 
                         @php
                             $lampiranAktifSaatIni = \App\Models\JurnalLampiran::where('jurnal', (int) $jurnal)->first();
@@ -973,18 +978,18 @@
                                     banyak_display = isNaN(num) ? '' : (Number.isInteger(num) ? num.toString() : banyak_display);
                                 }
                             "
-                            placeholder="0 atau 1,5"
+                            placeholder="0 atau 1,5 (boleh minus)"
                             class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg font-bold text-gray-500 dark:text-gray-300 tabular-nums shadow-sm">
                         <button type="button"
                             @click="
                                 let h = parseFloat(parseInputID(harga_display));
                                 let t = parseFloat(parseInputID(total_display));
-                                if (!isNaN(h) && h > 0 && !isNaN(t)) {
+                                if (!isNaN(h) && h != 0 && !isNaN(t)) {
                                     let res = t / h;
                                     banyak_display = res.toString().replace('.', ',');
                                     $wire.set('banyak', res);
                                 } else {
-                                    window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & lebih dari 0.');
+                                    window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & tidak boleh 0.');
                                 }
                             "
                             class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
@@ -1013,12 +1018,12 @@
                             @click="
                                 let h = parseFloat(parseInputID(harga_display));
                                 let t = parseFloat(parseInputID(total_display));
-                                if (!isNaN(h) && h > 0 && !isNaN(t)) {
+                                if (!isNaN(h) && h != 0 && !isNaN(t)) {
                                     let res = t / h;
                                     m3 = parseFloat(res.toFixed(6)).toString().replace('.', ',');
                                     $wire.set('m3', m3);
                                 } else {
-                                    window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & lebih dari 0.');
+                                    window.showToast('error', 'Gagal', 'Harga dan Total harus diisi & tidak boleh 0.');
                                 }
                             "
                             class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
@@ -1076,12 +1081,12 @@
                                     divisor = parseFloat(parseInputID(banyak_display));
                                     label = 'Kuantitas';
                                 }
-                                if (!isNaN(t) && !isNaN(divisor) && divisor > 0) {
+                                if (!isNaN(t) && !isNaN(divisor) && divisor != 0) {
                                     let res = t / divisor;
                                     harga_display = formatRupiah(res);
                                     $wire.set('harga', res);
                                 } else {
-                                    window.showToast('error', 'Gagal', 'Total dan Kuantitas/Kubikasi harus diisi & lebih dari 0.');
+                                    window.showToast('error', 'Gagal', 'Total dan Kuantitas/Kubikasi harus diisi & tidak boleh 0.');
                                 }
                             "
                             class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
@@ -1144,12 +1149,12 @@
                                     } else {
                                         window.showToast('error', 'Gagal', 'Harga harus diisi.');
                                     }
-                                } else if (!isNaN(h) && !isNaN(multiplier) && multiplier > 0) {
+                                } else if (!isNaN(h) && !isNaN(multiplier) && multiplier != 0) {
                                     let res = multiplier * h;
                                     total_display = formatRupiah(res);
                                     $wire.set('total', res);
                                 } else {
-                                    window.showToast('error', 'Gagal', 'Harga dan Kuantitas/Kubikasi harus diisi & lebih dari 0.');
+                                    window.showToast('error', 'Gagal', 'Harga dan Kuantitas/Kubikasi harus diisi & tidak boleh 0.');
                                 }
                             "
                             class="mt-1 w-full py-1 bg-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-start gap-1.5 pl-0.5 transition-colors">
@@ -1370,7 +1375,7 @@
 
                                 <div class="text-right shrink-0">
                                     <span class="text-sm font-bold text-gray-500 dark:text-gray-400 tabular-nums"
-                                        x-text="(row.m3 !== null && row.m3 !== undefined && row.m3 !== '' && parseFloat(row.m3) > 0) ? parseFloat(parseFloat(row.m3).toFixed(6)).toString().replace('.', ',') : '-'">
+                                        x-text="(row.m3 !== null && row.m3 !== undefined && row.m3 !== '' && parseFloat(row.m3) != 0) ? parseFloat(parseFloat(row.m3).toFixed(6)).toString().replace('.', ',') : '-'">
                                     </span>
                                 </div>
 
@@ -1998,7 +2003,7 @@
                                                 {{ $hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.') }}×
                                                 {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
                                             </div>
-                                        @elseif($hj->hit_kbk === 'm' && (float) $hj->m3 > 0)
+                                        @elseif($hj->hit_kbk === 'm' && (float) $hj->m3 != 0)
                                             <div class="font-bold text-gray-800 dark:text-gray-200 tabular-nums">
                                                 {{ rtrim(rtrim(number_format((float) $hj->m3, 6, ',', '.'), '0'), ',') }}m³×
                                                 {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
@@ -2076,15 +2081,17 @@
                                                         {{ $hj->nama_akun }}</div>
                                                 </div>
                                                 <div class="text-right shrink-0">
+                                                    {{-- Mendukung nilai MINUS (koreksi/retur): debit minus tampil
+                                                         tanpa tanda '+', kredit minus tampil dengan tanda '+'. --}}
                                                     @if ($isDebit)
                                                         <div
                                                             class="text-emerald-600 font-black text-sm tabular-nums whitespace-nowrap">
-                                                            +{{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
+                                                            {{ $totalRow < 0 ? '' : '+' }}{{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
                                                         </div>
                                                     @else
                                                         <div
                                                             class="text-rose-600 font-black text-sm tabular-nums whitespace-nowrap">
-                                                            -{{ $totalRow == intval($totalRow) ? number_format($totalRow, 0, ',', '.') : number_format($totalRow, 2, ',', '.') }}
+                                                            {{ $totalRow < 0 ? '+' : '-' }}{{ number_format(abs($totalRow), $totalRow == intval($totalRow) ? 0 : 2, ',', '.') }}
                                                         </div>
                                                     @endif
                                                     <div
@@ -2131,7 +2138,7 @@
                                                 @if ($hj->hit_kbk === 'b' && $hj->banyak !== null && $hj->banyak !== '')
                                                     {{ $hj->banyak == intval($hj->banyak) ? number_format($hj->banyak, 0, ',', '.') : number_format($hj->banyak, 2, ',', '.') }}×
                                                     {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
-                                                @elseif($hj->hit_kbk === 'm' && (float) $hj->m3 > 0)
+                                                @elseif($hj->hit_kbk === 'm' && (float) $hj->m3 != 0)
                                                     {{ rtrim(rtrim(number_format((float) $hj->m3, 6, ',', '.'), '0'), ',') }}m³×
                                                     {{ $hj->harga == intval($hj->harga) ? number_format($hj->harga, 0, ',', '.') : number_format($hj->harga, 2, ',', '.') }}
                                                 @else
@@ -2403,7 +2410,7 @@
                                         </td>
                                         <td
                                             class="px-4 py-4 text-right font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
-                                            {{ (float) $hj->m3 > 0 ? rtrim(rtrim(number_format((float) $hj->m3, 6, ',', '.'), '0'), ',') : '-' }}
+                                            {{ (float) $hj->m3 != 0 ? rtrim(rtrim(number_format((float) $hj->m3, 6, ',', '.'), '0'), ',') : '-' }}
                                         </td>
                                         <td
                                             class="px-4 py-4 text-right text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap">
