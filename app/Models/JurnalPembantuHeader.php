@@ -43,8 +43,11 @@ class JurnalPembantuHeader extends Model
     // ── Konstanta Status ──────────────────────────────────────────────
 
     const STATUS_DRAFT = 'draft';
+
     const STATUS_DIPOSTING = 'diposting';
+
     const STATUS_DIBALIK = 'dibalik';
+
     const STATUS_DIBATALKAN = 'dibatalkan';
 
     const STATUSES = [
@@ -72,6 +75,35 @@ class JurnalPembantuHeader extends Model
         'd' => 'Debet',
         'k' => 'Kredit',
     ];
+
+    // ── Modul yang nilainya diambil langsung dari kolom `jumlah` ──────
+
+    /**
+     * Modul yang nilai barisnya diambil bulat-bulat dari kolom `jumlah`
+     * (bukan dihitung ulang dari harga x banyak/m3).
+     *
+     * SATU-SATUNYA sumber aturan ini. Dipakai oleh:
+     *  - recalculateTotalNilai()            (total_nilai header)
+     *  - PostingJurnalPembantuService       (nilai baris Jurnal Umum)
+     * Supaya header dan Jurnal Umum tidak pernah beda hitungan.
+     */
+    const MODUL_PAKAI_JUMLAH = [
+        'produksi',
+        'web_kayu',
+        'rotary',
+        'import',
+        'pembelian_kayu',
+    ];
+
+    public static function pakaiJumlahLangsung(?string $modulAsal): bool
+    {
+        if ($modulAsal === null || $modulAsal === '') {
+            return false;
+        }
+
+        return in_array($modulAsal, self::MODUL_PAKAI_JUMLAH, true)
+            || str_starts_with($modulAsal, 'produksi_');
+    }
 
     /**
      * Bersihkan lampiran (JurnalLampiran) yang jadi "sampah" begitu SATU
@@ -184,27 +216,28 @@ class JurnalPembantuHeader extends Model
     {
         $items = $this->items()->where('status', true)->get();
 
-        // JALUR 1: Khusus untuk Import (Ambil bulat-bulat dari kolom 'jumlah')
-        // Ini menghindari selisih desimal/floating-point antara Excel dan PHP
-        if (in_array($this->modul_asal, ['produksi', 'web_kayu', 'rotary', 'import', 'pembelian_kayu'])) {
-            
+        // JALUR 1: Khusus untuk Import/Produksi (Ambil bulat-bulat dari kolom 'jumlah')
+        // Ini menghindari selisih desimal/floating-point antara Excel dan PHP.
+        // Aturan modul ada di pakaiJumlahLangsung() dan dipakai juga oleh service posting.
+        if (self::pakaiJumlahLangsung($this->modul_asal)) {
+
             $total = $items->sum('jumlah');
-            
-        } 
+
+        }
         // JALUR 2: Untuk Modul Lain (Jurnal Umum, Penjualan, Pembelian, Manual, dsb)
         // Tetap menggunakan rumus bawaan agar program Anda yang lain tidak rusak
         else {
-            
+
             $total = $items->sum(function ($item) {
                 return match ($item->hit_kbk) {
-                    'k'      => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
-                    'm'      => (float)$item->harga * (float)($item->m3 ?? 0),
-                    'b'      => (float)$item->harga * (float)($item->banyak ?? 0),
-                    null, '' => $item->banyak > 0 ? (float)$item->harga * (float)$item->banyak : (float)$item->harga,
-                    default  => (float)$item->harga * (float)($item->banyak ?? 0),
+                    'k' => (float) $item->harga * (float) ($item->m3 ?? 0) * 1000,
+                    'm' => (float) $item->harga * (float) ($item->m3 ?? 0),
+                    'b' => (float) $item->harga * (float) ($item->banyak ?? 0),
+                    null, '' => $item->banyak > 0 ? (float) $item->harga * (float) $item->banyak : (float) $item->harga,
+                    default => (float) $item->harga * (float) ($item->banyak ?? 0),
                 };
             });
-            
+
         }
 
         // Hilangkan koma/desimal secara general untuk semua modul (floor/pembulatan ke bawah)

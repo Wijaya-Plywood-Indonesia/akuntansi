@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\JurnalLampiran;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalUmum;
 use Carbon\Carbon;
@@ -14,14 +15,14 @@ class PostingJurnalPembantuService
 {
     /** Kelompok jurnal yang bisa difilter saat posting batch. */
     public const KELOMPOK_AKUNTANSI = 'akuntansi';
+
     public const KELOMPOK_PRODUKSI = 'produksi';
+
     public const KELOMPOK_KAYU_MASUK = 'kayu_masuk';
 
     /**
      * Posting satu nomor jurnal pembantu ke Jurnal Umum.
      *
-     * @param int|string $nomorJurnal
-     * @param int|null $userId
      * @throws \Exception
      */
     public function postingByNomorJurnal(int|string $nomorJurnal, ?int $userId = null): void
@@ -31,7 +32,7 @@ class PostingJurnalPembantuService
         DB::transaction(function () use ($nomorJurnal, $userId) {
             $headers = JurnalPembantuHeader::query()
                 ->with([
-                    'items' => fn($q) => $q->where('status', true)
+                    'items' => fn ($q) => $q->where('status', true),
                 ])
                 ->where('jurnal', $nomorJurnal)
                 ->orderBy('map')
@@ -81,7 +82,7 @@ class PostingJurnalPembantuService
                 // tidak dipakai lagi (hilang dari Jurnal Umum). Method ini
                 // aman terhadap tabrakan (auto-merge kalau nomor tujuan
                 // kebetulan sudah punya lampiran sendiri).
-                \App\Models\JurnalLampiran::pindahkanKe((int) $nomorJurnal, $nomorFinal, $userId);
+                JurnalLampiran::pindahkanKe((int) $nomorJurnal, $nomorFinal, $userId);
             }
 
             $namaGlobal = null;
@@ -89,7 +90,7 @@ class PostingJurnalPembantuService
             $pihakIdGlobal = null;
 
             foreach ($headers as $h) {
-                if (empty($noDokumenGlobal) && !empty($h->no_dokumen)) {
+                if (empty($noDokumenGlobal) && ! empty($h->no_dokumen)) {
                     $noDokumenGlobal = $h->no_dokumen;
                 }
 
@@ -97,7 +98,7 @@ class PostingJurnalPembantuService
                     $parts = explode('|', $h->keterangan);
                     $parsedNama = isset($parts[2]) ? trim($parts[2]) : null;
 
-                    if (!empty($parsedNama)) {
+                    if (! empty($parsedNama)) {
                         $namaGlobal = $parsedNama;
                     } else {
                         $firstItem = $h->items->first();
@@ -117,6 +118,11 @@ class PostingJurnalPembantuService
             }
 
             foreach ($headers as $header) {
+                // Modul produksi/import/dsb: nilai baris diambil dari kolom `jumlah`
+                // (sama persis dengan JALUR 1 di JurnalPembantuHeader::recalculateTotalNilai),
+                // supaya Jurnal Umum selalu sama dengan total_nilai header.
+                $pakaiJumlah = JurnalPembantuHeader::pakaiJumlahLangsung($header->modul_asal);
+
                 $itemsPerBarang = $header->items->groupBy('id_barang');
 
                 foreach ($itemsPerBarang as $idBarang => $items) {
@@ -124,15 +130,18 @@ class PostingJurnalPembantuService
 
                     $totalBanyak = (float) $items->sum('banyak');
                     $totalM3 = (float) $items->sum('m3');
-                    $totalNilaiGrup = (float) $items->sum(function ($item) {
-                        return match ($item->hit_kbk) {
-                            'k'      => (float)$item->harga * (float)($item->m3 ?? 0) * 1000,
-                            'm'      => (float)$item->harga * (float)($item->m3 ?? 0),
-                            'b'      => (float)$item->harga * (float)($item->banyak ?? 0),
-                            null, '' => $item->banyak > 0 ? (float)$item->harga * (float)$item->banyak : (float)$item->harga,
-                            default  => (float)$item->harga * (float)($item->banyak ?? 0),
-                        };
-                    });
+
+                    $totalNilaiGrup = $pakaiJumlah
+                        ? (float) $items->sum('jumlah')
+                        : (float) $items->sum(function ($item) {
+                            return match ($item->hit_kbk) {
+                                'k' => (float) $item->harga * (float) ($item->m3 ?? 0) * 1000,
+                                'm' => (float) $item->harga * (float) ($item->m3 ?? 0),
+                                'b' => (float) $item->harga * (float) ($item->banyak ?? 0),
+                                null, '' => $item->banyak > 0 ? (float) $item->harga * (float) $item->banyak : (float) $item->harga,
+                                default => (float) $item->harga * (float) ($item->banyak ?? 0),
+                            };
+                        });
 
                     $firstItem = $items->first();
                     $itemHitKbk = $firstItem?->hit_kbk;
@@ -141,7 +150,7 @@ class PostingJurnalPembantuService
                     $prefix = substr($header->no_akun, 0, 3);
                     $isCashOrPayment = in_array($prefix, ['110', '111', '112', '113', '114', '210', '220', '230']);
 
-                    if (!$isCashOrPayment) {
+                    if (! $isCashOrPayment) {
                         $hitKbk = 'b';
 
                         if ($firstItem) {
@@ -170,9 +179,20 @@ class PostingJurnalPembantuService
                     if ($hitKbk === 'm') {
                         $hargaFinal = $totalM3 > 0 ? ($totalNilaiGrup / $totalM3) : $totalNilaiGrup;
                     } elseif ($hitKbk === 'b') {
-                        if (!$banyakFinal && !$isCashOrPayment) $banyakFinal = 1;
+                        if (! $banyakFinal && ! $isCashOrPayment) {
+                            $banyakFinal = 1;
+                        }
                         $hargaFinal = $totalBanyak > 0 ? ($totalNilaiGrup / $totalBanyak) : $totalNilaiGrup;
                     } else {
+                        $hargaFinal = $totalNilaiGrup;
+                    }
+
+                    if ($pakaiJumlah) {
+                        // Nilai sudah final dari `jumlah`. hit_kbk kosong =>
+                        // JurnalUmum::getNilaiAttribute memakai harga langsung,
+                        // jadi tidak ada perkalian ulang dan tidak ada pembulatan per-satuan.
+                        // banyak & m3 tetap disimpan sebagai informasi saja.
+                        $hitKbk = '';
                         $hargaFinal = $totalNilaiGrup;
                     }
 
@@ -202,6 +222,17 @@ class PostingJurnalPembantuService
                     'tgl_posting' => now(),
                 ]);
             }
+
+            // Pengaman: pastikan Jurnal Umum hasil posting benar-benar balance.
+            // Kalau tidak, seluruh transaksi di-rollback (status header kembali draft).
+            $rowsJU = JurnalUmum::query()->where('jurnal', $nomorFinal)->get();
+            $selisih = round($rowsJU->sum('debit') - $rowsJU->sum('kredit'), 2);
+
+            if (abs($selisih) > 1) {
+                throw new \Exception(
+                    "Jurnal Umum No. {$nomorFinal} tidak balance setelah posting (selisih: {$selisih}). Posting dibatalkan."
+                );
+            }
         }, 5);
     }
 
@@ -209,10 +240,9 @@ class PostingJurnalPembantuService
      * Posting batch jurnal berdasarkan periode hari (1 hari, 7 hari, 30 hari / 1 bulan).
      * Urutan posting dijamin dari nomor jurnal terkecil ke terbesar (orderBy('jurnal', 'asc')).
      *
-     * @param int $jumlahHari Jumlah hari ke belakang (1 = hari ini, 7 = 7 hari terakhir, 30 = 1 bulan terakhir)
-     * @param Carbon|null $referenceDate Tanggal acuan (default hari ini)
-     * @param int|null $userId
-     * @param string|null $kelompok null = semua, atau 'akuntansi' | 'produksi' | 'kayu_masuk'
+     * @param  int  $jumlahHari  Jumlah hari ke belakang (1 = hari ini, 7 = 7 hari terakhir, 30 = 1 bulan terakhir)
+     * @param  Carbon|null  $referenceDate  Tanggal acuan (default hari ini)
+     * @param  string|null  $kelompok  null = semua, atau 'akuntansi' | 'produksi' | 'kayu_masuk'
      * @return array{total_jurnal: int, sukses: int, gagal: int, errors: array<string>}
      */
     public function postingBatchPeriode(int $jumlahHari, ?Carbon $referenceDate = null, ?int $userId = null, ?string $kelompok = null): array
@@ -229,10 +259,7 @@ class PostingJurnalPembantuService
      * Posting batch jurnal berdasarkan rentang tanggal.
      * Mengurutkan nomor jurnal dari yang terkecil (asc).
      *
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @param int|null $userId
-     * @param string|null $kelompok null = semua, atau 'akuntansi' | 'produksi' | 'kayu_masuk'
+     * @param  string|null  $kelompok  null = semua, atau 'akuntansi' | 'produksi' | 'kayu_masuk'
      * @return array{total_jurnal: int, sukses: int, gagal: int, errors: array<string>}
      */
     public function postingBatchRentang(Carbon $startDate, Carbon $endDate, ?int $userId = null, ?string $kelompok = null): array
@@ -261,7 +288,7 @@ class PostingJurnalPembantuService
                 $sukses++;
             } catch (Throwable $e) {
                 $gagal++;
-                $errors[] = "Jurnal #{$nomorJurnal}: " . $e->getMessage();
+                $errors[] = "Jurnal #{$nomorJurnal}: ".$e->getMessage();
             }
         }
 
