@@ -126,6 +126,20 @@ class BarangController extends Controller
             ]);
         }
 
+        // Fallback: master barang kayu tanpa nama jenis, mis. "persediaan kayu 130".
+        $namaTanpaJenis = trim(preg_replace('/\s+/', ' ', sprintf('Persediaan Kayu %s', $ukuran)));
+        $barangTanpaJenis = Barang::where('nama_barang', 'like', $namaTanpaJenis)->first();
+
+        if ($barangTanpaJenis) {
+            return response()->json([
+                'success' => true,
+                'nama_barang_format' => $namaBarang,
+                'id_barang' => $barangTanpaJenis->id,
+                'barang' => $barangTanpaJenis,
+                'note' => 'Found via fallback tanpa jenis kayu'
+            ]);
+        }
+
         return response()->json([
             'success' => false,
             'nama_barang_format' => $namaBarang,
