@@ -32,8 +32,14 @@ class AdminPanelProvider extends PanelProvider
         // TEMA LOGIN:  'terang' (default)  atau  'gelap'
         // ============================================================
         $tema = 'terang';
-
         $terang = $tema === 'terang';
+
+        // ============================================================
+        // KEGELAPAN FOTO LATAR (0 = tanpa lapisan, 1 = hitam pekat)
+        // Ini nilai di bagian TENGAH foto. Tepi foto otomatis lebih gelap (vignette).
+        // Naikkan kalau foto terlalu terang, turunkan kalau terlalu gelap.
+        // ============================================================
+        $fotoGelap = 0.60;
 
         // ============================================================
         // LOGO (akuntansi memakai logo Wijaya)
@@ -44,6 +50,19 @@ class AdminPanelProvider extends PanelProvider
         $logoUrl = asset($logo);
         $logoRgb = $terang ? '15,23,42' : '255,255,255';
 
+        // ============================================================
+        // FOTO LATAR (opsional). Kalau ada, latar abstrak dimatikan.
+        // ============================================================
+        $fotoFile = null;
+        foreach (['images/akuntansi-bg.webp', 'images/akuntansi-bg.jpg', 'images/akuntansi-bg.jpeg', 'images/akuntansi-bg.png'] as $f) {
+            if (file_exists(public_path($f))) {
+                $fotoFile = $f;
+                break;
+            }
+        }
+        $pakaiFoto = $fotoFile !== null;
+        $fotoUrl = $pakaiFoto ? asset($fotoFile) . '?v=' . filemtime(public_path($fotoFile)) : null;
+
         // ------------------------------------------------------------
         // PALET WARNA PER TEMA
         // ------------------------------------------------------------
@@ -51,16 +70,19 @@ class AdminPanelProvider extends PanelProvider
             ? ['{{A}}' => '#f59e0b', '{{B}}' => '#3b82f6', '{{BAR}}' => '#3b82f6', '{{NB}}' => '#2563eb', '{{INK}}' => '#0f172a']
             : ['{{A}}' => '#fbbf24', '{{B}}' => '#60a5fa', '{{BAR}}' => '#93c5fd', '{{NB}}' => '#93c5fd', '{{INK}}' => '#ffffff'];
 
+        // Perubahan: input lebih tegas (--input-bg putih, --input-ring lebih gelap),
+        // divider logo (--divider) dan border input terang.
         $vars = $terang
             ? '--bg: linear-gradient(135deg, #f8fafc 0%, #eef2ff 55%, #fff6e3 100%);
                --ink: #0f172a;
-               --card-bg: rgba(255,255,255,0.78);
+               --card-bg: rgba(255,255,255,0.80);
                --card-border: rgba(15,23,42,0.08);
                --card-shadow: 0 30px 60px -20px rgba(15,23,42,0.28), inset 0 1px 0 rgba(255,255,255,0.9);
                --text: #0f172a;
                --muted: #64748b;
-               --input-bg: #f8fafc;
-               --input-ring: #cbd5e1;
+               --input-bg: #ffffff;
+               --input-ring: #94a3b8;
+               --divider: rgba(15,23,42,0.09);
                --link: #b45309;
                --link-hover: #92400e;
                --icon: #64748b;
@@ -76,7 +98,8 @@ class AdminPanelProvider extends PanelProvider
                --text: #ffffff;
                --muted: rgba(255,255,255,0.75);
                --input-bg: rgba(255,255,255,0.10);
-               --input-ring: rgba(255,255,255,0.22);
+               --input-ring: rgba(255,255,255,0.28);
+               --divider: rgba(255,255,255,0.14);
                --link: #fbbf24;
                --link-hover: #fde68a;
                --icon: rgba(255,255,255,0.8);
@@ -86,7 +109,7 @@ class AdminPanelProvider extends PanelProvider
                --logo-shadow: drop-shadow(0 4px 12px rgba(0,0,0,0.45));';
 
         // ------------------------------------------------------------
-        // LATAR ABSTRAK (SVG) - untuk layar lebar
+        // LATAR ABSTRAK (SVG) - dipakai hanya kalau tidak ada foto
         // ------------------------------------------------------------
         $svg = <<<'HTML'
 <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
@@ -123,12 +146,10 @@ class AdminPanelProvider extends PanelProvider
     </linearGradient>
   </defs>
 
-  <!-- cahaya lembut -->
   <circle cx="170" cy="120" r="420" fill="url(#gAmber)"/>
   <circle cx="1480" cy="820" r="480" fill="url(#gBlue)"/>
   <circle cx="1350" cy="90" r="260" fill="url(#gBlue)" opacity=".55"/>
 
-  <!-- cincin abstrak -->
   <g fill="none" stroke="{{INK}}" stroke-opacity=".07">
     <circle cx="1380" cy="170" r="150"/>
     <circle cx="1380" cy="170" r="230" stroke-dasharray="3 12"/>
@@ -137,7 +158,6 @@ class AdminPanelProvider extends PanelProvider
     <circle cx="220" cy="760" r="200" stroke-dasharray="3 12"/>
   </g>
 
-  <!-- batang transparan -->
   <g>
     <rect x="70"  y="640" width="38" height="260" rx="8" fill="url(#gBar)"/>
     <rect x="124" y="580" width="38" height="320" rx="8" fill="url(#gBarA)"/>
@@ -150,10 +170,8 @@ class AdminPanelProvider extends PanelProvider
     <rect x="1446" y="440" width="38" height="460" rx="8" fill="url(#gBarA)"/>
   </g>
 
-  <!-- area di bawah gelombang -->
   <path d="M-100 650 C 200 520, 400 760, 700 600 S 1200 380, 1700 480 L1700 900 L-100 900 Z" fill="url(#gFill)"/>
 
-  <!-- gelombang mengalir -->
   <g fill="none" stroke-linecap="round">
     <path class="flow f1" d="M-100 650 C 200 520, 400 760, 700 600 S 1200 380, 1700 480" stroke="url(#gLine1)" stroke-width="3"/>
     <path class="flow f2" d="M-100 720 C 250 640, 500 820, 850 690 S 1300 520, 1700 590" stroke="url(#gLine2)" stroke-width="2.2"/>
@@ -161,7 +179,6 @@ class AdminPanelProvider extends PanelProvider
     <path class="flow f4" d="M-100 790 C 300 730, 620 860, 980 770 S 1400 640, 1700 700" stroke="url(#gLine1)" stroke-width="1.4" stroke-opacity=".6"/>
   </g>
 
-  <!-- jaringan titik -->
   <g stroke="{{INK}}" stroke-opacity=".10" stroke-width="1" fill="none">
     <polyline points="260,250 420,170 600,260 780,150 960,230 1130,140"/>
     <polyline points="420,170 470,340 600,260"/>
@@ -178,10 +195,7 @@ class AdminPanelProvider extends PanelProvider
     <circle cx="1210" cy="300" r="3.5" opacity=".55"/><circle cx="1330" cy="250" r="4" opacity=".55"/>
   </g>
 
-  <!-- ===== ELEMEN AKUNTANSI + RUMUS EXCEL SAMAR (disembunyikan di HP) ===== -->
   <g class="acc" font-family="ui-monospace, 'SFMono-Regular', Consolas, 'Courier New', monospace" fill="{{INK}}">
-
-    <!-- rumus excel -->
     <text class="fl a" x="70"   y="70"  font-size="30" fill-opacity=".14">=SUM(D2:D40)</text>
     <text class="fl c" x="1090" y="215" font-size="24" fill-opacity=".12">=VLOOKUP(A2;Akun;3;0)</text>
     <text class="fl b" x="1075" y="335" font-size="22" fill-opacity=".12">=SUMIF(B:B;&quot;Kas&quot;;D:D)</text>
@@ -189,23 +203,19 @@ class AdminPanelProvider extends PanelProvider
     <text class="fl c" x="300"  y="730" font-size="22" fill-opacity=".12">=IF(D5&gt;E5;1;0)</text>
     <text class="fl b" x="300"  y="410" font-size="24" fill-opacity=".12">=D10-E10</text>
 
-    <!-- rumus akuntansi -->
     <text class="fl b" x="980"  y="62"  font-size="26" fill-opacity=".12">Laba = Pendapatan − Beban</text>
     <text class="fl c" x="560"  y="868" font-size="28" fill-opacity=".11">Debit = Kredit</text>
 
-    <!-- simbol besar -->
     <text class="fl b" x="95"   y="330" font-size="150" fill-opacity=".045" font-weight="700">Σ</text>
     <text class="fl a" x="1440" y="360" font-size="110" fill-opacity=".05" font-weight="700">%</text>
     <text class="fl c" x="760"  y="120" font-size="90"  fill-opacity=".04" font-weight="700">=</text>
 
-    <!-- angka rupiah -->
     <text class="fl a" x="64"   y="470" font-size="26" fill-opacity=".12">1.250.000</text>
     <text class="fl c" x="1160" y="430" font-size="26" fill-opacity=".12">48.750.000</text>
     <text class="fl b" x="1010" y="860" font-size="24" fill-opacity=".11">Rp 12.500.000</text>
     <text class="fl a" x="300"  y="560" font-size="22" fill-opacity=".10">+12,4%</text>
     <text class="fl c" x="1330" y="500" font-size="22" fill-opacity=".14" fill="{{A}}">0,00</text>
 
-    <!-- mini buku besar: kolom Debit / Kredit -->
     <g font-size="17">
       <text class="fl b" x="64"  y="540" fill="{{A}}"   fill-opacity=".22" letter-spacing="3">DEBIT</text>
       <text class="fl b" x="170" y="540" fill="{{NB}}"  fill-opacity=".22" letter-spacing="3">KREDIT</text>
@@ -223,7 +233,6 @@ class AdminPanelProvider extends PanelProvider
       <text x="72"  y="629">1.250.000</text>
     </g>
 
-    <!-- koin Rp -->
     <g class="fl a">
       <circle cx="700" cy="60" r="30" fill="none" stroke="{{A}}" stroke-opacity=".30" stroke-width="2"/>
       <circle cx="700" cy="60" r="23" fill="none" stroke="{{A}}" stroke-opacity=".16" stroke-width="1"/>
@@ -243,9 +252,6 @@ class AdminPanelProvider extends PanelProvider
 HTML;
         $svg = strtr($svg, $svgColors);
 
-        // ------------------------------------------------------------
-        // LAPISAN TEKS UNTUK HP (ukuran mengikuti lebar layar)
-        // ------------------------------------------------------------
         $mobile = <<<'HTML'
 <div class="abs-mob" aria-hidden="true">
   <span class="m t1">=SUM(D2:D40)</span>
@@ -263,7 +269,7 @@ HTML;
         $abstractBg = '<div class="abs-bg" aria-hidden="true">' . $svg . '</div>' . $mobile;
 
         // ------------------------------------------------------------
-        // CSS
+        // CSS dasar
         // ------------------------------------------------------------
         $css = '.fi-simple-layout { ' . $vars . ' }' . <<<'CSS'
 
@@ -283,7 +289,6 @@ HTML;
 .abs-bg svg { width: 100%; height: 100%; display: block; }
 .fi-simple-main-ctn { position: relative; z-index: 1; }
 
-/* animasi pelan */
 .abs-bg .flow { stroke-dasharray: 14 10; animation: flowmove 40s linear infinite; }
 .abs-bg .f2 { animation-duration: 55s; animation-direction: reverse; }
 .abs-bg .f3 { animation-duration: 70s; }
@@ -298,25 +303,42 @@ HTML;
     .abs-bg .fl { animation: none; }
 }
 
-/* ===== LAPISAN HP (disembunyikan di layar lebar) ===== */
 .abs-mob { display: none; }
 
 /* ===== CARD ===== */
 .fi-simple-main {
+    position: relative;
+    overflow: hidden;
     background: var(--card-bg) !important;
-    -webkit-backdrop-filter: blur(22px) saturate(160%);
-    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
     border: 1px solid var(--card-border) !important;
     border-radius: 1.75rem !important;
     box-shadow: var(--card-shadow) !important;
     --tw-ring-shadow: 0 0 #0000 !important;
     --tw-ring-color: transparent !important;
-    padding-top: 2.5rem !important;
+    padding-top: 2.75rem !important;
     padding-bottom: 2.5rem !important;
 }
 
+/* Garis aksen amber di sisi atas card */
+.fi-simple-main::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f59e0b, #fbbf24, #fcd34d);
+    pointer-events: none;
+}
+
 /* ===== LOGO ===== */
-.login-brand-logo { display: flex; justify-content: center; margin: 0 0 1rem 0; }
+.login-brand-logo {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 1rem 0;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--divider);
+}
 .login-brand-logo img {
     display: block;
     height: 6rem;
@@ -327,7 +349,6 @@ HTML;
 }
 .fi-simple-main .fi-logo { display: none !important; }
 
-/* Header */
 .fi-simple-main .fi-simple-header {
     margin-top: 0 !important;
     padding-top: 0 !important;
@@ -355,7 +376,7 @@ HTML;
 .fi-simple-main .fi-input-wrp {
     background-color: var(--input-bg) !important;
     border-radius: 0.75rem !important;
-    box-shadow: inset 0 0 0 1px var(--input-ring) !important;
+    box-shadow: inset 0 0 0 1px var(--input-ring), 0 1px 2px rgba(15, 23, 42, 0.06) !important;
     transition: all 0.2s ease;
 }
 .fi-simple-main .fi-input-wrp:focus-within {
@@ -376,8 +397,18 @@ HTML;
 
 /* ===== CHECKBOX ===== */
 .fi-simple-main input[type="checkbox"] {
-    background-color: var(--check-bg) !important;
-    border-color: var(--check-border) !important;
+    background-color: var(--check-bg);
+    border-color: var(--check-border);
+    border-radius: 0.375rem;
+    cursor: pointer;
+}
+.fi-simple-main input[type="checkbox"]:checked {
+    background-color: #f59e0b !important;
+    border-color: #f59e0b !important;
+}
+.fi-simple-main input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.35);
 }
 
 /* ===== TOMBOL ===== */
@@ -400,9 +431,7 @@ HTML;
 /* ===== ERROR ===== */
 .fi-simple-main .fi-fo-field-wrp-error-message { color: var(--error) !important; }
 
-/* ============================================================
-   RESPONSIVE (HP / layar sempit)
-   ============================================================ */
+/* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
     .abs-bg .acc { display: none; }
     .abs-mob { display: block; position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; color: var(--ink); font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Courier New', monospace; }
@@ -423,10 +452,8 @@ HTML;
     .abs-mob .t7 { top: 19.5%; left: 6%; font-size: clamp(10px, 2.9vw, 13px); opacity: .11; }
 
     .fi-simple-main-ctn { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
-    .fi-simple-main {
-        padding: 1.75rem 1.25rem !important;
-        border-radius: 1.4rem !important;
-    }
+    .fi-simple-main { padding: 1.75rem 1.25rem !important; border-radius: 1.4rem !important; }
+    .login-brand-logo { margin-bottom: 1rem; padding-bottom: 1rem; }
     .login-brand-logo img { height: 4.75rem; }
     .fi-simple-main .fi-simple-header-heading { font-size: 1.35rem !important; }
 }
@@ -435,6 +462,51 @@ HTML;
     .login-brand-logo img { height: 4.25rem; }
 }
 CSS;
+
+        // ------------------------------------------------------------
+        // CSS tambahan kalau memakai FOTO sebagai latar
+        // Lapisan di atas foto = navy gelap dengan VIGNETTE:
+        // tengah lebih terang (fokus ke card), tepi lebih gelap.
+        // ------------------------------------------------------------
+        if ($pakaiFoto) {
+            $tengah = number_format(min(1, max(0, $fotoGelap - 0.15)), 2, '.', '');
+            $tepi   = number_format(min(1, max(0, $fotoGelap + 0.20)), 2, '.', '');
+            $veil   = 'radial-gradient(ellipse at center, rgba(15,23,42,' . $tengah . ') 0%, rgba(15,23,42,' . $tepi . ') 100%)';
+
+            $css .= '
+/* ===== LATAR FOTO ===== */
+.fi-simple-layout {
+    background-color: #0f172a !important;
+    background-image: ' . $veil . ', url("' . $fotoUrl . '") !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important;
+}';
+
+            // Di atas foto gelap: efek kaca (glass) + shadow berlapis supaya card punya kedalaman
+            if ($terang) {
+                $css .= '
+.fi-simple-layout {
+    --card-bg: rgba(255,255,255,0.92);
+    --card-border: rgba(255,255,255,0.65);
+    --card-shadow:
+        0 50px 90px -25px rgba(0,0,0,0.65),
+        0 20px 40px -20px rgba(0,0,0,0.45),
+        0 0 0 1px rgba(255,255,255,0.28),
+        inset 0 1px 0 rgba(255,255,255,1);
+}
+.fi-simple-main {
+    -webkit-backdrop-filter: blur(30px) saturate(190%) !important;
+    backdrop-filter: blur(30px) saturate(190%) !important;
+}';
+            }
+
+            $css .= '
+@media (max-width: 768px) {
+    .fi-simple-layout { background-attachment: scroll !important; }
+}';
+        }
 
         // ------------------------------------------------------------
         // JS: logo ke atas "Sign in", latar putih dihapus, warna sesuai tema, auto-crop
@@ -562,10 +634,10 @@ JS;
                 fn (): string => $logoHtml
             )
 
-            // Latar abstrak (hanya untuk tamu / halaman login)
+            // Latar abstrak (hanya untuk tamu, dan hanya kalau tidak ada foto)
             ->renderHook(
                 PanelsRenderHook::BODY_START,
-                fn (): string => auth()->check() ? '' : $abstractBg
+                fn (): string => (auth()->check() || $pakaiFoto) ? '' : $abstractBg
             )
 
             // Script logo
@@ -590,7 +662,6 @@ JS;
                     ->icon('heroicon-o-book-open')
                     ->collapsed(true),
             ])
-            ->sidebarCollapsibleOnDesktop()
         ;
     }
 }
