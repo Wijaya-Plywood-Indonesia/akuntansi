@@ -5,82 +5,67 @@ namespace App\Exports;
 use App\Models\JurnalUmum as JurnalModel;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\WithColumnWidths;
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class JurnalUmumExport implements
-    FromCollection,
-    WithHeadings,
-    WithMapping,
-    WithStyles,
-    WithColumnWidths,
-    WithColumnFormatting,
-    WithEvents
+class JurnalUmumExport extends DefaultValueBinder implements FromCollection, WithColumnFormatting, WithColumnWidths, WithCustomValueBinder, WithEvents, WithHeadings, WithMapping
 {
     public function __construct(
         protected ?string $tglDari = null,
         protected ?string $tglSampai = null,
     ) {}
 
-    /**
-     * Ambil data sesuai rentang tanggal, urut tgl & no jurnal seperti sheet "isi jurnal".
-     */
     public function collection(): Collection
     {
         $query = JurnalModel::query();
 
-        if (!empty($this->tglDari)) {
+        if (! empty($this->tglDari)) {
             $query->whereDate('tgl', '>=', $this->tglDari);
         }
-        if (!empty($this->tglSampai)) {
+        if (! empty($this->tglSampai)) {
             $query->whereDate('tgl', '<=', $this->tglSampai);
         }
 
         return $query->orderBy('tgl')->orderBy('jurnal')->orderBy('id')->get();
     }
 
-    /**
-     * Header kolom — persis sama dengan sheet "isi jurnal":
-     * Nama Akun | tgl | jurnal | No Akun | No | mm | Nama | Keterangan | map | hit kbk | Banyak | M3 | Harga
-     */
     public function headings(): array
     {
         return [
-            'Nama Akun',
-            'tgl',
-            'jurnal',
-            'No Akun',
-            'No',
-            'mm',
-            'Nama',
-            'Keterangan',
-            'map',
-            'hit kbk',
-            'Banyak',
-            'M3',
-            'Harga',
+            'NAMA AKUN',   // A
+            'TANGGAL',     // B
+            'No',          // C  nomor jurnal
+            'NO.AKUN',     // D
+            'NO',          // E  nomor dokumen (mis. "sj 9725")
+            'mm',          // F
+            'Nama',        // G
+            'Keterangan',  // H
+            'Map',         // I  d = debet, k = kredit
+            'Hit',         // J
+            'Banyak',      // K
+            'm3',          // L
+            'Harga',       // M
+            'Total',       // N
         ];
     }
 
-    /**
-     * Mapping tiap baris model -> kolom export.
-     * "No" pada sheet asli = kolom no-dokumen.
-     */
     public function map($row): array
     {
         return [
             $row->nama_akun,
-            $row->tgl ? $row->tgl->format('Y-m-d') : null,
+            $row->tgl ? ExcelDate::dateTimeToExcel($row->tgl) : null,
             $row->jurnal,
             $row->no_akun,
             $row->no_dokumen,
@@ -89,104 +74,113 @@ class JurnalUmumExport implements
             $row->keterangan,
             $row->map,
             $row->hit_kbk,
-            $row->banyak,
-            $row->m3,
-            $row->harga,
+            $row->banyak !== null ? (float) $row->banyak : null,
+            $row->m3 !== null ? (float) $row->m3 : null,
+            $row->harga !== null ? (float) $row->harga : null,
+            $row->nilai, // accessor model: b -> banyak*harga, m -> m3*harga, else harga
         ];
     }
 
     /**
-     * Lebar kolom — disamakan dengan sheet "isi jurnal" (dalam satuan karakter Excel).
+     * Kolom D (NO.AKUN) dan E (NO) selalu disimpan sebagai teks.
      */
+    public function bindValue(Cell $cell, $value): bool
+    {
+        if (
+            in_array($cell->getColumn(), ['D', 'E'], true)
+            && $value !== null
+            && $value !== ''
+        ) {
+            $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
+
+            return true;
+        }
+
+        return parent::bindValue($cell, $value);
+    }
+
     public function columnWidths(): array
     {
         return [
-            'A' => 36.18, // Nama Akun
-            'B' => 10.82, // tgl
-            'C' => 5.73,  // jurnal
-            'D' => 10.27, // No Akun
-            'E' => 14.27, // No
-            'F' => 7.18,  // mm
-            'G' => 20.82, // Nama
-            'H' => 44.18, // Keterangan
-            'I' => 7.18,  // map
-            'J' => 6.82,  // hit kbk
-            'K' => 10.0,  // Banyak
-            'L' => 11.27, // M3
-            'M' => 14.27, // Harga
+            'A' => 28,
+            'B' => 12,
+            'C' => 6,
+            'D' => 11,
+            'E' => 12,
+            'F' => 6,
+            'G' => 24,
+            'H' => 44,
+            'I' => 6,
+            'J' => 6,
+            'K' => 10,
+            'L' => 11,
+            'M' => 16,
+            'N' => 16,
         ];
     }
 
-    /**
-     * Format angka per kolom — disamakan dengan sheet "isi jurnal".
-     */
     public function columnFormats(): array
     {
         return [
             'B' => 'dd-mm-yyyy',
-            'D' => '0.00',
-            'K' => 'General',
-            'L' => '0.0000',
-            'M' => '#,##0_);(#,##0)',
+            'K' => '#,##0',
+            'L' => '#,##0.0000',
+            'M' => '#,##0',
+            'N' => '#,##0',
         ];
-    }
-
-    public function styles($sheet)
-    {
-        // Font default seluruh sheet: Calibri 11
-        $sheet->getParent()->getDefaultStyle()->getFont()->setName('Calibri')->setSize(11);
-
-        $sheet->getRowDimension(1)->setRowHeight(15);
-
-        return [];
     }
 
     public function registerEvents(): array
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
-                $sheet      = $event->sheet->getDelegate();
-                $lastRow    = $sheet->getHighestRow();
-                $lastColumn = 'M';
+                $sheet = $event->sheet->getDelegate();
+                $lastRow = max($sheet->getHighestRow(), 1);
+                $range = "A1:N{$lastRow}";
 
-                // Fill cyan muda (#CCFFFF) untuk seluruh range data (header + body),
-                // KECUALI kolom A (Nama Akun) dan C (jurnal) yang tetap putih —
-                // sama persis seperti sheet "isi jurnal" pada file referensi.
-                $sheet->getStyle("A1:{$lastColumn}{$lastRow}")->applyFromArray([
-                    'font' => [
-                        'name' => 'Calibri',
-                        'size' => 11,
-                        'bold' => false,
-                    ],
+                $sheet->getParent()->getDefaultStyle()->getFont()->setName('Calibri')->setSize(11);
+
+                // Fill cyan muda (#CCFFFF) untuk seluruh range (header + body)
+                $sheet->getStyle($range)->applyFromArray([
                     'fill' => [
-                        'fillType'   => Fill::FILL_SOLID,
+                        'fillType' => Fill::FILL_SOLID,
                         'startColor' => ['rgb' => 'CCFFFF'],
                     ],
                 ]);
 
-                // Kembalikan kolom A (Nama Akun) dan C (jurnal) ke putih (tanpa fill).
-                $sheet->getStyle("A1:A{$lastRow}")->applyFromArray([
-                    'fill' => [
-                        'fillType'   => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'FFFFFF'],
+                // Kolom A (NAMA AKUN) dan C (No) tetap putih
+                foreach (['A', 'C'] as $col) {
+                    $sheet->getStyle("{$col}1:{$col}{$lastRow}")->applyFromArray([
+                        'fill' => [
+                            'fillType' => Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'FFFFFF'],
+                        ],
+                    ]);
+                }
+
+                // Header: tebal & rata tengah
+                $sheet->getStyle('A1:N1')->applyFromArray([
+                    'font' => ['bold' => true],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
                     ],
                 ]);
-                $sheet->getStyle("C1:C{$lastRow}")->applyFromArray([
-                    'fill' => [
-                        'fillType'   => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'FFFFFF'],
-                    ],
-                ]);
 
-                // Alignment header: jurnal center, No Akun & No & mm left (mengikuti sheet asli)
-                $sheet->getStyle('C1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('B1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle('D1:F1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                // Border seluruh data
+                $sheet->getStyle($range)->getBorders()->getAllBorders()
+                    ->setBorderStyle(Border::BORDER_THIN);
 
-                // AutoFilter pada baris header, sama seperti sheet referensi.
-                $sheet->setAutoFilter("A1:{$lastColumn}{$lastRow}");
+                // Alignment kolom data
+                $sheet->getStyle("B2:C{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("I2:J{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("D2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                $sheet->getStyle("K2:N{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
-                // Freeze header row, sama seperti template asli
+                // Format teks untuk NO.AKUN dan NO
+                $sheet->getStyle("D2:E{$lastRow}")->getNumberFormat()->setFormatCode('@');
+
+                $sheet->setAutoFilter("A1:N{$lastRow}");
                 $sheet->freezePane('A2');
             },
         ];
