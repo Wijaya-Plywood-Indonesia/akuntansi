@@ -67,15 +67,15 @@ class JurnalPenjualanTriplekService
         private readonly BukuKitabJurnalService $engine,
     ) {}
 
-    public function buatJurnalPenjualan(Penjualan $penjualan, int $userId): void
+    public function buatJurnalPenjualan(Penjualan $penjualan, int $userId, ?int $noJurnalOverride = null): void
     {
         $penjualan->loadMissing(['details.barang.subAnakAkun', 'rekeningPerusahaan.subAnakAkun']);
 
         $totalBayar = $this->totalBayar($penjualan);
         $data = $this->siapkanDataBarang($penjualan);
 
-        DB::transaction(function () use ($penjualan, $userId, $totalBayar, $data) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+        DB::transaction(function () use ($penjualan, $userId, $totalBayar, $data, $noJurnalOverride) {
+            $noJurnal = $noJurnalOverride ?: ((int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1);
 
             if ($penjualan->jenis_transaksi === 'DP') {
                 // ── DP: penjualan diakui PENUH sekarang, Piutang = TOTAL
@@ -238,14 +238,16 @@ class JurnalPenjualanTriplekService
 
         foreach ($penjualan->details as $detail) {
             $qty = (float) $detail->qty;
-            $hargaBeli = (float) ($detail->barang->harga_beli ?? 0);
-            $nominal = $qty * $hargaBeli;
+            $subtotalDetail = (float) $detail->subtotal;
+            $hargaJualSatuan = (float) ($detail->harga_jual ?? 0);
 
-            if ($nominal <= 0) {
-                continue;
-            }
+            // Jika barang diinput dengan harga 0 (sampel / bonus / promo),
+            // maka harga beli/HPP-nya juga diperlakukan 0 agar persediaan dan HPP-nya bernilai 0.
+            $isHargaNol = ($hargaJualSatuan <= 0 || $subtotalDetail <= 0);
+            $hargaBeli = $isHargaNol ? 0.0 : (float) ($detail->barang->harga_beli ?? 0);
+            $nominalHpp = $qty * $hargaBeli;
 
-            $nilaiPokokBarang += $nominal;
+            $nilaiPokokBarang += $nominalHpp;
 
             // FIX: sebelumnya baris ini SELALU numpuk ke 1 akun Persediaan
             // tetap dari template Buku Kitab (mis. "1404.2 Persediaan
@@ -273,23 +275,8 @@ class JurnalPenjualanTriplekService
                 'keterangan'  => 'Keluar stok '.$detail->nama_barang,
             ];
 
-            // FIX: sama seperti Persediaan di atas — akun HPP & akun
-            // Pendapatan juga bisa beda-beda PER BARANG (lihat master
-            // Barang: kolom "Akun Pendapatan" & "Akun HPP"), bukan cuma
-            // akun Persediaan. Sebelumnya kedua breakdown ini tidak bawa
-            // no_akun/nama_akun sendiri, jadi selalu numpuk ke akun tetap
-            // dari template Buku Kitab (mis. semua barang tercatat ke
-            // "4002.0 Penjualan Domestik" walau di master Barang sudah
-            // di-set akun pendapatan lain, mis. "4199.0 Pendapatan Usaha
-            // Lainnya" untuk Lem Dover). Kalau barang tidak di-set akun
-            // khusus (null), otomatis fallback ke akun tetap template
-            // seperti biasa — jadi aman untuk barang yang memang belum
-            // di-mapping.
             $kodeAkunHpp = $detail->barang?->akunHpp?->kode_sub_anak_akun;
             $namaAkunHpp = $detail->barang?->akunHpp?->nama_sub_anak_akun;
-
-            $kodeAkunPendapatan = $detail->barang?->akunPendapatan?->kode_sub_anak_akun;
-            $namaAkunPendapatan = $detail->barang?->akunPendapatan?->nama_sub_anak_akun;
 
             $breakdownHpp[] = [
                 'no_akun'     => $kodeAkunHpp,
@@ -300,7 +287,12 @@ class JurnalPenjualanTriplekService
                 'keterangan'  => 'HPP '.$detail->nama_barang,
             ];
 
-            $hargaJualBersih = $qty > 0 ? round((float) $detail->subtotal / $qty, 4) : 0;
+            // Breakdown Penjualan: selalu masukkan seluruh detail barang meski harga jual / subtotal 0
+            $subtotalDetail = (float) $detail->subtotal;
+            $kodeAkunPendapatan = $detail->barang?->akunPendapatan?->kode_sub_anak_akun;
+            $namaAkunPendapatan = $detail->barang?->akunPendapatan?->nama_sub_anak_akun;
+
+            $hargaJualBersih = $qty > 0 ? round($subtotalDetail / $qty, 4) : 0;
             $breakdownPenjualan[] = [
                 'no_akun'     => $kodeAkunPendapatan,
                 'nama_akun'   => $namaAkunPendapatan,

@@ -417,7 +417,8 @@ class ViewPenjualan extends ViewRecord
                         $data['bayar'] = (float) ($data['bayar'] ?? 0);
                         $data['kembalian'] = (float) ($data['kembalian'] ?? 0);
 
-                        SyncPenjualanService::syncPenjualan($record->id, $data);
+                        $userId = filament()->auth()->id() ?? 1;
+                        SyncPenjualanService::syncPenjualan($record->id, $data, $userId);
 
                         Notification::make()
                             ->title('Data Berhasil Disinkronkan')
