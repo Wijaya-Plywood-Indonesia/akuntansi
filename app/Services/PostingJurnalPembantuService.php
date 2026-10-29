@@ -88,6 +88,7 @@ class PostingJurnalPembantuService
             $namaGlobal = null;
             $noDokumenGlobal = null;
             $pihakIdGlobal = null;
+            $supplierIdGlobal = null;
 
             foreach ($headers as $h) {
                 if (empty($noDokumenGlobal) && ! empty($h->no_dokumen)) {
@@ -108,8 +109,20 @@ class PostingJurnalPembantuService
                     }
                 }
 
-                if (empty($pihakIdGlobal)) {
-                    $pihakIdGlobal = $h->items->first()?->pihak_id;
+                if (empty($pihakIdGlobal) && empty($supplierIdGlobal)) {
+                    $it = $h->items->first();
+
+                    if ($it && in_array($it->jenis_pihak, ['supplier', 'pemasok'], true)) {
+                        // Pihak = supplier -> masuk id_supplier (Buku Pembantu Utang),
+                        // bukan id_pembeli. Kalau pihak_id kosong, cocokkan lewat nama.
+                        $supplierIdGlobal = $it->pihak_id ?: (
+                            filled($it->nama_pihak)
+                                ? \App\Models\Supplier::whereRaw('LOWER(TRIM(nama)) = ?', [mb_strtolower(trim($it->nama_pihak))])->value('id')
+                                : null
+                        );
+                    } elseif ($it) {
+                        $pihakIdGlobal = $it->pihak_id;
+                    }
                 }
             }
 
@@ -222,6 +235,7 @@ class PostingJurnalPembantuService
                         'keterangan' => $header->keterangan,
                         'id_barang' => $idBarangFinal,
                         'id_pembeli' => $pihakIdGlobal,
+                        'id_supplier' => $supplierIdGlobal,
                         'banyak' => $banyakFinal !== null ? round($banyakFinal, 4) : null,
                         'm3' => $m3Final !== null ? round($m3Final, 4) : null,
                         'harga' => round($hargaFinal, 2),
