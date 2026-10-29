@@ -203,9 +203,6 @@ class BukuKitabJurnalService
                         $banyakItem = (float) ($b['banyak'] ?? 0);
                         $hargaItem = (float) ($b['harga'] ?? 0);
                         $nominalItem = round($banyakItem * $hargaItem, 4);
-                        if ($nominalItem <= 0) {
-                            continue;
-                        }
 
                         $ketItem = $b['keterangan'] ?? ($b['nama_barang'] ?? $baris->keterangan ?? $keteranganDefault ?? $kodeKitab);
 
@@ -391,9 +388,6 @@ class BukuKitabJurnalService
                         $banyakItem = (float) ($b['banyak'] ?? 0);
                         $hargaItem = (float) ($b['harga'] ?? 0);
                         $nominalItem = round($banyakItem * $hargaItem, 4);
-                        if ($nominalItem <= 0) {
-                            continue;
-                        }
 
                         $dataItem = [
                             'jurnal_pembantu_header_id' => $header->id,

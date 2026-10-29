@@ -187,6 +187,20 @@ class PostingJurnalPembantuService
                         $hargaFinal = $totalNilaiGrup;
                     }
 
+                    // Jika hit_kbk 'b' atau 'm' menghasilkan selisih pembulatan rupiah vs totalNilaiGrup
+                    // (misal karena beberapa item barang digabung di header yang sama dengan harga satuan beda),
+                    // kosongkan hit_kbk dan gunakan harga = totalNilaiGrup langsung agar nilai rupiah
+                    // Jurnal Umum 100% konsisten dengan Jurnal Pembantu dan tidak pernah selisih/unbalanced.
+                    // Kolom banyak & m3 tetap disimpan sebagai catatan kuantitas fisik.
+                    if (! $pakaiJumlah && in_array($hitKbk, ['b', 'm'])) {
+                        $qtyCheck = $hitKbk === 'b' ? ($banyakFinal ?? 0) : ($m3Final ?? 0);
+                        $nilaiHitung = round($qtyCheck * round($hargaFinal, 2), 2);
+                        if (abs($nilaiHitung - round($totalNilaiGrup, 2)) > 0.01) {
+                            $hitKbk = '';
+                            $hargaFinal = $totalNilaiGrup;
+                        }
+                    }
+
                     if ($pakaiJumlah) {
                         // Nilai sudah final dari `jumlah`. hit_kbk kosong =>
                         // JurnalUmum::getNilaiAttribute memakai harga langsung,
