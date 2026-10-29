@@ -259,6 +259,7 @@
                         </td>
                         <td class="px-4 py-3 text-center font-semibold text-gray-900 dark:text-gray-100">
                             {{ number_format($detail['stok_sistem'], 2, '.', '') }}
+                            <span class="text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500">{{ $detail['satuan'] }}</span>
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if ($opname->isDraft())
@@ -270,9 +271,11 @@
                                 wire:model.lazy="details.{{ $index }}.stok_aktual"
                                 onclick="this.select()"
                                 placeholder="-">
+                            <span class="ml-1 text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500">{{ $detail['satuan'] }}</span>
                             @else
                             <span class="font-semibold text-gray-900 dark:text-gray-100">
                                 {{ $aktual !== null ? number_format($aktual, 2, '.', '') : '-' }}
+                                <span class="text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500">{{ $detail['satuan'] }}</span>
                             </span>
                             @endif
                         </td>
@@ -280,6 +283,7 @@
                             @if ($selisih !== null)
                             <span class="{{ $selisih > 0 ? 'text-green-600 dark:text-green-400' : ($selisih < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400') }}">
                                 {{ $selisih > 0 ? '+' : '' }}{{ number_format($selisih, 2, '.', '') }}
+                                <span class="text-[10px] font-bold uppercase opacity-70">{{ $detail['satuan'] }}</span>
                             </span>
                             @else
                             <span class="text-gray-400 dark:text-gray-500">-</span>
