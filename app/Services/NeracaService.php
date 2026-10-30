@@ -101,7 +101,7 @@ class NeracaService
             ->get()
             ->keyBy('no_akun');
 
-        $semuaKode = collect(array_keys($saldoAwal))->merge($mutasi->keys())->unique();
+        $semuaKode = collect(array_keys($saldoAwal))->merge($mutasi->keys())->unique(null, true);
 
         $result = [];
         foreach ($semuaKode as $kode) {
@@ -152,7 +152,7 @@ class NeracaService
             ->get()
             ->keyBy('no_akun');
 
-        $semuaKode = collect(array_keys($qtyAwal))->merge($mutasiQty->keys())->unique();
+        $semuaKode = collect(array_keys($qtyAwal))->merge($mutasiQty->keys())->unique(null, true);
 
         $result = [];
         foreach ($semuaKode as $kode) {
@@ -208,7 +208,7 @@ class NeracaService
             ->get()
             ->keyBy('no_akun');
 
-        $semuaKode = collect(array_keys($m3Awal))->merge($mutasiM3->keys())->unique();
+        $semuaKode = collect(array_keys($m3Awal))->merge($mutasiM3->keys())->unique(null, true);
 
         $result = [];
         foreach ($semuaKode as $kode) {
