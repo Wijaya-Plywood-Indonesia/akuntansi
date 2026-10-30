@@ -362,6 +362,7 @@
         showBarangPicker: @entangle('showBarangPicker'),
         barangOptions: @entangle('barangOptions'),
         id_pembeli: @entangle('id_pembeli'),
+        pihakTipe: @entangle('pihakTipe'),
         showPembeliPicker: @entangle('showPembeliPicker'),
         pembeliOptions: @entangle('pembeliOptions'),
         nama: @entangle('nama'),
@@ -876,12 +877,12 @@
                         <div class="flex items-center gap-1 mb-1">
                             <span
                                 class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Pilih
-                                Pembeli (Piutang)</span>
+                                <span x-text="pihakTipe === 'utang' ? 'Supplier (Utang)' : 'Pembeli (Piutang)'"></span></span>
                             <span class="text-rose-500 text-[11px]">*</span>
                         </div>
                         <div class="relative">
                             <input type="text" x-model="pembeliSearchTerm" @focus="isPembeliDropdownOpen = true"
-                                placeholder="Cari pembeli..."
+                                :placeholder="pihakTipe === 'utang' ? 'Cari supplier...' : 'Cari pembeli...'"
                                 class="w-full px-3.5 py-2.5 pr-10 text-sm bg-indigo-50 dark:bg-gray-800 border border-indigo-300 dark:border-indigo-900 rounded-lg font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm">
                             <button type="button" x-show="pembeliSearchTerm.length > 0 || id_pembeli"
                                 @click="clearPembeli()"
@@ -1936,7 +1937,7 @@
                                             @if (in_array($hj->no_akun, $piutangAkunCodes ?? []) && $hj->nama)
                                                 <span
                                                     class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-[9px] font-black text-violet-700 dark:text-violet-400"
-                                                    title="Piutang atas nama pembeli ini">
+                                                    title="Buku pembantu: atas nama pihak ini">
                                                     <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor"
                                                         viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -2390,7 +2391,7 @@
                                             @if ($hj->nama && in_array($hj->no_akun, $piutangAkunCodes ?? []))
                                                 <span
                                                     class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/20 text-[10px] font-black text-violet-700 dark:text-violet-400 tracking-wider"
-                                                    title="Piutang atas nama pembeli ini">
+                                                    title="Buku pembantu: atas nama pihak ini">
                                                     {{ $hj->nama }}
                                                 </span>
                                             @else

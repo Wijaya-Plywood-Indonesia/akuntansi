@@ -188,44 +188,44 @@ class StockOpnamePage extends Page implements HasForms
 
     /**
      * Menghitung stok buku besar untuk sekumpulan barang sekaligus dalam
-     * SATU query agregat ke JurnalUmum (meniru logika StokMatrix::mount()
-     * di web telur), alih-alih memanggil accessor per-barang di dalam loop
-     * (yang menyebabkan N+1 query dan halaman terasa berat).
+     * SATU query agregat ke JurnalUmum.
      *
-     * @param  \Illuminate\Support\Collection|iterable  $barangs  Koleksi Barang, WAJIB sudah eager-load relasi subAnakAkun
+     * PENTING: pencocokan HARUS lewat `id_barang` (sama persis dengan
+     * StokMatrix::mount()), BUKAN lewat `no_akun`. Satu akun persediaan
+     * bisa dipakai beberapa barang (mis. Tepung WHN & Tepung WJY sama-sama
+     * 1402.13) — kalau dihitung per no_akun, stok kedua barang tergabung
+     * dan angkanya jadi beda dengan Stok Matrix.
+     *
+     * @param  \Illuminate\Support\Collection|iterable  $barangs
      * @return array<int, float>  key = barang_id, value = stok
      */
     protected function hitungStokBukuBesarBatch(iterable $barangs): array
     {
-        $barangs = collect($barangs);
+        $barangIds = collect($barangs)->pluck('id')->filter()->unique()->values()->all();
 
-        $kodeAkuns = $barangs->map(fn($barang) => $barang->subAnakAkun?->kode_sub_anak_akun)
-            ->filter()
-            ->unique()
-            ->toArray();
-
-        $transaksisGrouped = JurnalUmum::select('no_akun', 'map', DB::raw('SUM(COALESCE(banyak, 0)) as total_qty'))
-            ->whereIn('no_akun', $kodeAkuns)
-            ->groupBy('no_akun', 'map')
+        $transaksisGrouped = JurnalUmum::select(
+            'id_barang',
+            'map',
+            DB::raw('SUM(COALESCE(banyak, 0)) as total_qty')
+        )
+            ->whereIn('id_barang', $barangIds)
+            ->groupBy('id_barang', 'map')
             ->get()
-            ->groupBy('no_akun');
+            ->groupBy('id_barang');
 
         $hasil = [];
 
-        foreach ($barangs as $barang) {
-            $kodeAkun = $barang->subAnakAkun?->kode_sub_anak_akun;
-
+        foreach ($barangIds as $id) {
             $totalQty = 0.0;
-            if ($kodeAkun && isset($transaksisGrouped[$kodeAkun])) {
-                foreach ($transaksisGrouped[$kodeAkun] as $trx) {
-                    $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
-                    $qty = (float) $trx->total_qty;
 
-                    $totalQty += $isDebit ? $qty : -$qty;
-                }
+            foreach ($transaksisGrouped[$id] ?? [] as $trx) {
+                $isDebit = in_array(strtolower($trx->map), ['d', 'debit']);
+                $qty = (float) $trx->total_qty;
+
+                $totalQty += $isDebit ? $qty : -$qty;
             }
 
-            $hasil[$barang->id] = $totalQty;
+            $hasil[$id] = $totalQty;
         }
 
         return $hasil;
@@ -325,7 +325,7 @@ class StockOpnamePage extends Page implements HasForms
         }
 
         // Muat ulang detail relasi barang terbaru dari database
-        $this->opname->load(['details.barang.subAnakAkun']);
+        $this->opname->load(['details.barang.subAnakAkun', 'details.barang.satuan']);
 
         // Jika masih draft, hitung stok buku besar terbaru untuk SEMUA barang di detail sekaligus (1 query)
         $stokBukuBesarMap = $this->opname->isDraft()
@@ -346,6 +346,7 @@ class StockOpnamePage extends Page implements HasForms
                     'barang_id' => $d->barang_id,
                     'barang' => $d->barang->nama_barang ?? '-',
                     'kode' => $d->barang->kode_barang ?? '-',
+                    'satuan' => $d->barang->satuan?->nama_satuan ?? '',
                     'stok_sistem' => $stokSistem,
                     'stok_aktual' => $d->stok_aktual !== null ? (string) $d->stok_aktual : '',
                     'catatan' => $d->catatan ?? '',
@@ -423,71 +424,131 @@ class StockOpnamePage extends Page implements HasForms
                     $this->catatan_approval ?: null
                 );
 
-                $this->opname->load('details.barang.subAnakAkun');
+                $this->opname->load('details.barang.subAnakAkun', 'details.barang.akunHpp');
 
-                $nextJurnalNo = (int) (\App\Models\JurnalUmum::max('jurnal') ?? 0) + 1;
-                $maxJP = (int) (\App\Models\JurnalPembantuHeader::max('jurnal') ?? 0);
-                $nextJurnalNo = max($nextJurnalNo, $maxJP) + 1;
+                // SATU nomor jurnal untuk seluruh barang dalam opname ini.
+                $nomorJurnal = max(
+                    (int) (JurnalUmum::max('jurnal') ?? 0),
+                    (int) (\App\Models\JurnalPembantuHeader::max('jurnal') ?? 0)
+                ) + 1;
 
-                // Hitung stok buku besar untuk SEMUA barang di opname ini sekaligus (1 query)
+                $noDokumen = $this->opname->no_opname ?? 'OPNAME_STOK';
+
+                // Stok buku besar terkini untuk SEMUA barang sekaligus (1 query, per id_barang)
                 $stokBukuBesarMap = $this->hitungStokBukuBesarBatch($this->opname->details->pluck('barang')->filter());
+
+                $barisPersediaan = []; // 1 baris per barang
+                $totalHpp = [];        // [kode_akun_hpp => ['nama' => ..., 'debit' => qty, 'kredit' => qty]]
+                $tanpaAkunHpp = [];
 
                 foreach ($this->opname->details as $detail) {
                     $barang = $detail->barang;
                     $subAkun = $barang?->subAnakAkun;
                     $kodeAkun = $subAkun?->kode_sub_anak_akun;
-                    $namaAkun = $subAkun?->nama_sub_anak_akun;
 
-                    if (!$kodeAkun) {
+                    if (! $barang || ! $kodeAkun) {
                         continue;
                     }
 
-                    $stokBukuBesarTerkini = $stokBukuBesarMap[$barang->id] ?? 0.0;
-                    $stokAktualFisik = (float) ($detail->stok_aktual ?? 0);
-                    $selisihOpname = $stokAktualFisik - $stokBukuBesarTerkini;
+                    $selisih = round((float) ($detail->stok_aktual ?? 0) - ($stokBukuBesarMap[$barang->id] ?? 0.0), 4);
 
-                    if ($selisihOpname == 0) {
+                    if ($selisih == 0) {
                         continue;
                     }
 
-                    $mapHeaderType = $selisihOpname > 0 ? 'd' : 'k';
-                    $mapItemType = $selisihOpname > 0 ? 'debit' : 'kredit';
-                    $qtyPenyesuaian = abs($selisihOpname);
+                    $kodeHpp = $barang->akunHpp?->kode_sub_anak_akun;
+                    if (! $kodeHpp) {
+                        $tanpaAkunHpp[] = $barang->nama_barang;
+                        continue;
+                    }
 
-                    $nextNoJurnalPembantu = (int) (\App\Models\JurnalPembantuHeader::max('no_jurnal_pembantu') ?? 0) + 1;
+                    $naik = $selisih > 0;
 
-                    $jurnalPembantuHeader = \App\Models\JurnalPembantuHeader::create([
-                        'no_jurnal_pembantu'  => $nextNoJurnalPembantu,
+                    $barisPersediaan[] = [
+                        'barang' => $barang,
+                        'kode' => $kodeAkun,
+                        'nama' => $subAkun->nama_sub_anak_akun,
+                        'naik' => $naik,
+                        'qty' => abs($selisih),
+                        'selisih' => $selisih,
+                        'harga' => (float) ($barang->harga_beli ?? 0),
+                    ];
+
+                    $totalHpp[$kodeHpp] ??= [
+                        'nama' => $barang->akunHpp->nama_sub_anak_akun,
+                        'debit' => 0.0,
+                        'kredit' => 0.0,
+                        'ada_debit' => false,
+                        'ada_kredit' => false,
+                    ];
+                    $totalHpp[$kodeHpp][$naik ? 'ada_kredit' : 'ada_debit'] = true;
+                    // Barang bertambah: Persediaan (D) / HPP (K). Berkurang: Persediaan (K) / HPP (D).
+                    // Nilai = selisih x harga beli barang.
+                    $totalHpp[$kodeHpp][$naik ? 'kredit' : 'debit'] += abs($selisih) * (float) ($barang->harga_beli ?? 0);
+                }
+
+                if ($tanpaAkunHpp) {
+                    throw new \Exception(
+                        'Akun HPP belum di-set di master Barang untuk: ' . implode(', ', $tanpaAkunHpp)
+                        . '. Lengkapi dulu, lalu approve ulang.'
+                    );
+                }
+
+                $buatHeader = function (string $kode, ?string $nama, string $map, string $ket, array $itemData, float $nilai) use ($nomorJurnal, $noDokumen) {
+                    $header = \App\Models\JurnalPembantuHeader::create([
+                        'no_jurnal_pembantu'  => (int) (\App\Models\JurnalPembantuHeader::max('no_jurnal_pembantu') ?? 0) + 1,
                         'tgl_transaksi'       => now()->format('Y-m-d'),
                         'jenis_transaksi'     => 'so',
                         'modul_asal'          => 'stock_opname',
-                        'jurnal'              => $nextJurnalNo,
-                        'no_akun'             => $kodeAkun,
-                        'nama_akun'           => $namaAkun,
-                        'map'                 => $mapHeaderType,
-                        'no_dokumen'          => $this->opname->no_opname ?? 'OPNAME_STOK',
-                        'keterangan'          => 'Opname Penyesuaian Fisik: ' . $barang->nama_barang . ' (Selisih: ' . ($selisihOpname > 0 ? '+' : '') . $selisihOpname . ')',
-                        'total_nilai'         => 0.0,
+                        'jurnal'              => $nomorJurnal,
+                        'no_akun'             => $kode,
+                        'nama_akun'           => $nama,
+                        'map'                 => $map,
+                        'no_dokumen'          => $noDokumen,
+                        'keterangan'          => $ket,
+                        'total_nilai'         => $nilai,
                         'status'              => \App\Models\JurnalPembantuHeader::STATUS_DRAFT,
                         'adalah_jurnal_balik' => false,
                         'dibuat_oleh'         => auth()->id(),
                     ]);
 
-                    $jurnalPembantuHeader->items()->create([
-                        'urut'         => 1,
-                        'barang_id'    => $barang->id,
-                        'no_akun'      => $kodeAkun,
-                        'nama_akun'    => $namaAkun,
-                        'map'          => $mapItemType,
-                        'nama_barang'  => $barang->nama_barang,
-                        'no_dokumen'   => $this->opname->no_opname ?? 'OPNAME_STOK',
-                        'banyak'       => $qtyPenyesuaian,
-                        'harga'        => 0.0,
-                        'jumlah'       => 0.0,
-                        'status'       => true,
-                        'keterangan'   => 'Opname Penyesuaian Fisik: ' . $barang->nama_barang . ' (Selisih: ' . ($selisihOpname > 0 ? '+' : '') . $selisihOpname . ')',
-                        'created_by'   => auth()->id(),
+                    $header->items()->create($itemData + [
+                        'jumlah'     => $nilai,
+                        'urut'       => 1,
+                        'no_dokumen' => $noDokumen,
+                        'status'     => true,
+                        'keterangan' => $ket,
+                        'created_by' => auth()->id(),
                     ]);
+                };
+
+                // Persediaan: 1 header per barang (id_barang terisi -> ikut hitungan Stok Matrix)
+                foreach ($barisPersediaan as $b) {
+                    $ket = 'Opname Penyesuaian Fisik: ' . $b['barang']->nama_barang
+                        . ' (Selisih: ' . ($b['selisih'] > 0 ? '+' : '') . $b['selisih'] . ')';
+
+                    $buatHeader($b['kode'], $b['nama'], $b['naik'] ? 'd' : 'k', $ket, [
+                        'id_barang'   => $b['barang']->id,
+                        'nama_barang' => $b['barang']->nama_barang,
+                        'banyak'      => $b['qty'],
+                        'harga'       => $b['harga'],
+                    ], round($b['qty'] * $b['harga'], 4));
+                }
+
+                // HPP: 1 header per akun HPP per sisi (D/K), TANPA id_barang
+                // supaya tidak ikut terhitung sebagai stok barang di Stok Matrix.
+                foreach ($totalHpp as $kodeHpp => $h) {
+                    $ket = 'Opname Penyesuaian Fisik (HPP) ' . $noDokumen;
+
+                    foreach (['kredit' => 'k', 'debit' => 'd'] as $sisi => $map) {
+                        if ($h['ada_' . $sisi]) {
+                            $buatHeader($kodeHpp, $h['nama'], $map, $ket, [
+                                'nama_barang' => 'Penyesuaian Opname',
+                                'banyak'      => 0,
+                                'harga'       => $h[$sisi],
+                            ], round($h[$sisi], 4));
+                        }
+                    }
                 }
             });
 

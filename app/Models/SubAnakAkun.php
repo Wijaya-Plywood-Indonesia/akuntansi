@@ -25,6 +25,7 @@ class SubAnakAkun extends Model
      */
     const TIPE_BUKU_PEMBANTU = [
         'piutang' => 'Piutang (per Pembeli)',
+        'utang' => 'Utang (per Supplier)',
     ];
 
     /*

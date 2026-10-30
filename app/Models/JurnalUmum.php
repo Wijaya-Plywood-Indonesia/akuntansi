@@ -15,6 +15,7 @@ class JurnalUmum extends Model
         'no_akun',
         'id_barang',
         'id_pembeli',
+        'id_supplier',
         'nama_akun',
         'nama',
         'banyak',
@@ -51,6 +52,11 @@ class JurnalUmum extends Model
     public function barang()
     {
         return $this->belongsTo(Barang::class, 'id_barang');
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class, 'id_supplier');
     }
 
     public function pembeli()
