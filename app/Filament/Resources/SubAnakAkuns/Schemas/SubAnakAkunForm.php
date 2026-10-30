@@ -43,7 +43,7 @@ class SubAnakAkunForm
 
                 Select::make('tipe_buku_pembantu')
                     ->label('Buku Pembantu')
-                    ->helperText('Menentukan modal apa yang muncul saat akun ini diklik di Chart of Accounts. Kosongkan kalau akun ini bukan Piutang (mis. akun Persediaan tetap pakai Barang Terkait secara otomatis).')
+                    ->helperText('Menentukan modal apa yang muncul saat akun ini diklik di Chart of Accounts. Kosongkan kalau akun ini bukan Piutang/Utang (mis. akun Persediaan tetap pakai Barang Terkait secara otomatis).')
                     ->options(SubAnakAkun::TIPE_BUKU_PEMBANTU)
                     ->native(false)
                     ->placeholder('Default (Barang Terkait, kalau ada)'),

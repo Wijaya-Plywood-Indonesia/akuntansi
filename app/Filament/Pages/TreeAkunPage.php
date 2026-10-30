@@ -226,6 +226,12 @@ class TreeAkunPage extends Page
         return $tgl->lte($hariIni) ? $tgl->diffInDays($hariIni) : 0;
     }
 
+    /** True kalau sub akun yang dibuka bertipe 'utang' (per Supplier), bukan 'piutang' (per Pembeli). */
+    public function getSelectedBukuIsUtangProperty(): bool
+    {
+        return $this->selectedPiutangSubAkun?->tipe_buku_pembantu === 'utang';
+    }
+
     public function getPiutangPembeliListProperty()
     {
         $subAkun = $this->selectedPiutangSubAkun;
@@ -235,14 +241,17 @@ class TreeAkunPage extends Page
         }
 
         $rows = JurnalUmum::query()
-            ->with('pembeli:id,nama')
+            ->with('pembeli:id,nama', 'supplier:id,nama')
             ->where('no_akun', $subAkun->kode_sub_anak_akun)
             ->orderBy('tgl')
             ->get();
 
+        $isUtang = $this->selectedBukuIsUtang;
+        $kolomId = $isUtang ? 'id_supplier' : 'id_pembeli';
+
         return $rows
-            ->groupBy(fn (JurnalUmum $r) => $r->id_pembeli ? 'id:'.$r->id_pembeli : 'nama:'.trim((string) $r->nama))
-            ->map(function ($group, $key) {
+            ->groupBy(fn (JurnalUmum $r) => $r->{$kolomId} ? 'id:'.$r->{$kolomId} : 'nama:'.trim((string) $r->nama))
+            ->map(function ($group, $key) use ($isUtang) {
                 $first = $group->first();
                 $debit = (float) $group->sum('debit');
                 $kredit = (float) $group->sum('kredit');
@@ -250,10 +259,11 @@ class TreeAkunPage extends Page
 
                 return (object) [
                     'key' => $key,
-                    'nama' => $first->pembeli?->nama ?: ($first->nama ?: 'Tanpa Nama'),
+                    'nama' => ($isUtang ? $first->supplier?->nama : $first->pembeli?->nama) ?: ($first->nama ?: 'Tanpa Nama'),
                     'debit' => $debit,
                     'kredit' => $kredit,
-                    'saldo' => $debit - $kredit,
+                    // Piutang: saldo normal debit. Utang: saldo normal kredit.
+                    'saldo' => $isUtang ? $kredit - $debit : $debit - $kredit,
                     // Jumlah NOTA unik (bukan jumlah baris jurnal — 1 nota
                     // bisa punya 2+ baris: tagihan + pelunasan/DP, jadi kalau
                     // dihitung dari baris jurnal angkanya bisa 2x lipat dari
@@ -314,11 +324,14 @@ class TreeAkunPage extends Page
             ->orderBy('tgl')
             ->orderBy('id');
 
+        $isUtang = $this->selectedBukuIsUtang;
+        $kolomId = $isUtang ? 'id_supplier' : 'id_pembeli';
+
         if (str_starts_with($this->selectedPembeliKey, 'id:')) {
-            $query->where('id_pembeli', (int) substr($this->selectedPembeliKey, 3));
+            $query->where($kolomId, (int) substr($this->selectedPembeliKey, 3));
         } else {
             $nama = substr($this->selectedPembeliKey, 5);
-            $query->whereNull('id_pembeli')->where('nama', $nama);
+            $query->whereNull($kolomId)->where('nama', $nama);
         }
 
         $saldoBerjalan = 0.0;
@@ -328,8 +341,8 @@ class TreeAkunPage extends Page
         // dilakukan setelah saldo_berjalan selesai dihitung, lewat reverse()
         // di akhir — supaya angkanya tetap benar tapi baris terbaru muncul
         // di atas.
-        return $query->get()->map(function (JurnalUmum $r) use (&$saldoBerjalan) {
-            $saldoBerjalan += $r->debit - $r->kredit;
+        return $query->get()->map(function (JurnalUmum $r) use (&$saldoBerjalan, $isUtang) {
+            $saldoBerjalan += $isUtang ? $r->kredit - $r->debit : $r->debit - $r->kredit;
 
             return (object) [
                 'tgl' => $r->tgl,
