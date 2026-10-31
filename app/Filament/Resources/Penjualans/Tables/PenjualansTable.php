@@ -6,6 +6,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -75,6 +76,16 @@ class PenjualansTable
 
             ->recordActions([
                 ViewAction::make(),
+
+                EditAction::make()
+                    ->visible(function ($record) {
+                        $user = filament()->auth()->user();
+                        if ($user->hasRole('super_admin')) {
+                            return true;
+                        }
+
+                        return empty($record->validated_by);
+                    }),
 
                 // 🖨 CETAK
                 Action::make('cetak')
@@ -160,20 +171,14 @@ class PenjualansTable
                     ->requiresConfirmation()
                     ->action(function ($record, DeleteAction $action) {
 
-                        // 1. Cek relasi yang ada di model Penjualan
-                        $adaDetailBarang = $record->details()->exists();
+                        // 1. Cek relasi retur: jika sudah ada retur tidak boleh dihapus langsung
                         $adaReturn = $record->returns()->exists();
 
-                        // 2. Logika validasi
-                        if ($adaDetailBarang || $adaReturn) {
-                            $alasan = $adaReturn
-                                ? 'Sudah terdapat data retur yang terikat pada nota ini.'
-                                : 'Masih terdapat rincian detail barang (item) dalam nota.';
-
+                        if ($adaReturn) {
                             Notification::make()
                                 ->danger()
                                 ->title('Data Gagal Dihapus!')
-                                ->body("Nota {$record->no_nota} tidak dapat dihapus karena: {$alasan} Silakan hapus data relasi terlebih dahulu.")
+                                ->body("Nota {$record->no_nota} tidak dapat dihapus karena sudah terdapat data retur yang terikat pada nota ini. Silakan hapus data retur terlebih dahulu.")
                                 ->persistent()
                                 ->send();
 
@@ -181,13 +186,16 @@ class PenjualansTable
                             $action->halt();
                         }
 
-                        // 3. Jika lolos pemeriksaan, hapus record
-                        $record->delete();
+                        // 2. Hapus detail barang & record penjualan dalam database transaction
+                        \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
+                            $record->details()->delete();
+                            $record->delete();
+                        });
 
                         Notification::make()
                             ->success()
                             ->title('Berhasil Dihapus')
-                            ->body("Data penjualan Nota {$record->no_nota} telah berhasil dihapus dari sistem.")
+                            ->body("Data penjualan Nota {$record->no_nota} beserta rincian item telah berhasil dihapus dari sistem.")
                             ->send();
                     }),
             ])
