@@ -294,6 +294,10 @@ class JurnalPenjualanTriplekService
             $namaAkunPendapatan = $detail->barang?->akunPendapatan?->nama_sub_anak_akun;
 
             $hargaJualBersih = $qty > 0 ? round($subtotalDetail / $qty, 4) : 0;
+            // id_barang sengaja TIDAK diisi di breakdown penjualan —
+            // tracking barang (untuk Stok Matrix & Buku Besar persediaan)
+            // cukup di baris persediaan saja. Akun pendapatan (4002.x)
+            // tidak perlu terhubung ke id_barang tertentu.
             $breakdownPenjualan[] = [
                 'no_akun'     => $kodeAkunPendapatan,
                 'nama_akun'   => $namaAkunPendapatan,
