@@ -10,6 +10,7 @@ use App\Models\JurnalPembantuItem;
 use App\Models\Kategori;
 use App\Models\Satuan;
 use App\Models\SubAnakAkun;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
@@ -681,7 +682,10 @@ class ImportJurnalProduksiService
     private function nextNomorJurnal(): int
     {
         if ($this->currentJurnalNo === null) {
-            $this->currentJurnalNo = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0);
+            ['jurnal' => $this->currentJurnalNo] = NomorJurnalService::nextJurnalDanNoJP();
+            // NomorJurnalService sudah increment 1, turunkan balik supaya ++$this->currentJurnalNo
+            // mengembalikan nilai yang sudah dialokasikan sebagai nilai pertama.
+            $this->currentJurnalNo--;
         }
 
         return ++$this->currentJurnalNo;
@@ -690,7 +694,8 @@ class ImportJurnalProduksiService
     private function nextNomorPembantu(): int
     {
         if ($this->currentPembantuNo === null) {
-            $this->currentPembantuNo = (int) (JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') ?? 0);
+            ['no_jp' => $this->currentPembantuNo] = NomorJurnalService::nextJurnalDanNoJP();
+            $this->currentPembantuNo--;
         }
 
         return ++$this->currentPembantuNo;

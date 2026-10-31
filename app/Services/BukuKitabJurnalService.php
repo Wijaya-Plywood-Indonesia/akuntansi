@@ -171,18 +171,24 @@ class BukuKitabJurnalService
             foreach ($barisTemplate as $baris) {
                 $nominal = (float) ($context[$baris->variabel_nilai] ?? 0);
 
+                $breakdown = $itemBreakdown[$baris->variabel_nilai] ?? null;
+                $harusSplitHeader = !empty($breakdown)
+                    && in_array($baris->variabel_nilai, $splitHeaderPerBarang, true);
+
                 // Baris yang nilainya 0/tidak ada di context dilewati —
                 // contoh: baris PPN dilewati kalau transaksi non-PPN,
                 // baris DP dilewati kalau memang tidak ada DP.
-                if ($nominal <= 0) {
+                //
+                // PENGECUALIAN: baris persediaan (splitHeaderPerBarang + ada
+                // breakdown item) tetap dibuat meski nominal = 0, karena stok
+                // fisik tetap keluar/masuk dan pergerakan itu harus tercatat
+                // di jurnal pembantu supaya Stok Matrix / Buku Besar persediaan
+                // terhitung benar (banyak/qty yang dihitung, bukan rupiah-nya).
+                if ($nominal <= 0 && !$harusSplitHeader) {
                     continue;
                 }
 
                 $adaBarisTerpakai = true;
-
-                $breakdown = $itemBreakdown[$baris->variabel_nilai] ?? null;
-                $harusSplitHeader = !empty($breakdown)
-                    && in_array($baris->variabel_nilai, $splitHeaderPerBarang, true);
 
                 if ($harusSplitHeader) {
                     // ── HEADER DIKELOMPOKKAN PER AKUN + PER BARANG ───────
