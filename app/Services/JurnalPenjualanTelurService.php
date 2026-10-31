@@ -9,6 +9,7 @@ use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
 use App\Models\Penjualan;
 use App\Models\SubAnakAkun;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -874,12 +875,12 @@ class JurnalPenjualanTelurService
 
     private function nextNomorJurnal(): int
     {
-        return (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+        return NomorJurnalService::nextJurnal();
     }
 
     private function nextNomorPembantu(): int
     {
-        return (JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') ?? 0) + 1;
+        return NomorJurnalService::nextNoJP();
     }
 
     // ══════════════════════════════════════════════════════════════════════

@@ -7,6 +7,7 @@ use App\Models\BukuKitab;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
 use App\Models\SubAnakAkun;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -162,7 +163,7 @@ class BukuKitabJurnalService
             $noJurnalOverride,
             $catatanPerVariabel,
         ) {
-            $noJurnal = $noJurnalOverride ?? (JurnalPembantuHeader::lockForUpdate()->max('jurnal') + 1);
+            $noJurnal = $noJurnalOverride ?? NomorJurnalService::nextJurnal();
 
             $headersDibuat = collect();
             $adaBarisTerpakai = false;
@@ -291,7 +292,7 @@ class BukuKitabJurnalService
                         }
 
                         $headerBarang = JurnalPembantuHeader::create([
-                            'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                            'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                             'tgl_transaksi'      => $tglTransaksi,
                             'jenis_transaksi'    => $jenisTransaksi,
                             'modul_asal'         => $modulAsal,
@@ -363,7 +364,7 @@ class BukuKitabJurnalService
                 $catatanBaris = trim((string) ($catatanPerVariabel[$baris->variabel_nilai] ?? ''));
 
                 $header = JurnalPembantuHeader::create([
-                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                    'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                     'tgl_transaksi'      => $tglTransaksi,
                     'jenis_transaksi'    => $jenisTransaksi,
                     'modul_asal'         => $modulAsal,

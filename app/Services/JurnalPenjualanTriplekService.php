@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\JurnalPembantuHeader;
 use App\Models\Penjualan;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -75,7 +76,7 @@ class JurnalPenjualanTriplekService
         $data = $this->siapkanDataBarang($penjualan);
 
         DB::transaction(function () use ($penjualan, $userId, $totalBayar, $data, $noJurnalOverride) {
-            $noJurnal = $noJurnalOverride ?: ((int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1);
+            $noJurnal = $noJurnalOverride ?: NomorJurnalService::nextJurnal();
 
             if ($penjualan->jenis_transaksi === 'DP') {
                 // ── DP: penjualan diakui PENUH sekarang, Piutang = TOTAL
@@ -206,7 +207,7 @@ class JurnalPenjualanTriplekService
         $dpSudahDiterima = $this->totalBayar($penjualan);
 
         DB::transaction(function () use ($penjualan, $nominalDibayarSekarang, $dpSudahDiterima, $userId) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             $this->postingSplitKas(
                 prefix: 'penjualan_dp_pelunasan',

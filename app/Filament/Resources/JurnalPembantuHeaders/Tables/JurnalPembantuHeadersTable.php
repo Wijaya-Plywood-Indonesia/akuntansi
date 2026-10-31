@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\JurnalPembantuHeaders\Tables;
 
 use App\Models\JurnalPembantuHeader;
+use App\Services\NomorJurnalService;
 use App\Services\PostingJurnalPembantuService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -327,11 +328,9 @@ class JurnalPembantuHeadersTable
                                     throw new \Exception('Jurnal sudah dibalik sebelumnya.');
                                 }
 
-                                $maxJurnal = (int) (JurnalPembantuHeader::query()->lockForUpdate()->max('jurnal') ?? 0);
-                                $maxNoJP = (int) (JurnalPembantuHeader::query()->lockForUpdate()->max('no_jurnal_pembantu') ?? 0);
-
-                                $nomorJurnalBaru = $maxJurnal + 1;
-                                $noJPBaru = $maxNoJP + 1;
+                                $nums = NomorJurnalService::nextJurnalDanNoJP();
+                                $nomorJurnalBaru = $nums['jurnal'];
+                                $noJPBaru = $nums['no_jp'];
 
                                 foreach ($headers as $header) {
                                     $headerBaru = JurnalPembantuHeader::create([
@@ -405,7 +404,8 @@ class JurnalPembantuHeadersTable
                     DeleteBulkAction::make(),
                 ]),
             ])
-            // Urut per nomor jurnal (terbaru di atas), lalu D sebelum K, lalu id.
+            // Urut per nomor jurnal (terbaru di atas), lalu berdasarkan id asli
+            // supaya No. JP tampil berurutan sesuai urutan pencatatan.
             // Item aktif + relasi barang di-eager-load untuk kolom "Barang".
             ->modifyQueryUsing(
                 fn (Builder $query) => $query
@@ -415,7 +415,6 @@ class JurnalPembantuHeadersTable
                             ->with('barang:id,kode_barang,nama_barang'),
                     ])
                     ->orderByDesc('jurnal')
-                    ->orderBy('map')
                     ->orderBy('id')
             );
     }

@@ -59,29 +59,18 @@ class PostingJurnalPembantuService
                 throw new \Exception("Jurnal No. {$nomorJurnal} tidak balance (Debit: {$totalDebit}, Kredit: {$totalKredit}).");
             }
 
-            $nomorFinal = (int) $nomorJurnal;
+            // Nomor jurnal final = nomor terbesar di Jurnal Umum + 1.
+            // Nomor di Jurnal Pembantu hanya dipakai sebagai kunci pengambilan data,
+            // bukan sebagai nomor di Jurnal Umum.
+            $maxJU = (int) (JurnalUmum::query()->lockForUpdate()->max('jurnal') ?? 0);
+            $nomorFinal = $maxJU + 1;
 
-            $sudahAda = JurnalUmum::query()
-                ->where('jurnal', $nomorFinal)
-                ->lockForUpdate()
-                ->exists();
-
-            if ($sudahAda) {
-                $maxJU = (int) (JurnalUmum::query()->lockForUpdate()->max('jurnal') ?? 0);
-                $maxJP = (int) (JurnalPembantuHeader::query()->lockForUpdate()->max('jurnal') ?? 0);
-
-                $nomorFinal = max($maxJU, $maxJP) + 1;
-
+            if ($nomorFinal !== (int) $nomorJurnal) {
                 JurnalPembantuHeader::query()
                     ->where('jurnal', $nomorJurnal)
                     ->update(['jurnal' => $nomorFinal]);
 
-                // Foto lampiran juga dikunci berdasarkan nomor jurnal — kalau
-                // nomornya di-renumber di atas tapi lampirannya tidak ikut
-                // dipindah, fotonya jadi "nyangkut" di nomor lama yang sudah
-                // tidak dipakai lagi (hilang dari Jurnal Umum). Method ini
-                // aman terhadap tabrakan (auto-merge kalau nomor tujuan
-                // kebetulan sudah punya lampiran sendiri).
+                // Lampiran foto ikut dipindah ke nomor baru agar tidak nyangkut di nomor lama.
                 JurnalLampiran::pindahkanKe((int) $nomorJurnal, $nomorFinal, $userId);
             }
 

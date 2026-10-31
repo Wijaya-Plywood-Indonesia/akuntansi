@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\JurnalPembantuHeader;
 use App\Models\Penjualan;
 use App\Models\RekeningPerusahaan;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -261,7 +262,7 @@ class JurnalPenjualanPelunasanService
             $dpUntukTransfer,
             $tglTransaksi,
         ) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             if ($nominalTunai > 0) {
                 $context = [
@@ -399,7 +400,7 @@ class JurnalPenjualanPelunasanService
         \Carbon\Carbon|string|null $tglTransaksi = null,
     ): void {
         DB::transaction(function () use ($kodeKitab, $nota, $userId, $nominal, $piutang, $dpAwal, $keteranganDefault, $tglTransaksi) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             $context = [
                 'nominal_kas' => $nominal,

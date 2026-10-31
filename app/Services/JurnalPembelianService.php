@@ -7,6 +7,7 @@ use App\Models\SubAnakAkun;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
 use App\Models\PembelianMetodePembayaran;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -39,7 +40,7 @@ class JurnalPembelianService
             $supplier = $pembelian->supplier_name ?: 'Supplier';
             $grandTotal = (float) $pembelian->grand_total;
 
-            $noJurnal = JurnalPembantuHeader::lockForUpdate()->max('jurnal') + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             // ──────────────────────────────────────────────────────────────
             // SISI DEBIT (D) 1: Nilai Pokok Barang
@@ -57,7 +58,7 @@ class JurnalPembelianService
                 $namaAkunDebet = $this->getNamaAkun($kodeAkunDebet);
 
                 $headerD = JurnalPembantuHeader::create([
-                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                    'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                     'tgl_transaksi'      => $tgl,
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
@@ -116,7 +117,7 @@ class JurnalPembelianService
                 $namaAkunPpn = $this->getNamaAkun($kodeAkunPpn) ?: 'PPN Masukan';
 
                 $headerPpnD = JurnalPembantuHeader::create([
-                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                    'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                     'tgl_transaksi'      => $tgl,
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
@@ -143,7 +144,7 @@ class JurnalPembelianService
                 $namaAkunOngkir = $this->getNamaAkun($kodeAkunOngkir) ?: 'Biaya Angkut Pembelian';
 
                 $headerOngkirD = JurnalPembantuHeader::create([
-                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                    'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                     'tgl_transaksi'      => $tgl,
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
@@ -170,7 +171,7 @@ class JurnalPembelianService
                 $namaAkunLain = $this->getNamaAkun($kodeAkunLain) ?: 'Beban Lain-Lain';
 
                 $headerLainD = JurnalPembantuHeader::create([
-                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                    'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                     'tgl_transaksi'      => $tgl,
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
@@ -231,7 +232,7 @@ class JurnalPembelianService
                 }
 
                 $headerKas = JurnalPembantuHeader::create([
-                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                    'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                     'tgl_transaksi'      => $tgl,
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
@@ -271,7 +272,7 @@ class JurnalPembelianService
                 $namaHutang = $this->getNamaAkun($akunHutangDinamis) ?: 'Hutang Dagang';
 
                 $headerHutang = JurnalPembantuHeader::create([
-                    'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                    'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                     'tgl_transaksi'      => $tgl,
                     'jenis_transaksi'    => 'bm',
                     'modul_asal'         => 'pembelian_barang',
@@ -332,3 +333,4 @@ class JurnalPembelianService
         return SubAnakAkun::where('kode_sub_anak_akun', $kode)->value('nama_sub_anak_akun') ?? '';
     }
 }
+
