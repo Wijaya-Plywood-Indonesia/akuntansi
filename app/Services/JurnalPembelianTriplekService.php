@@ -7,6 +7,7 @@ use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
 use App\Models\Pembelian;
 use App\Models\PembelianMetodePembayaran;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -82,7 +83,7 @@ class JurnalPembelianTriplekService
         $hutangUsahaPenuh = (float) $pembelian->grand_total;
 
         DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $hutangUsahaPenuh) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             // ──────────────────────────────────────────────────────────────
             // Sinkronkan Foto Nota dari Pembelian ke Lampiran Jurnal, supaya
@@ -210,7 +211,7 @@ class JurnalPembelianTriplekService
         $dpSudahDibayar = (float) $pembelian->metodePembayarans->sum('amount');
 
         DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $dpSudahDibayar, $tanggal, $fotoLampiranPaths) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
@@ -254,7 +255,7 @@ class JurnalPembelianTriplekService
         $bayar->loadMissing('rekeningPerusahaan.subAnakAkun');
 
         DB::transaction(function () use ($pembelian, $bayar, $userId, $tanggal, $fotoLampiranPaths) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
@@ -295,7 +296,7 @@ class JurnalPembelianTriplekService
         $hutangUsahaPenuh = (float) $pembelian->grand_total;
 
         DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $hutangUsahaPenuh, $tanggal, $fotoLampiranPaths) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
@@ -349,7 +350,7 @@ class JurnalPembelianTriplekService
         $bayar->loadMissing('rekeningPerusahaan.subAnakAkun');
 
         DB::transaction(function () use ($pembelian, $bayar, $userId, $tanggal, $fotoLampiranPaths) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
@@ -415,7 +416,7 @@ class JurnalPembelianTriplekService
         $nominalSisa = (float) $bayarSisa->amount;
 
         DB::transaction(function () use ($pembelian, $userId, $breakdownPersediaan, $nilaiPersediaanTotal, $ppnMasukan, $dpSudahDibayar, $bayarSisa, $nominalSisa, $tanggal, $fotoLampiranPaths) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
@@ -470,7 +471,7 @@ class JurnalPembelianTriplekService
         $bayar->loadMissing('rekeningPerusahaan.subAnakAkun');
 
         DB::transaction(function () use ($pembelian, $bayar, $userId, $tanggal, $fotoLampiranPaths) {
-            $noJurnal = (int) (JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0) + 1;
+            $noJurnal = NomorJurnalService::nextJurnal();
 
             $this->syncLampiran($noJurnal, $fotoLampiranPaths, $userId);
 
@@ -557,7 +558,7 @@ class JurnalPembelianTriplekService
 
         // ── D: Uang Muka Pembelian (1 baris, TOTAL gabungan) ────────────
         $headerD = JurnalPembantuHeader::create([
-            'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+            'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
             'tgl_transaksi'      => $tglTransaksi,
             'jenis_transaksi'    => 'bm',
             'modul_asal'         => 'pembelian_barang',
@@ -599,7 +600,7 @@ class JurnalPembelianTriplekService
             }
 
             $headerK = JurnalPembantuHeader::create([
-                'no_jurnal_pembantu' => JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') + 1,
+                'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                 'tgl_transaksi'      => $tglTransaksi,
                 'jenis_transaksi'    => 'bm',
                 'modul_asal'         => 'pembelian_barang',

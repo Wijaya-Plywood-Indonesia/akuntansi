@@ -4,6 +4,7 @@ namespace App\Services\Jurnal;
 
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -70,13 +71,10 @@ class RotaryJurnalReceiverService
             $items   = $payload['jurnal_items'];
 
             // ── 1. Ambil nomor jurnal baru ─────────────────────────────────
-            // Lock baris untuk hindari race condition
-            $maxJurnal = JurnalPembantuHeader::lockForUpdate()->max('jurnal') ?? 0;
-            $nomorJurnal = $maxJurnal + 1;
+            $nomorJurnal = NomorJurnalService::nextJurnal();
 
             // ── 2. Ambil nomor JP (no_jurnal_pembantu) baru ────────────────
-            $maxJP = JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu') ?? 0;
-            $noJPBase = $maxJP + 1; // counter, tiap header increment
+            $noJPBase = NomorJurnalService::nextNoJP(); // counter, tiap header increment
 
             $jumlahHeader = 0;
             $jumlahItems  = 0;

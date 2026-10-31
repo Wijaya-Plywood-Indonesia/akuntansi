@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalPembantuItem;
+use App\Services\NomorJurnalService;
 use Illuminate\Support\Facades\DB;
 
 class JurnalBalikService
@@ -105,13 +106,11 @@ class JurnalBalikService
 
     private function nextNomorJurnal(): int
     {
-        $max = JurnalPembantuHeader::lockForUpdate()->max('jurnal');
-        return ($max ?? 0) + 1;
+        return NomorJurnalService::nextJurnal();
     }
 
     private function nextNomorPembantu(): int
     {
-        $max = JurnalPembantuHeader::lockForUpdate()->max('no_jurnal_pembantu');
-        return ($max ?? 0) + 1;
+        return NomorJurnalService::nextNoJP();
     }
 }
