@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\JurnalLampiran;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalUmum;
+use App\Models\Supplier;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -23,12 +24,23 @@ class PostingJurnalPembantuService
     /**
      * Posting satu nomor jurnal pembantu ke Jurnal Umum.
      *
+     * Seluruh proses dibungkus advisory lock (di LUAR transaksi) supaya dua
+     * posting yang berjalan bersamaan tidak mendapat nomor max(JU)+1 yang sama,
+     * dan lock baru dilepas setelah transaksi commit.
+     *
      * @throws \Exception
      */
     public function postingByNomorJurnal(int|string $nomorJurnal, ?int $userId = null): void
     {
         $userId = $userId ?? Auth::id() ?? 1;
 
+        NomorJurnalService::dalamLock(function () use ($nomorJurnal, $userId) {
+            $this->prosesPosting($nomorJurnal, $userId);
+        });
+    }
+
+    private function prosesPosting(int|string $nomorJurnal, int $userId): void
+    {
         DB::transaction(function () use ($nomorJurnal, $userId) {
             $headers = JurnalPembantuHeader::query()
                 ->with([
@@ -66,6 +78,25 @@ class PostingJurnalPembantuService
             $nomorFinal = $maxJU + 1;
 
             if ($nomorFinal !== (int) $nomorJurnal) {
+                // FIX nomor overlap: nomorFinal belum ada di Jurnal Umum (karena = max+1),
+                // tapi bisa jadi sedang dipegang DRAFT nota lain di Jurnal Pembantu.
+                // Geser draft itu ke nomor baru dulu supaya 2 nota tidak berbagi 1 nomor.
+                $dipegangDraftLain = JurnalPembantuHeader::query()
+                    ->where('jurnal', $nomorFinal)
+                    ->where('jurnal', '!=', $nomorJurnal)
+                    ->exists();
+
+                if ($dipegangDraftLain) {
+                    $maxHeader = (int) (JurnalPembantuHeader::query()->max('jurnal') ?? 0);
+                    $nomorGeser = max($maxJU, $maxHeader, (int) $nomorJurnal) + 1;
+
+                    JurnalPembantuHeader::query()
+                        ->where('jurnal', $nomorFinal)
+                        ->update(['jurnal' => $nomorGeser]);
+
+                    JurnalLampiran::pindahkanKe($nomorFinal, $nomorGeser, $userId);
+                }
+
                 JurnalPembantuHeader::query()
                     ->where('jurnal', $nomorJurnal)
                     ->update(['jurnal' => $nomorFinal]);
@@ -106,7 +137,7 @@ class PostingJurnalPembantuService
                         // bukan id_pembeli. Kalau pihak_id kosong, cocokkan lewat nama.
                         $supplierIdGlobal = $it->pihak_id ?: (
                             filled($it->nama_pihak)
-                                ? \App\Models\Supplier::whereRaw('LOWER(TRIM(nama)) = ?', [mb_strtolower(trim($it->nama_pihak))])->value('id')
+                                ? Supplier::whereRaw('LOWER(TRIM(nama)) = ?', [mb_strtolower(trim($it->nama_pihak))])->value('id')
                                 : null
                         );
                     } elseif ($it) {
@@ -275,6 +306,11 @@ class PostingJurnalPembantuService
     /**
      * Posting batch jurnal berdasarkan rentang tanggal.
      * Mengurutkan nomor jurnal dari yang terkecil (asc).
+     *
+     * CATATAN: karena nomor di Jurnal Pembantu bisa digeser selama proses batch
+     * (lihat FIX nomor overlap di prosesPosting), daftar nomor diambil di awal
+     * lalu tiap nomor yang sudah tidak berstatus draft / sudah berpindah akan
+     * dilaporkan sebagai gagal dan bisa diulang.
      *
      * @param  string|null  $kelompok  null = semua, atau 'akuntansi' | 'produksi' | 'kayu_masuk'
      * @return array{total_jurnal: int, sukses: int, gagal: int, errors: array<string>}

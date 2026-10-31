@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\JurnalPembantuHeader;
+use App\Models\JurnalUmum;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,24 +24,34 @@ use Illuminate\Support\Facades\DB;
  * tidak ada koneksi lain yang bisa masuk ke blok alokasi nomor yang sama.
  * Lock dilepas otomatis begitu koneksi selesai, jadi aman walau terjadi
  * crash di tengah jalan.
+ *
+ * CATATAN:
+ * - nextJurnal() sekarang mengambil MAX dari jurnal_pembantu_headers DAN
+ *   jurnal_umum, supaya draft baru tidak pernah mendapat nomor yang sudah
+ *   terpakai di Jurnal Umum (penyebab nomor overlap, mis. No. 1218).
+ * - dalamLock() dipakai PostingJurnalPembantuService untuk membungkus
+ *   seluruh proses posting (alokasi nomor + insert ke Jurnal Umum + commit),
+ *   karena posting memakai nomor max(JurnalUmum) + 1 dan harus serial.
+ * - GET_LOCK re-entrant di MySQL >= 5.7 / MariaDB >= 10.0.2 (sesi yang sama
+ *   boleh mengambil lock bernama sama berulang; tiap GET_LOCK butuh
+ *   RELEASE_LOCK sendiri, dan itu sudah ditangani di withLock()).
  */
 class NomorJurnalService
 {
-    private const LOCK_NAME    = 'jurnal_nomor_alloc';
+    private const LOCK_NAME = 'jurnal_nomor_alloc';
+
     private const LOCK_TIMEOUT = 10; // detik menunggu lock sebelum gagal
 
     /**
      * Ambil nomor jurnal berikutnya yang dijamin unik.
-     *
-     * WAJIB dipanggil di dalam DB::transaction() yang sudah berjalan,
-     * ATAU bisa berdiri sendiri — lock akan melindungi alokasi ini.
+     * Melihat nomor terbesar di Jurnal Pembantu DAN Jurnal Umum.
      *
      * @throws \RuntimeException jika tidak bisa mendapat lock dalam batas waktu.
      */
     public static function nextJurnal(): int
     {
         return self::withLock(function () {
-            return (int) (DB::table('jurnal_pembantu_headers')->max('jurnal') ?? 0) + 1;
+            return self::maxJurnalGabungan() + 1;
         });
     }
 
@@ -64,14 +74,36 @@ class NomorJurnalService
     public static function nextJurnalDanNoJP(): array
     {
         return self::withLock(function () {
-            $maxJurnal = (int) (DB::table('jurnal_pembantu_headers')->max('jurnal') ?? 0);
-            $maxNoJP   = (int) (DB::table('jurnal_pembantu_headers')->max('no_jurnal_pembantu') ?? 0);
+            $maxNoJP = (int) (DB::table('jurnal_pembantu_headers')->max('no_jurnal_pembantu') ?? 0);
 
             return [
-                'jurnal' => $maxJurnal + 1,
-                'no_jp'  => $maxNoJP + 1,
+                'jurnal' => self::maxJurnalGabungan() + 1,
+                'no_jp' => $maxNoJP + 1,
             ];
         });
+    }
+
+    /**
+     * Jalankan $callback di dalam advisory lock alokasi nomor jurnal.
+     * Pakai ini untuk membungkus proses yang harus serial (mis. posting ke
+     * Jurnal Umum): panggil di LUAR DB::transaction() supaya lock baru
+     * dilepas SETELAH transaksi commit.
+     */
+    public static function dalamLock(callable $callback): mixed
+    {
+        return self::withLock($callback);
+    }
+
+    /**
+     * Nomor jurnal terbesar yang pernah dipakai, di Jurnal Pembantu maupun
+     * Jurnal Umum.
+     */
+    public static function maxJurnalGabungan(): int
+    {
+        $maxHeader = (int) (DB::table('jurnal_pembantu_headers')->max('jurnal') ?? 0);
+        $maxJU = (int) (JurnalUmum::query()->max('jurnal') ?? 0);
+
+        return max($maxHeader, $maxJU);
     }
 
     /**
