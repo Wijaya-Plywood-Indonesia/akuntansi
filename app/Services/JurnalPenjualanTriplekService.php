@@ -305,7 +305,14 @@ class JurnalPenjualanTriplekService
             $kodeAkunPendapatan = $detail->barang?->akunPendapatan?->kode_sub_anak_akun;
             $namaAkunPendapatan = $detail->barang?->akunPendapatan?->nama_sub_anak_akun;
 
+            // Harga jual bersih per satuan dasar: per M3 kalau hitung_dari = 'm3',
+            // selain itu per qty. Dengan begitu m3 x harga (hit_kbk 'm') atau
+            // banyak x harga (hit_kbk 'b') selalu cocok dengan subtotal.
             $hargaJualBersih = $pengali > 0 ? round($subtotalDetail / $pengali, 4) : 0;
+            // id_barang sengaja TIDAK diisi di breakdown penjualan —
+            // tracking barang (untuk Stok Matrix & Buku Besar persediaan)
+            // cukup di baris persediaan saja. Akun pendapatan (4002.x)
+            // tidak perlu terhubung ke id_barang tertentu.
             $breakdownPenjualan[] = [
                 'no_akun'     => $kodeAkunPendapatan,
                 'nama_akun'   => $namaAkunPendapatan,
