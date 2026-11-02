@@ -242,11 +242,23 @@ class JurnalPenjualanTriplekService
             $subtotalDetail = (float) $detail->subtotal;
             $hargaJualSatuan = (float) ($detail->harga_jual ?? 0);
 
+            // Dihitung per M3? Kalau ya, penjualan, HPP, dan persediaan
+            // SEMUA memakai kubikasi sebagai pengali (hit_kbk = 'm', harga =
+            // harga PER M3). HPP master barang diperlakukan mengikuti dasar
+            // hitung nota (Per M3 -> HPP per M3, Per Qty -> HPP per qty).
+            // Kalau satuan HPP master tidak cocok dengan cara jual, HPP
+            // diedit manual di JU Header. Kolom 'banyak' selalu qty (lembar)
+            // supaya stok qty tetap berkurang.
+            $kubikasi = (float) ($detail->kubikasi ?? 0);
+            $hitungM3 = ($detail->hitung_dari ?? 'qty') === 'm3' && $kubikasi > 0;
+            $pengali = $hitungM3 ? $kubikasi : $qty;
+            $infoM3 = $hitungM3 ? ['m3' => $kubikasi, 'hit_kbk' => 'm'] : [];
+
             // Jika barang diinput dengan harga 0 (sampel / bonus / promo),
             // maka harga beli/HPP-nya juga diperlakukan 0 agar persediaan dan HPP-nya bernilai 0.
             $isHargaNol = ($hargaJualSatuan <= 0 || $subtotalDetail <= 0);
             $hargaBeli = $isHargaNol ? 0.0 : (float) ($detail->barang->harga_beli ?? 0);
-            $nominalHpp = $qty * $hargaBeli;
+            $nominalHpp = $pengali * $hargaBeli;
 
             $nilaiPokokBarang += $nominalHpp;
 
@@ -274,7 +286,7 @@ class JurnalPenjualanTriplekService
                 'banyak'      => $qty,
                 'harga'       => $hargaBeli,
                 'keterangan'  => 'Keluar stok '.$detail->nama_barang,
-            ];
+            ] + $infoM3;
 
             $kodeAkunHpp = $detail->barang?->akunHpp?->kode_sub_anak_akun;
             $namaAkunHpp = $detail->barang?->akunHpp?->nama_sub_anak_akun;
@@ -286,14 +298,14 @@ class JurnalPenjualanTriplekService
                 'banyak'      => $qty,
                 'harga'       => $hargaBeli,
                 'keterangan'  => 'HPP '.$detail->nama_barang,
-            ];
+            ] + $infoM3;
 
             // Breakdown Penjualan: selalu masukkan seluruh detail barang meski harga jual / subtotal 0
             $subtotalDetail = (float) $detail->subtotal;
             $kodeAkunPendapatan = $detail->barang?->akunPendapatan?->kode_sub_anak_akun;
             $namaAkunPendapatan = $detail->barang?->akunPendapatan?->nama_sub_anak_akun;
 
-            $hargaJualBersih = $qty > 0 ? round($subtotalDetail / $qty, 4) : 0;
+            $hargaJualBersih = $pengali > 0 ? round($subtotalDetail / $pengali, 4) : 0;
             $breakdownPenjualan[] = [
                 'no_akun'     => $kodeAkunPendapatan,
                 'nama_akun'   => $namaAkunPendapatan,
@@ -301,7 +313,7 @@ class JurnalPenjualanTriplekService
                 'banyak'      => $qty,
                 'harga'       => $hargaJualBersih,
                 'keterangan'  => 'Penjualan '.$detail->nama_barang,
-            ];
+            ] + $infoM3;
         }
 
         $hutangGaji = self::HUTANG_GAJI_TETAP;

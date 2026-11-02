@@ -28,6 +28,19 @@ class DetailsRelationManager extends RelationManager
     {
         return false;
     }
+
+    /**
+     * Subtotal mengikuti dasar hitung: Per M3 -> kubikasi, Per Qty -> qty.
+     * Potongan dihitung per satuan dasar yang sama.
+     */
+    protected static function hitungSubtotal($hargaJual, $qty, $kubikasi, $hitungDari, $potongan): float
+    {
+        $pengali = ($hitungDari ?? 'qty') === 'm3'
+            ? (float) $kubikasi
+            : (float) $qty;
+
+        return max(0, ((float) $hargaJual * $pengali) - ((float) $potongan * $pengali));
+    }
     public function form(Schema $schema): Schema
     {
         return $schema
@@ -84,10 +97,12 @@ class DetailsRelationManager extends RelationManager
 
                                 $set(
                                     'subtotal',
-                                    StokPenyesuaianService::calculate_subtotal(
+                                    static::hitungSubtotal(
                                         $barang->harga_jual,
                                         $get('qty') ?? 1,
-                                        ($get('potongan') ?? 0) * ($get('qty') ?? 1)
+                                        $get('kubikasi'),
+                                        $get('hitung_dari'),
+                                        $get('potongan') ?? 0
                                     )
                                 );
                             })
@@ -116,10 +131,55 @@ class DetailsRelationManager extends RelationManager
                                 fn($get, $set) =>
                                 $set(
                                     'subtotal',
-                                    StokPenyesuaianService::calculate_subtotal(
+                                    static::hitungSubtotal(
                                         $get('harga_jual'),
                                         $get('qty'),
-                                        $get('potongan') * ($get('qty') ?? 0)
+                                        $get('kubikasi'),
+                                        $get('hitung_dari'),
+                                        $get('potongan')
+                                    )
+                                )
+                            ),
+
+                        TextInput::make('kubikasi')
+                            ->label('M³ (Kubikasi)')
+                            ->numeric()
+                            ->default(0)
+                            ->minValue(0)
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(
+                                fn($get, $set) =>
+                                $set(
+                                    'subtotal',
+                                    static::hitungSubtotal(
+                                        $get('harga_jual'),
+                                        $get('qty'),
+                                        $get('kubikasi'),
+                                        $get('hitung_dari'),
+                                        $get('potongan')
+                                    )
+                                )
+                            ),
+
+                        Select::make('hitung_dari')
+                            ->label('Dasar Harga')
+                            ->options([
+                                'qty' => 'Per Qty',
+                                'm3' => 'Per M³',
+                            ])
+                            ->default('qty')
+                            ->required()
+                            ->live()
+                            ->afterStateUpdated(
+                                fn($get, $set) =>
+                                $set(
+                                    'subtotal',
+                                    static::hitungSubtotal(
+                                        $get('harga_jual'),
+                                        $get('qty'),
+                                        $get('kubikasi'),
+                                        $get('hitung_dari'),
+                                        $get('potongan')
                                     )
                                 )
                             ),
@@ -135,10 +195,12 @@ class DetailsRelationManager extends RelationManager
                                 fn($get, $set) =>
                                 $set(
                                     'subtotal',
-                                    StokPenyesuaianService::calculate_subtotal(
+                                    static::hitungSubtotal(
                                         $get('harga_jual'),
                                         $get('qty'),
-                                        $get('potongan') * ($get('qty') ?? 0)
+                                        $get('kubikasi'),
+                                        $get('hitung_dari'),
+                                        $get('potongan')
                                     )
                                 )
                             ),
@@ -166,10 +228,12 @@ class DetailsRelationManager extends RelationManager
                                 fn($get, $set) =>
                                 $set(
                                     'subtotal',
-                                    StokPenyesuaianService::calculate_subtotal(
+                                    static::hitungSubtotal(
                                         $get('harga_jual'),
                                         $get('qty'),
-                                        $get('potongan') * ($get('qty') ?? 1)
+                                        $get('kubikasi'),
+                                        $get('hitung_dari'),
+                                        $get('potongan')
                                     )
                                 )
                             ),
@@ -219,6 +283,18 @@ class DetailsRelationManager extends RelationManager
                 TextColumn::make('qty')
                     ->label('Qty')
                     ->numeric()
+                    ->alignCenter(),
+
+                TextColumn::make('kubikasi')
+                    ->label('M³')
+                    ->numeric(decimalPlaces: 4)
+                    ->alignCenter(),
+
+                TextColumn::make('hitung_dari')
+                    ->label('Dasar Harga')
+                    ->badge()
+                    ->formatStateUsing(fn($state) => $state === 'm3' ? 'Per M³' : 'Per Qty')
+                    ->color(fn($state) => $state === 'm3' ? 'warning' : 'gray')
                     ->alignCenter(),
 
                 TextColumn::make('harga_awal')
@@ -277,11 +353,25 @@ class DetailsRelationManager extends RelationManager
                             $data['qty'] = (int) $data['qty'];
                             // $data['potongan'] = ($data['potongan'] ?? 0) * ($data['qty'] ?? 1);
 
-                            StokPenyesuaianService::validateSubtotal(
+                            if (($data['hitung_dari'] ?? 'qty') === 'm3' && (float) ($data['kubikasi'] ?? 0) <= 0) {
+                                throw ValidationException::withMessages([
+                                    'kubikasi' => 'Kubikasi (M³) harus diisi untuk dasar harga Per M³.',
+                                ]);
+                            }
+
+                            $subtotalCek = static::hitungSubtotal(
                                 $data['harga_jual'] ?? 0,
                                 $data['qty'] ?? 0,
-                                $data['potongan']
+                                $data['kubikasi'] ?? 0,
+                                $data['hitung_dari'] ?? 'qty',
+                                $data['potongan'] ?? 0
                             );
+
+                            if ($subtotalCek <= 0) {
+                                throw ValidationException::withMessages([
+                                    'subtotal' => 'Subtotal harus lebih dari 0.',
+                                ]);
+                            }
                         } catch (ValidationException $e) {
 
                             Notification::make()

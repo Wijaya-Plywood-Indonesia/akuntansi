@@ -15,6 +15,8 @@ class DetailPenjualan extends Model
         'nama_barang',
         'satuan',
         'qty',
+        'kubikasi',
+        'hitung_dari',
         'harga_awal',
         'harga_jual',
         'potongan',
@@ -24,6 +26,7 @@ class DetailPenjualan extends Model
 
     protected $casts = [
         'qty' => 'float',
+        'kubikasi' => 'float',
         'harga_awal' => 'decimal:2',
         'harga_jual' => 'decimal:2',
         'subtotal' => 'decimal:2',

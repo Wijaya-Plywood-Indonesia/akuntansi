@@ -10,6 +10,7 @@ use App\Models\Penjualan;
 use App\Models\RekeningPerusahaan;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
+use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
@@ -19,6 +20,11 @@ class PosPenjualan extends Page
     protected static string $resource = PenjualanResource::class;
 
     protected string $view = 'filament.resources.penjualans.pages.pos-penjualan';
+
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     /* ================= IDENTITAS TOKO ================= */
     public ?int $toko_id = null;
@@ -217,6 +223,8 @@ class PosPenjualan extends Page
                 'nama_barang' => $barang->nama_barang,
                 'satuan' => $barang->satuan?->nama_satuan ?? '-',
                 'qty' => 1,
+                'kubikasi' => 0,
+                'hitung_dari' => 'qty',
                 'harga_awal' => (int) $barang->harga_jual,
                 'harga_jual' => (int) $barang->harga_jual,
                 'potongan' => $this->is_member ? 0 : 0,
@@ -284,7 +292,7 @@ class PosPenjualan extends Page
         }
 
         $this->cart[$id]['qty'] = $qty;
-        $this->cart[$id]['total_potongan'] = $this->cart[$id]['potongan'] * $qty;
+        $this->cart[$id]['total_potongan'] = $this->cart[$id]['potongan'] * $this->pengali($this->cart[$id]);
         $this->updateSubtotal($id);
         $this->calculateTotal();
     }
@@ -323,7 +331,7 @@ class PosPenjualan extends Page
         $qty = max(0.01, (float) $this->cart[$id]['qty']);
 
         $this->cart[$id]['potongan'] = $potongan;
-        $this->cart[$id]['total_potongan'] = $potongan * $qty;
+        $this->cart[$id]['total_potongan'] = $potongan * $this->pengali($this->cart[$id]);
         $this->updateSubtotal($id);
         $this->calculateTotal();
     }
@@ -340,6 +348,48 @@ class PosPenjualan extends Page
         $this->calculateTotal();
     }
 
+    /**
+     * Pengali harga: kubikasi (M3) kalau hitung_dari = 'm3', selain itu qty.
+     */
+    protected function pengali(array $item): float
+    {
+        return ($item['hitung_dari'] ?? 'qty') === 'm3'
+            ? (float) ($item['kubikasi'] ?? 0)
+            : (float) ($item['qty'] ?? 0);
+    }
+
+    /**
+     * Dipanggil dari view saat kubikasi atau mode hitung (Per Qty / Per M3) berubah.
+     */
+    public function updateKubikasi(int $id): void
+    {
+        if (! isset($this->cart[$id])) {
+            return;
+        }
+
+        $this->cart[$id]['hitung_dari'] = in_array($this->cart[$id]['hitung_dari'] ?? 'qty', ['qty', 'm3'], true)
+            ? $this->cart[$id]['hitung_dari']
+            : 'qty';
+
+        $kubikasi = max(0, (float) ($this->cart[$id]['kubikasi'] ?? 0));
+        $barang = Barang::find($id);
+        $stokM3 = $barang ? (float) $barang->stok_matrix_m3 : 0;
+
+        if ($this->cart[$id]['hitung_dari'] === 'm3' && $stokM3 > 0 && $kubikasi > $stokM3) {
+            Notification::make()
+                ->title('Stok M³ Maksimum Tercapai')
+                ->body("Kubikasi maksimal adalah {$stokM3}.")
+                ->warning()
+                ->send();
+            $kubikasi = $stokM3;
+        }
+
+        $this->cart[$id]['kubikasi'] = $kubikasi;
+        $this->cart[$id]['total_potongan'] = (float) ($this->cart[$id]['potongan'] ?? 0) * $this->pengali($this->cart[$id]);
+        $this->updateSubtotal($id);
+        $this->calculateTotal();
+    }
+
     protected function updateSubtotal(int $id): void
     {
         if (! isset($this->cart[$id])) {
@@ -347,7 +397,8 @@ class PosPenjualan extends Page
         }
 
         $item = $this->cart[$id];
-        $this->cart[$id]['subtotal'] = max(0, ($item['harga_jual'] * $item['qty']) - ($item['total_potongan'] ?? 0));
+        $pengali = $this->pengali($item);
+        $this->cart[$id]['subtotal'] = max(0, ($item['harga_jual'] * $pengali) - ($item['total_potongan'] ?? 0));
     }
 
     /* ================= CUSTOMER SEARCH ================= */
@@ -536,7 +587,7 @@ class PosPenjualan extends Page
                 }
             }
 
-            $this->cart[$id]['total_potongan'] = $this->cart[$id]['potongan'] * $this->cart[$id]['qty'];
+            $this->cart[$id]['total_potongan'] = $this->cart[$id]['potongan'] * $this->pengali($this->cart[$id]);
             $this->updateSubtotal($id);
         }
         $this->calculateTotal();
@@ -712,6 +763,10 @@ class PosPenjualan extends Page
                     $barang = Barang::find($item['barang_id']);
                     $stokBukuBesar = $barang ? $barang->stok_matrix : 0;
 
+                    if (($item['hitung_dari'] ?? 'qty') === 'm3' && (float) ($item['kubikasi'] ?? 0) <= 0) {
+                        throw new \Exception("Kubikasi (M³) {$item['nama_barang']} harus diisi.");
+                    }
+
                     if ($stokBukuBesar < $item['qty']) {
                         throw new \Exception("Stok {$item['nama_barang']} tidak mencukupi.");
                     }
@@ -722,6 +777,8 @@ class PosPenjualan extends Page
                         'nama_barang' => $item['nama_barang'],
                         'satuan' => $item['satuan'],
                         'qty' => $item['qty'],
+                        'kubikasi' => $item['kubikasi'] ?? 0,
+                        'hitung_dari' => $item['hitung_dari'] ?? 'qty',
                         'harga_awal' => $item['harga_awal'],
                         'harga_jual' => $item['harga_jual'],
                         'potongan' => $item['potongan'],
