@@ -209,7 +209,7 @@ class BukuKitabJurnalService
                     foreach ($breakdown as $b) {
                         $banyakItem = (float) ($b['banyak'] ?? 0);
                         $hargaItem = (float) ($b['harga'] ?? 0);
-                        $nominalItem = round($banyakItem * $hargaItem, 4);
+                        $nominalItem = $this->nominalBreakdown($b);
 
                         $ketItem = $b['keterangan'] ?? ($b['nama_barang'] ?? $baris->keterangan ?? $keteranganDefault ?? $kodeKitab);
 
@@ -230,6 +230,8 @@ class BukuKitabJurnalService
                             'banyak'       => $banyakItem,
                             'harga'        => $hargaItem,
                             'nominal'      => $nominalItem,
+                            'm3'           => (float) ($b['m3'] ?? 0),
+                            'hit_kbk'      => $b['hit_kbk'] ?? 'b',
                             'nama_barang'  => $b['nama_barang'] ?? null,
                             'id_barang'    => $idBarang,
                         ];
@@ -325,9 +327,9 @@ class BukuKitabJurnalService
                                 'no_dokumen'   => $noDokumen,
                                 'keterangan'   => $it['ket_item'],
                                 'banyak'       => $it['banyak'],
-                                'm3'           => 0,
+                                'm3'           => $it['m3'] ?? 0,
                                 'harga'        => $it['harga'],
-                                'hit_kbk'      => 'b',
+                                'hit_kbk'      => $it['hit_kbk'] ?? 'b',
                                 'status'       => true,
                                 'created_by'   => $userId,
                             ];
@@ -394,7 +396,7 @@ class BukuKitabJurnalService
                     foreach ($breakdown as $b) {
                         $banyakItem = (float) ($b['banyak'] ?? 0);
                         $hargaItem = (float) ($b['harga'] ?? 0);
-                        $nominalItem = round($banyakItem * $hargaItem, 4);
+                        $nominalItem = $this->nominalBreakdown($b);
 
                         $dataItem = [
                             'jurnal_pembantu_header_id' => $header->id,
@@ -406,9 +408,9 @@ class BukuKitabJurnalService
                             'no_dokumen'   => $noDokumen,
                             'keterangan'   => $b['keterangan'] ?? ($b['nama_barang'] ?? $ketBaris),
                             'banyak'       => $banyakItem,
-                            'm3'           => 0,
+                            'm3'           => (float) ($b['m3'] ?? 0),
                             'harga'        => $hargaItem,
-                            'hit_kbk'      => 'b',
+                            'hit_kbk'      => $b['hit_kbk'] ?? 'b',
                             'status'       => true,
                             'created_by'   => $userId,
                         ];
@@ -453,5 +455,21 @@ class BukuKitabJurnalService
 
             return $headersDibuat;
         });
+    }
+
+    /**
+     * Nilai rupiah satu baris breakdown.
+     * hit_kbk = 'm' -> m3 x harga (harga = harga PER M3);
+     * selain itu -> banyak x harga.
+     */
+    private function nominalBreakdown(array $b): float
+    {
+        $harga = (float) ($b['harga'] ?? 0);
+
+        if (($b['hit_kbk'] ?? 'b') === 'm') {
+            return round((float) ($b['m3'] ?? 0) * $harga, 4);
+        }
+
+        return round((float) ($b['banyak'] ?? 0) * $harga, 4);
     }
 }
