@@ -176,24 +176,30 @@
                     <div>
                         {{-- Desktop Table --}}
                         <div class="hidden md:block w-full overflow-x-auto">
-                            <table class="w-full min-w-[700px] text-left table-fixed border-collapse">
+                            <table class="w-full min-w-[900px] text-left table-fixed border-collapse">
                                 <thead class="bg-gray-50/50 dark:bg-gray-800/50">
                                     <tr
                                         class="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[25%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[20%]">
                                             Item</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[22%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[18%]">
                                             Qty</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[18%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[10%]">
+                                            M³</th>
+                                        <th
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[11%]">
+                                            Dasar Harga</th>
+                                        <th
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[15%]">
                                             H. Jual</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[16%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[12%]">
                                             Potongan</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[16%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[11%]">
                                             Total</th>
                                         <th class="px-2 py-2 w-[3%]"></th>
                                     </tr>
@@ -250,6 +256,25 @@
                                                     <span
                                                         class="text-xs text-gray-500 font-bold whitespace-nowrap">{{ $item['satuan'] }}</span>
                                                 </div>
+                                            </td>
+                                            <td class="px-2 py-2" x-data="{ m3: @entangle('cart.' . $id . '.kubikasi') }">
+                                                <input type="text" :value="m3"
+                                                    @input="
+                                                        let clean = $event.target.value.replace(/[^0-9.]/g, '');
+                                                        m3 = clean ? parseFloat(clean) : 0;
+                                                        $el.value = clean;
+                                                    "
+                                                    @change="$wire.updateKubikasi({{ $id }})"
+                                                    placeholder="0.0000"
+                                                    class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md py-1 px-1 text-xs font-bold text-center focus:ring-2 focus:ring-primary-500/10 dark:text-white outline-none" />
+                                            </td>
+                                            <td class="px-2 py-2">
+                                                <select wire:model="cart.{{ $id }}.hitung_dari"
+                                                    wire:change="updateKubikasi({{ $id }})"
+                                                    class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md py-1 px-1 text-xs font-bold text-gray-700 dark:text-white focus:ring-2 focus:ring-primary-500/10 outline-none">
+                                                    <option value="qty">Per Qty</option>
+                                                    <option value="m3">Per M³</option>
+                                                </select>
                                             </td>
                                             <td class="px-2 py-2" x-data="{
                                                 harga: @entangle('cart.' . $id . '.harga_jual'),
@@ -354,6 +379,29 @@
                                                     class="w-8 h-8 flex items-center justify-center text-gray-400"><x-heroicon-o-plus
                                                         class="w-3.5 h-3.5" /></button>
                                             </div>
+                                        </div>
+                                        <div class="space-y-1" x-data="{ m3: @entangle('cart.' . $id . '.kubikasi') }">
+                                            <label
+                                                class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">M³ (Kubikasi)</label>
+                                            <input type="text" :value="m3"
+                                                @input="
+                                                    let clean = $event.target.value.replace(/[^0-9.]/g, '');
+                                                    m3 = clean ? parseFloat(clean) : 0;
+                                                    $el.value = clean;
+                                                "
+                                                @change="$wire.updateKubikasi({{ $id }})"
+                                                placeholder="0.0000"
+                                                class="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-xl py-2 px-3 text-sm font-black text-right focus:ring-2 focus:ring-primary-500/10 transition-all" />
+                                        </div>
+                                        <div class="space-y-1">
+                                            <label
+                                                class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Dasar Harga</label>
+                                            <select wire:model="cart.{{ $id }}.hitung_dari"
+                                                wire:change="updateKubikasi({{ $id }})"
+                                                class="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-xl py-2 px-3 text-xs font-bold text-gray-700 dark:text-white focus:ring-2 focus:ring-primary-500/10 outline-none">
+                                                <option value="qty">Per Qty</option>
+                                                <option value="m3">Per M³ (Kubikasi)</option>
+                                            </select>
                                         </div>
                                         <div class="space-y-1" x-data="{
                                             harga: @entangle('cart.' . $id . '.harga_jual'),

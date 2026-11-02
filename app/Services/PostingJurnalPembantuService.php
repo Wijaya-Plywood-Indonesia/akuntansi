@@ -156,10 +156,18 @@ class PostingJurnalPembantuService
                 // supaya Jurnal Umum selalu sama dengan total_nilai header.
                 $pakaiJumlah = JurnalPembantuHeader::pakaiJumlahLangsung($header->modul_asal);
 
-                $itemsPerBarang = $header->items->groupBy('id_barang');
+                // Khusus penjualan_triplek: baris yang dihitung per M3 (hit_kbk = 'm')
+                // dipisah dari komponen generik (mis. Alokasi Hutang Gaji) walau
+                // sama-sama tanpa id_barang, supaya harga per M3 tidak jadi
+                // harga rata-rata yang menimbulkan selisih pembulatan.
+                $itemsPerBarang = $header->items->groupBy(function ($item) use ($header) {
+                    $pisahM3 = $header->modul_asal === 'penjualan_triplek' && $item->hit_kbk === 'm';
 
-                foreach ($itemsPerBarang as $idBarang => $items) {
-                    $idBarangFinal = $idBarang !== '' ? $idBarang : null;
+                    return ($item->id_barang ?? '').'|'.($pisahM3 ? 'm' : 'x');
+                });
+
+                foreach ($itemsPerBarang as $items) {
+                    $idBarangFinal = $items->first()->id_barang ?: null;
 
                     $totalBanyak = (float) $items->sum('banyak');
                     $totalM3 = (float) $items->sum('m3');
@@ -201,6 +209,9 @@ class PostingJurnalPembantuService
                     }
 
                     if ($itemHitKbk === 'k') {
+                        $hitKbk = 'm';
+                    } elseif ($itemHitKbk === 'm' && $totalM3 > 0) {
+                        // Baris dihitung per M3 (mis. penjualan Per M3): harga = per M3.
                         $hitKbk = 'm';
                     } elseif ($itemHitKbk === 'b') {
                         $hitKbk = 'b';
