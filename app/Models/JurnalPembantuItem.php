@@ -82,6 +82,22 @@ class JurnalPembantuItem extends Model
 
     protected static function booted(): void
     {
+        // Hitung ulang `jumlah` setiap kali item disimpan, supaya kolom Jumlah
+        // selalu sinkron dengan hit_kbk / banyak / m3 / harga.
+        // Modul yang memang mengisi `jumlah` langsung (produksi, rotary, import,
+        // dll) dan kayu_masuk TIDAK disentuh.
+        static::saving(function (self $item) {
+            $modul = $item->header?->modul_asal;
+
+            if (JurnalPembantuHeader::pakaiJumlahLangsung($modul) || $modul === 'kayu_masuk') {
+                return;
+            }
+
+            if (in_array($item->hit_kbk, ['m', 'b'], true)) {
+                $item->jumlah = round($item->hitungJumlah(), 4);
+            }
+        });
+
         // Hapus created dan updated yang redundant
         // saved sudah mencakup keduanya (created + updated)
 

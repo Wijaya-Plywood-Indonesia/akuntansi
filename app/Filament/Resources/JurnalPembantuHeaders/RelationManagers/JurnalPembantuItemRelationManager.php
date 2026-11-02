@@ -17,6 +17,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -32,16 +33,109 @@ class JurnalPembantuItemRelationManager extends RelationManager
         return false;
     }
 
+    /**
+     * Pratinjau Jumlah di form (server tetap menghitung ulang saat simpan).
+     */
+    protected static function hitungJumlahForm($hitKbk, $banyak, $m3, $harga, $jumlahLama = 0): float
+    {
+        return match ($hitKbk) {
+            'm' => round((float) $harga * (float) $m3, 4),
+            'b' => round((float) $harga * (float) $banyak, 4),
+            default => (float) $jumlahLama,
+        };
+    }
+
     public function form(Schema $schema): Schema
     {
-        return $schema->components([
+        return $schema->columns(1)->components([
 
+            // ─────────────────────────────────────────────────────────
+            //  SPESIFIKASI & HITUNG
+            // ─────────────────────────────────────────────────────────
+            Section::make('📐 Spesifikasi & Perhitungan')
+                ->columnSpanFull()
+                ->description('Ukuran, kualitas, volume, harga, dan cara menghitung jumlah.')
+                ->collapsible()
+                ->schema([
+                    Grid::make(['default' => 2, 'md' => 4])->schema([
+
+                        TextInput::make('ukuran')
+                            ->label('Ukuran')
+                            ->placeholder('cth. 120×240')
+                            ->maxLength(100)
+                            ->columnSpan(1),
+
+                        TextInput::make('kualitas')
+                            ->label('Kualitas')
+                            ->placeholder('cth. Grade A')
+                            ->maxLength(100)
+                            ->columnSpan(1),
+
+                        TextInput::make('banyak')
+                            ->label('Banyak (Qty)')
+                            ->numeric()
+                            ->step('0.000001')
+                            ->placeholder('0')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn ($get, $set) => $set('jumlah', static::hitungJumlahForm($get('hit_kbk'), $get('banyak'), $get('m3'), $get('harga'), $get('jumlah'))))
+                            ->columnSpan(1),
+
+                        TextInput::make('m3')
+                            ->label('Volume (M³)')
+                            ->numeric()
+                            ->step('0.000001')
+                            ->placeholder('0.000000')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn ($get, $set) => $set('jumlah', static::hitungJumlahForm($get('hit_kbk'), $get('banyak'), $get('m3'), $get('harga'), $get('jumlah'))))
+                            ->columnSpan(1),
+                    ]),
+
+                    Grid::make(['default' => 1, 'md' => 3])->schema([
+
+                        TextInput::make('harga')
+                            ->label('Harga Satuan (Rp)')
+                            ->numeric()
+                            ->step('0.000001')
+                            ->required()
+                            ->placeholder('0')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn ($get, $set) => $set('jumlah', static::hitungJumlahForm($get('hit_kbk'), $get('banyak'), $get('m3'), $get('harga'), $get('jumlah'))))
+                            ->helperText('Harga per satuan (unit / m³ / lembar).')
+                            ->columnSpan(1),
+
+                        Select::make('hit_kbk')
+                            ->label('Cara Hitung Jumlah')
+                            ->options(JurnalPembantuItem::HIT_KBK)
+                            ->nullable()
+                            ->native(false)
+                            ->live()
+                            ->afterStateUpdated(fn ($get, $set) => $set('jumlah', static::hitungJumlahForm($get('hit_kbk'), $get('banyak'), $get('m3'), $get('harga'), $get('jumlah'))))
+                            ->helperText('× M³ : harga × Volume M³  |  × Banyak : harga × Qty')
+                            ->columnSpan(1),
+
+                        TextInput::make('jumlah')
+                            ->label('Jumlah (Rp) — Otomatis')
+                            ->numeric()
+                            ->step('0.0001')
+                            ->disabled()
+                            ->dehydrated(true)
+                            ->helperText('Otomatis = harga × (M³ atau Banyak) sesuai Cara Hitung.')
+                            ->columnSpan(1),
+                    ]),
+
+                    Toggle::make('status')
+                        ->label('Item Aktif')
+                        ->default(true)
+                        ->helperText('Non-aktifkan untuk menyembunyikan dari perhitungan.'),
+                ]),
             // ─────────────────────────────────────────────────────────
             //  IDENTITAS ITEM
             // ─────────────────────────────────────────────────────────
             Section::make('🏷️ Identitas Item')
+                ->columnSpanFull()
                 ->description('Nomor urut, pihak terkait, dan barang.')
                 ->collapsible()
+                ->collapsed()
                 ->schema([
                     Grid::make(3)->schema([
 
@@ -110,6 +204,7 @@ class JurnalPembantuItemRelationManager extends RelationManager
             //  DOKUMEN & KETERANGAN
             // ─────────────────────────────────────────────────────────
             Section::make('📄 Dokumen & Keterangan')
+                ->columnSpanFull()
                 ->collapsible()
                 ->collapsed()
                 ->schema([
@@ -135,80 +230,6 @@ class JurnalPembantuItemRelationManager extends RelationManager
                         ->columnSpanFull(),
                 ]),
 
-            // ─────────────────────────────────────────────────────────
-            //  SPESIFIKASI & HITUNG
-            // ─────────────────────────────────────────────────────────
-            Section::make('📐 Spesifikasi & Perhitungan')
-                ->description('Ukuran, kualitas, volume, harga, dan cara menghitung jumlah.')
-                ->collapsible()
-                ->schema([
-                    Grid::make(4)->schema([
-
-                        TextInput::make('ukuran')
-                            ->label('Ukuran')
-                            ->placeholder('cth. 120×240')
-                            ->maxLength(100)
-                            ->columnSpan(1),
-
-                        TextInput::make('kualitas')
-                            ->label('Kualitas')
-                            ->placeholder('cth. Grade A')
-                            ->maxLength(100)
-                            ->columnSpan(1),
-
-                        TextInput::make('banyak')
-                            ->label('Banyak (Qty)')
-                            ->numeric()
-                            ->step('0.000001')
-                            ->placeholder('0')
-                            ->live()
-                            ->columnSpan(1),
-
-                        TextInput::make('m3')
-                            ->label('Volume (M³)')
-                            ->numeric()
-                            ->step('0.000001')
-                            ->placeholder('0.000000')
-                            ->live()
-                            ->columnSpan(1),
-                    ]),
-
-                    Grid::make(3)->schema([
-
-                        TextInput::make('harga')
-                            ->label('Harga Satuan (Rp)')
-                            ->numeric()
-                            ->step('0.000001')
-                            ->required()
-                            ->placeholder('0')
-                            ->live()
-                            ->helperText('Harga per satuan (unit / m³ / lembar).')
-                            ->columnSpan(1),
-
-                        Select::make('hit_kbk')
-                            ->label('Cara Hitung Jumlah')
-                            ->options(JurnalPembantuItem::HIT_KBK)
-                            ->nullable()
-                            ->native(false)
-                            ->live()
-                            ->helperText('"× M³" atau "× Banyak" atau "Langsung" dari kolom Harga.')
-                            ->columnSpan(1),
-
-                        TextInput::make('jumlah')
-                            ->label('Jumlah (Rp) — Otomatis')
-                            ->numeric()
-                            ->step('0.0001')
-                            ->disabled()
-                            ->dehydrated(true)
-                            ->helperText('Dihitung otomatis dari server.')
-                            ->columnSpan(1),
-                    ]),
-
-                    Toggle::make('status')
-                        ->label('Item Aktif')
-                        ->default(true)
-                        ->helperText('Non-aktifkan untuk menyembunyikan dari perhitungan.'),
-                ]),
         ]);
     }
 
@@ -261,10 +282,12 @@ class JurnalPembantuItemRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->label('Tambah Item'),
+                    ->label('Tambah Item')
+                    ->modalWidth(Width::FourExtraLarge),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->modalWidth(Width::FourExtraLarge),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
