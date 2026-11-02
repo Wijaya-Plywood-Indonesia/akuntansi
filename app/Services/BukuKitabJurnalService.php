@@ -171,24 +171,18 @@ class BukuKitabJurnalService
             foreach ($barisTemplate as $baris) {
                 $nominal = (float) ($context[$baris->variabel_nilai] ?? 0);
 
-                $breakdown = $itemBreakdown[$baris->variabel_nilai] ?? null;
-                $harusSplitHeader = !empty($breakdown)
-                    && in_array($baris->variabel_nilai, $splitHeaderPerBarang, true);
-
                 // Baris yang nilainya 0/tidak ada di context dilewati —
                 // contoh: baris PPN dilewati kalau transaksi non-PPN,
                 // baris DP dilewati kalau memang tidak ada DP.
-                //
-                // PENGECUALIAN: baris persediaan (splitHeaderPerBarang + ada
-                // breakdown item) tetap dibuat meski nominal = 0, karena stok
-                // fisik tetap keluar/masuk dan pergerakan itu harus tercatat
-                // di jurnal pembantu supaya Stok Matrix / Buku Besar persediaan
-                // terhitung benar (banyak/qty yang dihitung, bukan rupiah-nya).
-                if ($nominal <= 0 && !$harusSplitHeader) {
+                if ($nominal <= 0) {
                     continue;
                 }
 
                 $adaBarisTerpakai = true;
+
+                $breakdown = $itemBreakdown[$baris->variabel_nilai] ?? null;
+                $harusSplitHeader = !empty($breakdown)
+                    && in_array($baris->variabel_nilai, $splitHeaderPerBarang, true);
 
                 if ($harusSplitHeader) {
                     // ── HEADER DIKELOMPOKKAN PER AKUN + PER BARANG ───────
@@ -330,6 +324,7 @@ class BukuKitabJurnalService
                                 'm3'           => $it['m3'] ?? 0,
                                 'harga'        => $it['harga'],
                                 'hit_kbk'      => $it['hit_kbk'] ?? 'b',
+                                'jumlah'       => $it['nominal'],
                                 'status'       => true,
                                 'created_by'   => $userId,
                             ];
@@ -411,6 +406,7 @@ class BukuKitabJurnalService
                             'm3'           => (float) ($b['m3'] ?? 0),
                             'harga'        => $hargaItem,
                             'hit_kbk'      => $b['hit_kbk'] ?? 'b',
+                            'jumlah'       => $nominalItem,
                             'status'       => true,
                             'created_by'   => $userId,
                         ];
@@ -438,6 +434,7 @@ class BukuKitabJurnalService
                         'm3'           => 0,
                         'harga'        => $nominal,
                         'hit_kbk'      => 'b', // banyak(1) x harga(nominal) = nominal
+                        'jumlah'       => $nominal,
                         'status'       => true,
                         'created_by'   => $userId,
                     ]);

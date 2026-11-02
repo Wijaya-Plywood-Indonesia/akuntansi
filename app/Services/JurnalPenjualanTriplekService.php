@@ -252,7 +252,19 @@ class JurnalPenjualanTriplekService
             $kubikasi = (float) ($detail->kubikasi ?? 0);
             $hitungM3 = ($detail->hitung_dari ?? 'qty') === 'm3' && $kubikasi > 0;
             $pengali = $hitungM3 ? $kubikasi : $qty;
-            $infoM3 = $hitungM3 ? ['m3' => $kubikasi, 'hit_kbk' => 'm'] : [];
+
+            // Per M3  -> m3 + hit_kbk 'm' (nilai = M3 x harga).
+            // Per Qty -> kubikasi (kalau diisi) tetap dibawa sebagai m3 dengan
+            // hit_kbk tetap 'b' (nilai = qty x harga), supaya stok M3 ikut
+            // berkurang dan kalau HPP perlu diubah ke 'm' di JU Header, M3-nya
+            // sudah terisi.
+            if ($hitungM3) {
+                $infoM3 = ['m3' => $kubikasi, 'hit_kbk' => 'm'];
+            } elseif ($kubikasi > 0) {
+                $infoM3 = ['m3' => $kubikasi];
+            } else {
+                $infoM3 = [];
+            }
 
             // Jika barang diinput dengan harga 0 (sampel / bonus / promo),
             // maka harga beli/HPP-nya juga diperlakukan 0 agar persediaan dan HPP-nya bernilai 0.
