@@ -1090,6 +1090,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 $data['harga'] = $harga;
                 $data['total'] = $total;
 
+                // Pastikan nama_barang di draft ikut diperbarui jika id_barang berubah atau dipilih
+                if (! blank($data['id_barang'] ?? null)) {
+                    $data['nama_barang'] = Barang::find($data['id_barang'])?->nama_barang;
+                } else {
+                    $data['nama_barang'] = null;
+                }
+
                 $this->items[$index] = array_merge($this->items[$index], $data);
                 $this->persistDraftState();
                 Notification::make()->title('Draft berhasil diperbarui')->success()->send();
