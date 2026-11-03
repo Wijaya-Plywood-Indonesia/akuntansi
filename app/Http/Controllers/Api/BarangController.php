@@ -146,4 +146,92 @@ class BarangController extends Controller
             'message' => 'Barang not found'
         ], 404);
     }
+
+    /**
+     * Resolves id_barang from plywood / platform characteristics.
+     * Example input: ?nama=12m better MTH
+     * or: ?tebal=12&jenis_kayu=sengon&grade=better&tipe=triplek
+     */
+    public function resolvePlywood(Request $request)
+    {
+        $rawNama = trim((string) $request->query('nama', ''));
+        $tipe = strtolower(trim((string) $request->query('tipe', ''))); // 'triplek' | 'platform'
+        $tebal = $request->query('tebal');
+        $jenisKayu = strtolower(trim((string) $request->query('jenis_kayu', '')));
+        $grade = strtolower(trim((string) $request->query('grade', '')));
+
+        // 1. Direct match by exact / trimmed nama_barang if provided
+        if ($rawNama !== '') {
+            $directClean = trim(preg_replace('/\s+/', ' ', $rawNama));
+            $barang = Barang::where('nama_barang', 'like', $directClean)->first();
+            if ($barang) {
+                return response()->json([
+                    'success' => true,
+                    'nama_barang_format' => $directClean,
+                    'id_barang' => $barang->id,
+                    'barang' => $barang,
+                ]);
+            }
+
+            // If not found, try loose match
+            $loose = '%' . str_replace(' ', '%', $directClean) . '%';
+            $barangLoose = Barang::where('nama_barang', 'like', $loose)->first();
+            if ($barangLoose) {
+                return response()->json([
+                    'success' => true,
+                    'nama_barang_format' => $directClean,
+                    'id_barang' => $barangLoose->id,
+                    'barang' => $barangLoose,
+                    'note' => 'Found via loose search',
+                ]);
+            }
+        }
+
+        // 2. Build standard pattern (e.g., "12m better MTH" or "platform 12 better MTH")
+        $isPlatform = ($tipe === 'platform') || str_contains($rawNama, 'platform');
+        
+        $tebalNum = (float) $tebal;
+        $tebalStr = ($tebalNum == (int) $tebalNum) ? (string) (int) $tebalNum : (string) $tebalNum;
+
+        $kayuCode = '';
+        if (str_contains($jenisKayu, 'meranti')) {
+            $kayuCode = 'm';
+        } elseif (str_contains($jenisKayu, 'sengon')) {
+            $kayuCode = 's';
+        } elseif (str_contains($jenisKayu, 'fm')) {
+            $kayuCode = 'fm';
+        }
+
+        $pattern = ($isPlatform ? 'platform ' : '') . $tebalStr . ($kayuCode ?: '%') . ' ' . ($grade ?: '%') . ' MTH';
+        $pattern = trim(preg_replace('/\s+/', ' ', $pattern));
+
+        $barang = Barang::where('nama_barang', 'like', $pattern)->first();
+        if ($barang) {
+            return response()->json([
+                'success' => true,
+                'nama_barang_format' => $pattern,
+                'id_barang' => $barang->id,
+                'barang' => $barang,
+            ]);
+        }
+
+        // 3. Fallback loose search
+        $wildcard = ($isPlatform ? '%platform%' : '%') . $tebalStr . '%' . ($grade ?: '') . '%MTH%';
+        $barangLoose = Barang::where('nama_barang', 'like', $wildcard)->first();
+        if ($barangLoose) {
+            return response()->json([
+                'success' => true,
+                'nama_barang_format' => $pattern,
+                'id_barang' => $barangLoose->id,
+                'barang' => $barangLoose,
+                'note' => 'Found via flexible search',
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'nama_barang_format' => $rawNama ?: $pattern,
+            'message' => 'Barang not found',
+        ], 404);
+    }
 }
