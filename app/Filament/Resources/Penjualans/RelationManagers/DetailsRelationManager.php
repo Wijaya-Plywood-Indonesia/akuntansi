@@ -57,31 +57,25 @@ class DetailsRelationManager extends RelationManager
                                 'barang',
                                 'nama_barang',
                                 modifyQueryUsing: function (Builder $query, $operation) {
-                                    // Jika sedang EDIT, kita tidak perlu memfilter query
-                                    // agar data yang sudah terpilih tetap muncul di dropdown
+                                    // Jika sedang EDIT, jangan filter query agar data yang sudah terpilih tetap muncul
                                     if ($operation === 'edit') {
                                         return $query;
                                     }
 
                                     $user = auth()->user();
-                                    $tokoUser = $user->tokoUtama()->first();
+                                    $tokoUser = $user?->tokoUtama()->first();
 
-                                    if (!$tokoUser) {
-                                        return $query->whereRaw('1 = 0');
+                                    // Jika user memiliki toko utama dan ada record stok toko, gunakan filter toko
+                                    if ($tokoUser) {
+                                        $penjualan = $this->getOwnerRecord();
+                                        $barangQuery = StokPenyesuaianService::queryBarangByToko($tokoUser->id_toko, $penjualan->id);
+                                        return $query->fromSub($barangQuery, 'barangs');
                                     }
 
-                                    $penjualan = $this->getOwnerRecord();
-                                    $barangQuery = StokPenyesuaianService::queryBarangByToko($tokoUser->id_toko, $penjualan->id);
-
-                                    // Inject query service ke relationship
-                                    return $query->fromSub($barangQuery, 'barangs');
+                                    // Fallback: tampilkan semua barang
+                                    return $query;
                                 }
                             )
-                            // 1. DISABLE SAAT EDIT: Mengunci input agar barang tidak bisa diubah setelah disimpan
-                            ->disabled(fn ($operation) => $operation === 'edit')
-                            // 2. DEHYDRATED: Penting! Agar nilai 'barang_id' tetap terkirim ke backend saat simpan, meskipun disabled
-                            ->dehydrated()
-                            ->live(onBlur: true) // 🔥 Menambahkan Live agar reaktif
                             ->searchable()
                             ->preload()
                             ->afterStateUpdated(function ($state, callable $set, $get) {
@@ -387,7 +381,49 @@ class DetailsRelationManager extends RelationManager
                     }),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->mutateFormDataUsing(function (array $data): array {
+                        try {
+                            $barang = Barang::find($data['barang_id']);
+                            if ($barang) {
+                                $data['nama_barang'] = $barang->nama_barang;
+                                $data['harga_awal'] = $barang->harga_jual;
+                            }
+                            $data['qty'] = (int) $data['qty'];
+
+                            if (($data['hitung_dari'] ?? 'qty') === 'm3' && (float) ($data['kubikasi'] ?? 0) <= 0) {
+                                throw ValidationException::withMessages([
+                                    'kubikasi' => 'Kubikasi (M³) harus diisi untuk dasar harga Per M³.',
+                                ]);
+                            }
+
+                            $subtotalCek = static::hitungSubtotal(
+                                $data['harga_jual'] ?? 0,
+                                $data['qty'] ?? 0,
+                                $data['kubikasi'] ?? 0,
+                                $data['hitung_dari'] ?? 'qty',
+                                $data['potongan'] ?? 0
+                            );
+
+                            if ($subtotalCek <= 0) {
+                                throw ValidationException::withMessages([
+                                    'subtotal' => 'Subtotal harus lebih dari 0.',
+                                ]);
+                            }
+
+                            $data['subtotal'] = $subtotalCek;
+                        } catch (ValidationException $e) {
+                            Notification::make()
+                                ->title('Perhitungan Tidak Valid')
+                                ->body('Subtotal hasil perhitungan kurang dari atau sama dengan 0.')
+                                ->danger()
+                                ->send();
+
+                            throw $e;
+                        }
+
+                        return $data;
+                    }),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
