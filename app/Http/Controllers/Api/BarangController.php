@@ -234,4 +234,107 @@ class BarangController extends Controller
             'message' => 'Barang not found',
         ], 404);
     }
+
+    /**
+     * Resolves id_barang from bahan penolong characteristics.
+     * Example input: ?nama=lem_pai&domain=whn
+     * or: ?nama=Hardner&domain=wjy
+     */
+    public function resolvePenolong(Request $request)
+    {
+        $rawNama = strtolower(trim((string) $request->query('nama', '')));
+        $domain = strtoupper(trim((string) $request->query('domain', ''))); // 'WHN' | 'WJY'
+
+        if ($rawNama === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Parameter nama is required',
+            ], 400);
+        }
+
+        // Sub anak akun ID untuk bahan penolong:
+        // 197: Lem, 198: Hardner, 199: Isi Staples, 200: Pewarna, 201: Tepung, 202: Solasi Coklat, 203: Solasi Putih
+        $targetSubAkun = null;
+        $searchKeyword = '';
+
+        if (str_contains($rawNama, 'pai')) {
+            $targetSubAkun = 197;
+            $searchKeyword = 'Lem PAI';
+        } elseif (str_contains($rawNama, 'aruki')) {
+            $targetSubAkun = 197;
+            $searchKeyword = 'Lem Aruki';
+        } elseif (str_contains($rawNama, 'dover')) {
+            $targetSubAkun = 197;
+            $searchKeyword = 'Lem Dover';
+        } elseif (str_contains($rawNama, 'lem')) {
+            $targetSubAkun = 197;
+            $searchKeyword = 'Lem';
+        } elseif (str_contains($rawNama, 'hardner') || str_contains($rawNama, 'hadner') || str_contains($rawNama, 'hdr')) {
+            $targetSubAkun = 198;
+            $searchKeyword = 'Hardner';
+        } elseif (str_contains($rawNama, 'staple') || str_contains($rawNama, 'steples') || str_contains($rawNama, 'stp')) {
+            $targetSubAkun = 199;
+            $searchKeyword = 'Isi Staples';
+        } elseif (str_contains($rawNama, 'warna') || str_contains($rawNama, 'pewarna') || str_contains($rawNama, 'pwn')) {
+            $targetSubAkun = 200;
+            $searchKeyword = 'Pewarna';
+        } elseif (str_contains($rawNama, 'tepung') || str_contains($rawNama, 'tpg')) {
+            $targetSubAkun = 201;
+            $searchKeyword = 'Tepung';
+        } elseif (str_contains($rawNama, 'coklat')) {
+            $targetSubAkun = 202;
+            $searchKeyword = 'Solasi Coklat';
+        } elseif (str_contains($rawNama, 'putih')) {
+            $targetSubAkun = 203;
+            $searchKeyword = 'Solasi Putih';
+        }
+
+        $query = Barang::query();
+        if ($targetSubAkun) {
+            $query->where('id_sub_anak_akun', $targetSubAkun);
+        }
+
+        if ($domain !== '') {
+            $queryDomain = (clone $query)->where(function ($q) use ($searchKeyword, $domain) {
+                $q->where('nama_barang', 'like', "%{$searchKeyword}%{$domain}%")
+                  ->orWhere('nama_barang', 'like', "%{$searchKeyword} %{$domain}");
+            });
+
+            $barang = $queryDomain->first();
+            if ($barang) {
+                return response()->json([
+                    'success' => true,
+                    'id_barang' => $barang->id,
+                    'barang' => $barang,
+                ]);
+            }
+        }
+
+        // Fallback: cari by searchKeyword tanpa filter domain
+        if ($searchKeyword !== '') {
+            $barang = (clone $query)->where('nama_barang', 'like', "%{$searchKeyword}%")->first();
+            if ($barang) {
+                return response()->json([
+                    'success' => true,
+                    'id_barang' => $barang->id,
+                    'barang' => $barang,
+                ]);
+            }
+        }
+
+        // Fallback terakhir: search rawNama
+        $barang = Barang::where('nama_barang', 'like', "%{$rawNama}%")->first();
+        if ($barang) {
+            return response()->json([
+                'success' => true,
+                'id_barang' => $barang->id,
+                'barang' => $barang,
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Barang penolong not found',
+        ], 404);
+    }
 }
