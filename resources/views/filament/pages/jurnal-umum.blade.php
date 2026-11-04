@@ -1663,6 +1663,34 @@
                     </div>
                 @endif
 
+                @if ($modeTidakBalance)
+                    <div
+                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                        <div class="text-red-700 dark:text-red-300 text-xs font-bold space-y-1">
+                            <div>
+                                Menampilkan {{ count($jurnalTidakBalance) }} nomor jurnal yang tidak balance
+                                (baris berwarna merah):
+                            </div>
+                            <div class="flex flex-wrap gap-1.5">
+                                @foreach ($jurnalTidakBalance as $noJurnal => $selisihJurnal)
+                                    <span
+                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 font-black">
+                                        #{{ $noJurnal }}
+                                        <span class="font-semibold">
+                                            {{ $selisihJurnal > 0 ? 'debit lebih besar' : 'kredit lebih besar' }}
+                                            Rp {{ number_format(abs($selisihJurnal), 2, ',', '.') }}
+                                        </span>
+                                    </span>
+                                @endforeach
+                            </div>
+                        </div>
+                        <button type="button" wire:click="tampilkanSemuaJurnal"
+                            class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-none whitespace-nowrap">
+                            Tampilkan Semua Jurnal
+                        </button>
+                    </div>
+                @endif
+
                 <div
                     class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 w-full">
                     <div class="flex flex-wrap items-center gap-3">
@@ -1771,9 +1799,21 @@
                                         <span
                                             class="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-[0.2em]">Unbalanced</span>
                                     </div>
-                                    <span
-                                        class="text-[9px] text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap">Selisih:
-                                        Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
+                                    @if (! $modeTidakBalance)
+                                        <button type="button" wire:click="tampilkanJurnalTidakBalance"
+                                            title="Klik untuk menampilkan jurnal yang menyebabkan selisih"
+                                            class="inline-flex items-center gap-1 text-[10px] text-red-600 dark:text-red-400 font-black whitespace-nowrap underline decoration-dotted underline-offset-2 hover:text-red-700 cursor-pointer">
+                                            Selisih: Rp {{ number_format($selisihDB, 0, ',', '.') }}
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                                    d="M9 5l7 7-7 7" />
+                                            </svg>
+                                        </button>
+                                    @else
+                                        <span
+                                            class="text-[9px] text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap">Selisih:
+                                            Rp {{ number_format($selisihDB, 0, ',', '.') }}</span>
+                                    @endif
                                 </div>
                             @endif
                         </div>
@@ -1915,7 +1955,7 @@
                                 {{-- ══ BARIS DESKTOP (grid) ══ --}}
                                 <div data-row-id="{{ $hj->id }}"
                                     :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                    class="hidden md:grid gap-3 px-4 py-3.5 items-start hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
+                                    class="hidden md:grid gap-3 px-4 py-3.5 items-start hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif @if (isset($jurnalTidakBalance[(int) $hj->jurnal])) !bg-red-50 dark:!bg-red-900/20 border-l-4 border-red-500 @endif"
                                     style="grid-template-columns: 32px 1fr 44px 90px 70px 150px 120px 120px 70px; animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                     <div class="pt-0.5">
@@ -2060,7 +2100,7 @@
                                 {{-- ══ KARTU MOBILE ══ --}}
                                 <div data-row-id="{{ $hj->id }}"
                                     :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                    class="md:hidden p-4 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
+                                    class="md:hidden p-4 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif @if (isset($jurnalTidakBalance[(int) $hj->jurnal])) !bg-red-50 dark:!bg-red-900/20 border-l-4 border-red-500 @endif"
                                     style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                     <div class="flex items-start gap-3">
@@ -2334,7 +2374,7 @@
 
                                     <tr data-row-id="{{ $hj->id }}"
                                         :class="isSelected({{ $hj->id }}) ? 'row-selected' : ''"
-                                        class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif"
+                                        class="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 align-top transition-colors row-fadein @if ($modeJurnalTunggal && (string) $hj->jurnal === (string) $nomorJurnalDitampilkan) !bg-amber-50 dark:!bg-amber-900/20 @endif @if (isset($jurnalTidakBalance[(int) $hj->jurnal])) !bg-red-50 dark:!bg-red-900/20 border-l-4 border-red-500 @endif"
                                         style="animation-delay: {{ min($index * 0.02, 0.4) }}s">
 
                                         <td class="px-4 py-4 text-center">

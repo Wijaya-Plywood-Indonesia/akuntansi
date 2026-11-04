@@ -122,6 +122,10 @@ class JurnalUmum extends Page implements HasActions, HasForms
     #[Url]
     public $filterJurnalNomor = null;
 
+    // Aktif saat user klik angka "Selisih" di header: tabel hanya menampilkan
+    // nomor jurnal yang debit != kreditnya, barisnya diberi warna merah.
+    public bool $filterTidakBalance = false;
+
     public int $perPage = 50;
 
     public bool $hasMorePages = true;
@@ -265,9 +269,53 @@ class JurnalUmum extends Page implements HasActions, HasForms
         ];
     }
 
+    /**
+     * Nomor jurnal yang total debit-nya TIDAK sama dengan total kredit-nya
+     * (dihitung dengan rumus yang sama persis dengan total di header halaman).
+     *
+     * @return array<int, float>  [no_jurnal => selisih (debit - kredit)]
+     */
+    protected function hitungJurnalTidakBalance(): array
+    {
+        $nilai = "CASE LOWER(hit_kbk) WHEN 'b' THEN banyak * harga WHEN 'm' THEN m3 * harga ELSE harga END";
+
+        return JurnalModel::query()
+            ->whereNotNull('jurnal')
+            ->selectRaw("
+                jurnal,
+                SUM(CASE WHEN LOWER(map) IN ('d','debit') THEN {$nilai} ELSE 0 END) AS total_d,
+                SUM(CASE WHEN LOWER(map) IN ('k','kredit') THEN {$nilai} ELSE 0 END) AS total_k
+            ")
+            ->groupBy('jurnal')
+            ->havingRaw('ABS(total_d - total_k) >= 0.01')
+            ->orderByDesc('jurnal')
+            ->get()
+            ->mapWithKeys(fn ($r) => [(int) $r->jurnal => round((float) $r->total_d - (float) $r->total_k, 2)])
+            ->all();
+    }
+
+    /**
+     * Dipanggil saat angka "Selisih" di header diklik.
+     */
+    public function tampilkanJurnalTidakBalance(): void
+    {
+        if (empty($this->hitungJurnalTidakBalance())) {
+            $this->dispatch('toast', type: 'info', title: 'Tidak ada jurnal timpang', msg: 'Semua nomor jurnal balance. Selisih di header kemungkinan karena filter tanggal/pencarian yang memotong sebagian baris sebuah jurnal.');
+
+            return;
+        }
+
+        $this->filterJurnalNomor = null;
+        $this->filterTidakBalance = true;
+        $this->selectedIds = [];
+        $this->selectAll = false;
+    }
+
     protected function getViewData(): array
     {
         $modeJurnalTunggal = filled($this->filterJurnalNomor);
+        $modeTidakBalance = $this->filterTidakBalance && ! $modeJurnalTunggal;
+        $jurnalTidakBalance = $modeTidakBalance ? $this->hitungJurnalTidakBalance() : null;
 
         // ── URUTAN: nomor jurnal terbaru di atas (1 jurnal tetap menyatu),
         //    di dalam 1 nomor jurnal DEBIT dulu semua baru KREDIT,
@@ -279,6 +327,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
 
         if ($modeJurnalTunggal) {
             $query->where('jurnal', $this->filterJurnalNomor);
+        } elseif ($modeTidakBalance) {
+            // Abaikan filter tanggal: tampilkan SEMUA jurnal timpang (utuh, semua barisnya).
+            $query->whereIn('jurnal', array_keys($jurnalTidakBalance) ?: [0]);
         } else {
             if (! empty($this->filterTglDari)) {
                 $query->whereDate('tgl', '>=', $this->filterTglDari);
@@ -307,7 +358,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
         //         per baris di tabel history tidak menampilkan 0.
         //         Sebelumnya hanya select() kolom mentah tanpa "total",
         //         sehingga $hj->total selalu null di Blade.
-        $data = $query->limit($modeJurnalTunggal ? 1000 : $this->perPage + 1)
+        $modeDaftarPenuh = $modeJurnalTunggal || $modeTidakBalance;
+
+        $data = $query->limit($modeDaftarPenuh ? 1000 : $this->perPage + 1)
             ->select([
                 'id',
                 'tgl',
@@ -333,8 +386,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
             ")
             ->get();
 
-        $this->hasMorePages = $modeJurnalTunggal ? false : ($data->count() > $this->perPage);
-        $historyJurnals = $modeJurnalTunggal ? $data : $data->take($this->perPage);
+        $this->hasMorePages = $modeDaftarPenuh ? false : ($data->count() > $this->perPage);
+        $historyJurnals = $modeDaftarPenuh ? $data : $data->take($this->perPage);
 
         // ── Ambil nama barang untuk baris yang punya id_barang ──────
         $barangIds = $historyJurnals->pluck('id_barang')->filter()->unique()->values();
@@ -352,6 +405,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $totalsQuery = JurnalModel::query();
         if ($modeJurnalTunggal) {
             $totalsQuery->where('jurnal', $this->filterJurnalNomor);
+        } elseif ($modeTidakBalance) {
+            $totalsQuery->whereIn('jurnal', array_keys($jurnalTidakBalance) ?: [0]);
         } else {
             if (! empty($this->filterTglDari)) {
                 $totalsQuery->whereDate('tgl', '>=', $this->filterTglDari);
@@ -394,6 +449,12 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $isHistoryBalanced = abs($totalDebitDB - $totalKreditDB) < 0.01;
         $selisihDB = abs($totalDebitDB - $totalKreditDB);
 
+        // Untuk pewarnaan merah: kalau header Unbalanced, tandai juga baris
+        // jurnal timpang di tampilan biasa (bukan cuma saat filter aktif).
+        if ($jurnalTidakBalance === null) {
+            $jurnalTidakBalance = $isHistoryBalanced ? [] : $this->hitungJurnalTidakBalance();
+        }
+
         // OPTIMASI CACHE: Simpan dalam bentuk array agar tidak menyentuh limit 1MB DB Cache
         $accountsMap = cache()->remember('sub_anak_akun_map_v2', 600, function () {
             return SubAnakAkun::pluck('nama_sub_anak_akun', 'kode_sub_anak_akun')->toArray();
@@ -427,6 +488,8 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'isHistoryBalanced' => $isHistoryBalanced,
             'selisihDB' => $selisihDB,
             'modeJurnalTunggal' => $modeJurnalTunggal,
+            'modeTidakBalance' => $modeTidakBalance,
+            'jurnalTidakBalance' => $jurnalTidakBalance,
             'nomorJurnalDitampilkan' => $this->filterJurnalNomor,
             'lampiranCounts' => $lampiranCounts,
             'lampiranThumbs' => $lampiranThumbs,
@@ -437,6 +500,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     {
         // Filter tanggal manual membatalkan mode "1 nomor jurnal" dari deep-link.
         $this->filterJurnalNomor = null;
+        $this->filterTidakBalance = false;
         $this->filterTglDari = $this->filterTglDariInput;
         $this->filterTglSampai = $this->filterTglSampaiInput;
         $this->perPage = 50;
@@ -452,6 +516,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public function tampilkanSemuaJurnal(): void
     {
         $this->filterJurnalNomor = null;
+        $this->filterTidakBalance = false;
         $this->filterTglDariInput = '';
         $this->filterTglSampaiInput = '';
         $this->filterTglDari = '';
@@ -465,6 +530,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
     public function resetFilter(): void
     {
         $this->filterJurnalNomor = null;
+        $this->filterTidakBalance = false;
         $this->filterTglDariInput = '';
         $this->filterTglSampaiInput = '';
         $this->filterTglDari = '';
