@@ -52,6 +52,12 @@ class ViewPenjualan extends ViewRecord
      */
     private const STATUS_SUDAH_DIVALIDASI = ['LUNAS', 'DP', 'PIUTANG'];
 
+    /**
+     * Jenis transaksi yang uangnya masuk LEWAT menu Pelunasan. Untuk jenis
+     * ini, "Bayar" tidak boleh diubah dari Sinkronkan Data.
+     */
+    private const JENIS_BAYAR_TERKUNCI = ['COD', 'DP'];
+
     protected function getHeaderActions(): array
     {
         return [
@@ -348,13 +354,19 @@ class ViewPenjualan extends ViewRecord
                 ->icon('heroicon-m-arrow-path')
                 ->color('warning')
                 ->modalWidth('lg')
-                ->mountUsing(fn ($form, $record) => $form->fill([
-                    'total_sebelum' => $record->total,
-                    'total_saat_ini' => SyncPenjualanService::calculateCurrentTotal($record->id),
-                    'bayar' => $record->bayar,
-                    'kembalian' => $record->bayar - SyncPenjualanService::calculateCurrentTotal($record->id),
-                    'keterangan' => $record->keterangan,
-                ]))
+                ->mountUsing(function ($form, $record) {
+                    $totalSaatIni = SyncPenjualanService::calculateCurrentTotal($record->id);
+                    $terkunci = in_array($record->jenis_transaksi, self::JENIS_BAYAR_TERKUNCI, true);
+
+                    $form->fill([
+                        'total_sebelum' => $record->total,
+                        'total_saat_ini' => $totalSaatIni,
+                        'bayar' => $record->bayar,
+                        // COD/DP: tidak ada kembalian, uang masuk lewat Pelunasan.
+                        'kembalian' => $terkunci ? 0 : $record->bayar - $totalSaatIni,
+                        'keterangan' => $record->keterangan,
+                    ]);
+                })
                 ->form([
                     TextInput::make('total_sebelum')
                         ->label('Total Sebelum')
@@ -379,8 +391,18 @@ class ViewPenjualan extends ViewRecord
                         ->required()
                         ->live(onBlur: true)
                         ->dehydrated()
+                        // COD/DP: dikunci. Pembayaran dicatat lewat menu Pelunasan.
+                        ->disabled(fn (): bool => in_array($this->record->jenis_transaksi, self::JENIS_BAYAR_TERKUNCI, true))
+                        ->helperText(fn (): ?string => in_array($this->record->jenis_transaksi, self::JENIS_BAYAR_TERKUNCI, true)
+                            ? 'Nota '.$this->record->jenis_transaksi.': nilai bayar tidak bisa diubah di sini. Catat pembayaran lewat menu Pelunasan Penjualan.'
+                            : null)
                         ->rules([
                             fn ($get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                // COD/DP tidak divalidasi bayar >= total (memang belum lunas).
+                                if (in_array($this->record->jenis_transaksi, self::JENIS_BAYAR_TERKUNCI, true)) {
+                                    return;
+                                }
+
                                 $totalSaatIni = (float) $get('total_saat_ini');
                                 $totalSebelum = (float) $get('total_sebelum');
                                 $bayar = (float) $value;
@@ -412,10 +434,17 @@ class ViewPenjualan extends ViewRecord
                     try {
                         $data['total'] = $data['total_saat_ini'];
 
-                        // FIX: Langsung timpa dengan nilai final dari inputan form
-                        // Jangan ditambah (+) dengan $record lama agar tidak dobel
-                        $data['bayar'] = (float) ($data['bayar'] ?? 0);
-                        $data['kembalian'] = (float) ($data['kembalian'] ?? 0);
+                        if (in_array($record->jenis_transaksi, self::JENIS_BAYAR_TERKUNCI, true)) {
+                            // COD/DP: pertahankan bayar yang ada, tanpa kembalian.
+                            // (SyncPenjualanService juga punya guard yang sama.)
+                            $data['bayar'] = (float) $record->bayar;
+                            $data['kembalian'] = 0.0;
+                        } else {
+                            // FIX: Langsung timpa dengan nilai final dari inputan form
+                            // Jangan ditambah (+) dengan $record lama agar tidak dobel
+                            $data['bayar'] = (float) ($data['bayar'] ?? 0);
+                            $data['kembalian'] = (float) ($data['kembalian'] ?? 0);
+                        }
 
                         $userId = filament()->auth()->id() ?? 1;
                         SyncPenjualanService::syncPenjualan($record->id, $data, $userId);
@@ -442,4 +471,4 @@ class ViewPenjualan extends ViewRecord
                 }),
         ];
     }
-} 
+}

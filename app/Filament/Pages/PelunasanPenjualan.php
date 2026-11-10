@@ -17,6 +17,13 @@ class PelunasanPenjualan extends Page
 {
     use HasPageShield;
 
+    /**
+     * Batas jumlah nota yang ditampilkan di daftar. Sebelumnya 20 sehingga
+     * nota lama yang belum lunas (mis. 9826) terpotong dan baru muncul
+     * kalau dicari. Naikkan angka ini kalau nota belum lunas makin banyak.
+     */
+    private const BATAS_DAFTAR_NOTA = 200;
+
     protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
 
     protected string $view = 'filament.pages.pelunasan-penjualan';
@@ -55,7 +62,8 @@ class PelunasanPenjualan extends Page
     #[Computed]
     public function notaResults(): Collection
     {
-        return app(PenjualanPelunasanService::class)->getBelumLunas($this->search, 20);
+        return app(PenjualanPelunasanService::class)
+            ->getBelumLunas($this->search, self::BATAS_DAFTAR_NOTA);
     }
 
     #[Computed]

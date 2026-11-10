@@ -10,6 +10,15 @@ use Filament\Schemas\Schema;
 
 class PenjualanForm
 {
+    /**
+     * COD & DP: uang masuk hanya lewat menu Pelunasan, jadi kolom
+     * bayar/kembalian dikunci dan tidak ikut tersimpan dari form Edit.
+     */
+    private static function bayarTerkunci($record): bool
+    {
+        return in_array($record?->jenis_transaksi, ['COD', 'DP'], true);
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -68,7 +77,12 @@ class PenjualanForm
                     ->label('Bayar')
                     ->numeric()
                     ->reactive()
-                    ->required()
+                    ->required(fn ($record) => ! self::bayarTerkunci($record))
+                    ->disabled(fn ($record) => self::bayarTerkunci($record))
+                    ->dehydrated(fn ($record) => ! self::bayarTerkunci($record))
+                    ->helperText(fn ($record) => self::bayarTerkunci($record)
+                        ? 'Nota COD/DP: pembayaran dicatat lewat menu Pelunasan Penjualan.'
+                        : null)
                     ->afterStateUpdated(
                         fn($state, callable $get, callable $set) =>
                         $set('kembalian', $state - ($get('total') ?? 0))
@@ -78,7 +92,7 @@ class PenjualanForm
                     ->label('Kembalian')
                     ->numeric()
                     ->disabled()
-                    ->dehydrated(),
+                    ->dehydrated(fn ($record) => ! self::bayarTerkunci($record)),
 
                 TextInput::make('user_id')
                     ->default(fn() => auth()->id())
