@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 class JurnalUmum extends Model
 {
@@ -25,7 +26,8 @@ class JurnalUmum extends Model
         'keterangan',
         'hit_kbk',
         'no-dokumen',
-        'map'
+        'map',
+        'diposting_oleh',
     ];
 
     // Database Casting
@@ -62,6 +64,12 @@ class JurnalUmum extends Model
     public function pembeli()
     {
         return $this->belongsTo(Pembeli::class, 'id_pembeli');
+    }
+
+    // User yang memposting baris jurnal ini ke Jurnal Umum
+    public function pemosting()
+    {
+        return $this->belongsTo(User::class, 'diposting_oleh');
     }
 
     public function subAkun()
@@ -120,6 +128,15 @@ class JurnalUmum extends Model
      */
     protected static function booted(): void
     {
+        // Catat siapa yang memposting. Kalau pemanggil sudah mengisi
+        // diposting_oleh secara eksplisit (mis. PostingJurnalPembantuService),
+        // nilai itu yang dipakai; kalau belum, pakai user yang sedang login.
+        static::creating(function (self $jurnal) {
+            if (empty($jurnal->diposting_oleh) && Auth::check()) {
+                $jurnal->diposting_oleh = Auth::id();
+            }
+        });
+
         static::deleted(function (self $jurnal) {
             JurnalPembantuHeader::bersihkanLampiranJikaKosong((int) $jurnal->jurnal);
         });

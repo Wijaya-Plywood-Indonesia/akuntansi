@@ -2292,6 +2292,7 @@
                                     <th class="px-4 py-4 text-center">Foto</th>
                                     <th class="px-4 py-4 text-center">MM</th>
                                     <th class="px-4 py-4">Nama</th>
+                                    <th class="px-4 py-4">Diposting Oleh</th>
                                     <th class="px-4 py-4 min-w-[240px]">Keterangan</th>
                                     <th class="px-4 py-4 text-center">Hit KBK</th>
                                     <th class="px-4 py-4 text-right">Kuantitas</th>
@@ -2363,6 +2364,9 @@
                                             <td class="px-4 py-5">
                                                 <div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700">
                                                 </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div>
                                             </td>
                                             <td class="px-4 py-5"></td>
                                         </tr>
@@ -2437,6 +2441,17 @@
                                             @else
                                                 <span
                                                     class="text-gray-800 dark:text-gray-200 font-medium">{{ $hj->nama ?? '-' }}</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-4 whitespace-nowrap">
+                                            @if ($hj->nama_pemosting)
+                                                <span
+                                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-900/20 text-[10px] font-black text-sky-700 dark:text-sky-400 tracking-wider"
+                                                    title="Diposting oleh {{ $hj->nama_pemosting }}">
+                                                    {{ $hj->nama_pemosting }}
+                                                </span>
+                                            @else
+                                                <span class="text-gray-300 dark:text-gray-600">-</span>
                                             @endif
                                         </td>
                                         <td
@@ -2527,7 +2542,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="17" class="px-6 py-16 text-center">
+                                        <td colspan="18" class="px-6 py-16 text-center">
                                             <div class="flex flex-col items-center gap-3 text-gray-400">
                                                 <svg class="w-10 h-10 opacity-30" fill="none"
                                                     stroke="currentColor" viewBox="0 0 24 24">
@@ -2547,7 +2562,7 @@
                             <tfoot
                                 class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                                 <tr>
-                                    <td colspan="14"
+                                    <td colspan="15"
                                         class="px-4 py-5 text-right text-gray-600 tracking-widest uppercase">Total
                                         Akumulasi</td>
                                     <td
@@ -2561,7 +2576,7 @@
                                     <td></td>
                                 </tr>
                                 <tr class="border-t border-gray-200 dark:border-gray-700">
-                                    <td colspan="17" class="px-4 py-3">
+                                    <td colspan="18" class="px-4 py-3">
                                         @if ($isHistoryBalanced)
                                             <div class="flex items-center justify-end gap-2">
                                                 <div

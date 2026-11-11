@@ -376,6 +376,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 'harga',
                 'map',
                 'id_barang',
+                'diposting_oleh',
             ])
             ->selectRaw("
                 CASE LOWER(hit_kbk)
@@ -401,6 +402,18 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 $hj->nama_barang = null;
             });
         }
+
+        // ── Ambil nama user pemosting untuk kolom "Diposting Oleh" ──
+        $pemostingIds = $historyJurnals->pluck('diposting_oleh')->filter()->unique()->values();
+        $pemostingNames = $pemostingIds->isNotEmpty()
+            ? \App\Models\User::whereIn('id', $pemostingIds)->pluck('name', 'id')
+            : collect();
+
+        $historyJurnals->each(function ($hj) use ($pemostingNames) {
+            $hj->nama_pemosting = $hj->diposting_oleh
+                ? ($pemostingNames[$hj->diposting_oleh] ?? null)
+                : null;
+        });
 
         $totalsQuery = JurnalModel::query();
         if ($modeJurnalTunggal) {

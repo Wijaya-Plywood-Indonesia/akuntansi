@@ -272,6 +272,7 @@ class PostingJurnalPembantuService
                         'harga' => round($hargaFinal, 2),
                         'hit_kbk' => $hitKbk,
                         'map' => strtolower($header->map),
+                        'diposting_oleh' => $userId,
                     ]);
                 }
 
