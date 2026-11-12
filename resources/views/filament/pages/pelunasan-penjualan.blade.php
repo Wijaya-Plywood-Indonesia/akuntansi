@@ -183,18 +183,21 @@
                 <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-lg flex flex-col overflow-hidden sticky top-4"
                     x-data="{
                         sisa: {{ $this->getSisa() }},
-                        metode: @entangle('metode_pembayaran'),
+                        mode: @entangle('mode_ui'),
                         nominal: @entangle('nominal'),
-                        nominal_tunai: @entangle('nominal_tunai'),
-                        nominal_transfer: @entangle('nominal_transfer'),
+                        nominal_split_a: @entangle('nominal_split_a'),
+                        nominal_split_b: @entangle('nominal_split_b'),
+                        akun_pelunasan_id: @entangle('akun_pelunasan_id'),
+                        akun_split_a_id: @entangle('akun_split_a_id'),
+                        akun_split_b_id: @entangle('akun_split_b_id'),
                         format(val) {
                             if (val === null || val === undefined || val === '' || val == 0) return '0';
                             let cleaned = val.toString().replace(/\D/g, '');
                             return cleaned.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                         },
                         get totalInput() {
-                            if (this.metode === 'TUNAI & TRANSFER') {
-                                return (parseInt(this.nominal_tunai) || 0) + (parseInt(this.nominal_transfer) || 0);
+                            if (this.mode === 'SPLIT') {
+                                return (parseInt(this.nominal_split_a) || 0) + (parseInt(this.nominal_split_b) || 0);
                             }
                             return parseInt(this.nominal) || 0;
                         },
@@ -275,128 +278,256 @@
                                     class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer dark:text-white" />
                             </div>
 
-                            {{-- METODE PEMBAYARAN --}}
-                            <div class="space-y-2">
+                            {{-- MODE PEMBAYARAN: PELUNASAN / SPLIT --}}
+                            <div class="space-y-3">
                                 <label
-                                    class="text-[10px] font-bold text-gray-500 uppercase tracking-wide block ml-1">Metode
+                                    class="text-[10px] font-bold text-gray-500 uppercase tracking-wide block ml-1">Mode
                                     Pembayaran</label>
                                 <div
-                                    class="grid grid-cols-3 gap-1 p-1 bg-gray-100/50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <button wire:click="$set('metode_pembayaran', 'TUNAI')"
-                                        class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TUNAI' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Tunai</button>
-                                    <button wire:click="$set('metode_pembayaran', 'TRANSFER')"
-                                        class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TRANSFER' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Transfer</button>
-                                    <button wire:click="$set('metode_pembayaran', 'TUNAI & TRANSFER')"
-                                        class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $metode_pembayaran === 'TUNAI & TRANSFER' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Tunai
-                                        & Transfer</button>
+                                    class="grid grid-cols-2 gap-1 p-1 bg-gray-100/50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <button wire:click="$set('mode_ui', 'PELUNASAN')"
+                                        class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $mode_ui === 'PELUNASAN' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Pelunasan</button>
+                                    <button wire:click="$set('mode_ui', 'SPLIT')"
+                                        class="py-1.5 rounded-md text-[10px] font-bold uppercase transition-all {{ $mode_ui === 'SPLIT' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary-600' : 'text-gray-500' }}">Split</button>
                                 </div>
 
-                                @if ($metode_pembayaran === 'TRANSFER' || $metode_pembayaran === 'TUNAI & TRANSFER')
-                                    <div wire:key="payment-bank-selector" class="space-y-2">
-                                        <select wire:model.live="rekening_perusahaan_id"
-                                            class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 pr-8 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer">
-                                            <option value="">Pilih Bank...</option>
-                                            @foreach ($rekeningPerusahaan as $rek)
-                                                <option value="{{ $rek->id }}">{{ $rek->atas_nama }} |
-                                                    {{ $rek->nama_bank }} | {{ $rek->no_rekening }}</option>
+                                {{-- ═══ MODE: PELUNASAN (1 akun) ══════════════════════════════════════ --}}
+                                @if ($mode_ui === 'PELUNASAN')
+                                    <div wire:key="mode-pelunasan" class="space-y-2">
+
+                                        {{-- Dropdown pilih akun 1101.x --}}
+                                        <select wire:model.live="akun_pelunasan_id"
+                                            class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 pr-8 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer dark:text-white">
+                                            <option value="">— Pilih Akun Kas / Bank —</option>
+                                            @foreach ($akunKasList as $akun)
+                                                @php
+                                                    $rekTerkait = $rekeningPerSubAkun->firstWhere('sub_anak_akun_id', $akun->id);
+                                                @endphp
+                                                <option value="{{ $akun->id }}">
+                                                    {{ $akun->kode_sub_anak_akun }} — {{ $akun->nama_sub_anak_akun }}
+                                                    @if ($rekTerkait)
+                                                        ({{ $rekTerkait->no_rekening }})
+                                                    @endif
+                                                </option>
                                             @endforeach
                                         </select>
 
-                                        @if ($selectedBank)
-                                            <div wire:key="payment-selected-bank-details"
-                                                class="p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-100 dark:border-primary-800/50">
-                                                <div class="flex flex-col">
-                                                    <span
-                                                        class="text-[8px] font-bold text-primary-600 dark:text-primary-400 uppercase">Rekening
-                                                        Atas Nama</span>
-                                                    <span
-                                                        class="text-xs font-bold text-gray-700 dark:text-gray-200">{{ $selectedBank->atas_nama }}</span>
-                                                    <div class="mt-1 flex justify-between items-center">
+                                        {{-- Chip info rekening terhubung --}}
+                                        @if ($akun_pelunasan_id)
+                                            @php
+                                                $akunTerpilih = $akunKasList->firstWhere('id', $akun_pelunasan_id);
+                                                $rekTerpilih = $rekeningPerSubAkun->firstWhere('sub_anak_akun_id', $akun_pelunasan_id);
+                                            @endphp
+                                            @if ($rekTerpilih)
+                                                <div
+                                                    class="p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-100 dark:border-primary-800/50">
+                                                    <div class="flex flex-col">
                                                         <span
-                                                            class="text-sm font-black text-primary-700 dark:text-primary-300 font-mono tracking-tight">{{ $selectedBank->no_rekening }}</span>
+                                                            class="text-[8px] font-bold text-primary-600 dark:text-primary-400 uppercase">Rekening
+                                                            Atas Nama</span>
                                                         <span
-                                                            class="text-[8px] font-bold px-1.5 py-0.5 bg-primary-200 dark:bg-primary-800 rounded text-primary-800 dark:text-primary-200 uppercase">{{ $selectedBank->nama_bank }}</span>
+                                                            class="text-xs font-bold text-gray-700 dark:text-gray-200">{{ $rekTerpilih->atas_nama }}</span>
+                                                        <div class="mt-1 flex justify-between items-center">
+                                                            <span
+                                                                class="text-sm font-black text-primary-700 dark:text-primary-300 font-mono tracking-tight">{{ $rekTerpilih->no_rekening }}</span>
+                                                            <span
+                                                                class="text-[8px] font-bold px-1.5 py-0.5 bg-primary-200 dark:bg-primary-800 rounded text-primary-800 dark:text-primary-200 uppercase">{{ $rekTerpilih->nama_bank }}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            @elseif($akunTerpilih)
+                                                <div
+                                                    class="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800/50">
+                                                    <span
+                                                        class="text-[10px] font-bold text-amber-700 dark:text-amber-400">💵
+                                                        Kas Tunai — tidak ada rekening bank terhubung</span>
+                                                </div>
+                                            @endif
                                         @endif
+
+                                        {{-- Input nominal --}}
+                                        <div
+                                            class="space-y-1.5 bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+                                            <div class="space-y-1">
+                                                <div class="flex justify-between items-center">
+                                                    <label
+                                                        class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1">Nominal
+                                                        Diterima</label>
+                                                    <button type="button" wire:click="setNominal('pas')"
+                                                        class="text-[9px] font-bold uppercase text-primary-600 hover:underline">Pas
+                                                        (Lunas)</button>
+                                                </div>
+                                                <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
+                                                    <span class="text-lg font-bold text-primary-600">Rp</span>
+                                                    <input type="text" :value="format(nominal)"
+                                                        @input="
+                                                            let raw = $event.target.value.replace(/\D/g, '');
+                                                            nominal = raw ? parseInt(raw) : 0;
+                                                            $el.value = format(nominal);
+                                                        "
+                                                        class="w-full bg-transparent border-none p-0 text-xl lg:text-2xl font-black focus:ring-0 tracking-tight dark:text-white"
+                                                        placeholder="0" />
+                                                </div>
+                                            </div>
+
+                                            <div class="pt-0.5 flex justify-between items-center">
+                                                <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
+                                                    x-text="akanLunas ? 'Status' : 'Sisa Setelah Ini'"></span>
+                                                <span class="text-base lg:text-lg font-bold"
+                                                    :class="akanLunas ? 'text-green-500' : 'text-red-500'"
+                                                    x-text="akanLunas ? 'LUNAS ✓' : format(sisaSetelah)">
+                                                </span>
+                                            </div>
+
+                                            <template x-if="!akanLunas && totalInput > 0">
+                                                <p class="text-[10px] font-semibold text-red-500 ml-1 pt-0.5">
+                                                    Nominal harus pas menutup sisa tagihan. Tidak bisa dicicil.
+                                                </p>
+                                            </template>
+                                        </div>
                                     </div>
-                                @endif
-                            </div>
 
-                            {{-- NOMINAL --}}
-                            <div
-                                class="space-y-1.5 bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+                                {{-- ═══ MODE: SPLIT (2 akun) ══════════════════════════════════════════ --}}
+                                @elseif ($mode_ui === 'SPLIT')
+                                    <div wire:key="mode-split" class="space-y-3">
 
-                                @if ($metode_pembayaran === 'TUNAI & TRANSFER')
-                                    <div wire:key="nominal-split-fields" class="flex flex-wrap gap-3 mb-2">
-                                        <div class="flex-1 min-w-[120px] space-y-1">
+                                        {{-- Slot A --}}
+                                        <div
+                                            class="bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800 space-y-2">
                                             <label
-                                                class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Tunai</label>
-                                            <div class="flex items-center gap-1 border-b border-primary-500 pb-0.5">
+                                                class="text-[10px] font-black text-gray-500 uppercase tracking-wide">Slot
+                                                A</label>
+
+                                            <select wire:model.live="akun_split_a_id"
+                                                class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 pr-8 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer dark:text-white">
+                                                <option value="">— Pilih Akun —</option>
+                                                @foreach ($akunKasList as $akun)
+                                                    @php
+                                                        $rek = $rekeningPerSubAkun->firstWhere('sub_anak_akun_id', $akun->id);
+                                                    @endphp
+                                                    <option value="{{ $akun->id }}">
+                                                        {{ $akun->kode_sub_anak_akun }} — {{ $akun->nama_sub_anak_akun }}
+                                                        @if ($rek)
+                                                            ({{ $rek->no_rekening }})
+                                                        @endif
+                                                    </option>
+                                                @endforeach
+                                            </select>
+
+                                            {{-- Chip rekening slot A --}}
+                                            @if ($akun_split_a_id)
+                                                @php
+                                                    $rekA = $rekeningPerSubAkun->firstWhere('sub_anak_akun_id', $akun_split_a_id);
+                                                @endphp
+                                                @if ($rekA)
+                                                    <div
+                                                        class="px-2 py-1 bg-primary-50 dark:bg-primary-900/20 rounded border border-primary-100 dark:border-primary-800/50 flex justify-between items-center">
+                                                        <span
+                                                            class="text-xs font-bold text-gray-700 dark:text-gray-200">{{ $rekA->atas_nama }}</span>
+                                                        <span
+                                                            class="text-[9px] font-bold font-mono text-primary-700 dark:text-primary-300">{{ $rekA->no_rekening }}</span>
+                                                    </div>
+                                                @else
+                                                    <div
+                                                        class="px-2 py-1 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-100 dark:border-amber-800/50">
+                                                        <span
+                                                            class="text-[10px] font-bold text-amber-700 dark:text-amber-400">💵
+                                                            Kas Tunai</span>
+                                                    </div>
+                                                @endif
+                                            @endif
+
+                                            <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
                                                 <span class="text-xs font-bold text-primary-600">Rp</span>
-                                                <input type="text" :value="format(nominal_tunai)"
+                                                <input type="text" :value="format(nominal_split_a)"
                                                     @input="
                                                         let raw = $event.target.value.replace(/\D/g, '');
-                                                        nominal_tunai = raw ? parseInt(raw) : 0;
-                                                        $el.value = format(nominal_tunai);
+                                                        nominal_split_a = raw ? parseInt(raw) : 0;
+                                                        $el.value = format(nominal_split_a);
                                                     "
-                                                    class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white text-gray-900" />
+                                                    class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white text-gray-900"
+                                                    placeholder="0" />
                                             </div>
                                         </div>
-                                        <div class="flex-1 min-w-[120px] space-y-1">
+
+                                        {{-- Slot B --}}
+                                        <div
+                                            class="bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800 space-y-2">
                                             <label
-                                                class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Transfer</label>
-                                            <div class="flex items-center gap-1 border-b border-primary-500 pb-0.5">
+                                                class="text-[10px] font-black text-gray-500 uppercase tracking-wide">Slot
+                                                B</label>
+
+                                            <select wire:model.live="akun_split_b_id"
+                                                class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 pr-8 text-sm focus:ring-2 focus:ring-primary-500/10 cursor-pointer dark:text-white">
+                                                <option value="">— Pilih Akun —</option>
+                                                @foreach ($akunKasList as $akun)
+                                                    @php
+                                                        $rek = $rekeningPerSubAkun->firstWhere('sub_anak_akun_id', $akun->id);
+                                                    @endphp
+                                                    <option value="{{ $akun->id }}">
+                                                        {{ $akun->kode_sub_anak_akun }} — {{ $akun->nama_sub_anak_akun }}
+                                                        @if ($rek)
+                                                            ({{ $rek->no_rekening }})
+                                                        @endif
+                                                    </option>
+                                                @endforeach
+                                            </select>
+
+                                            {{-- Chip rekening slot B --}}
+                                            @if ($akun_split_b_id)
+                                                @php
+                                                    $rekB = $rekeningPerSubAkun->firstWhere('sub_anak_akun_id', $akun_split_b_id);
+                                                @endphp
+                                                @if ($rekB)
+                                                    <div
+                                                        class="px-2 py-1 bg-primary-50 dark:bg-primary-900/20 rounded border border-primary-100 dark:border-primary-800/50 flex justify-between items-center">
+                                                        <span
+                                                            class="text-xs font-bold text-gray-700 dark:text-gray-200">{{ $rekB->atas_nama }}</span>
+                                                        <span
+                                                            class="text-[9px] font-bold font-mono text-primary-700 dark:text-primary-300">{{ $rekB->no_rekening }}</span>
+                                                    </div>
+                                                @else
+                                                    <div
+                                                        class="px-2 py-1 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-100 dark:border-amber-800/50">
+                                                        <span
+                                                            class="text-[10px] font-bold text-amber-700 dark:text-amber-400">💵
+                                                            Kas Tunai</span>
+                                                    </div>
+                                                @endif
+                                            @endif
+
+                                            <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
                                                 <span class="text-xs font-bold text-primary-600">Rp</span>
-                                                <input type="text" :value="format(nominal_transfer)"
+                                                <input type="text" :value="format(nominal_split_b)"
                                                     @input="
                                                         let raw = $event.target.value.replace(/\D/g, '');
-                                                        nominal_transfer = raw ? parseInt(raw) : 0;
-                                                        $el.value = format(nominal_transfer);
+                                                        nominal_split_b = raw ? parseInt(raw) : 0;
+                                                        $el.value = format(nominal_split_b);
                                                     "
-                                                    class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white text-gray-900" />
+                                                    class="w-full bg-transparent border-none p-0 text-lg font-black focus:ring-0 tracking-tight dark:text-white text-gray-900"
+                                                    placeholder="0" />
                                             </div>
                                         </div>
-                                    </div>
-                                @else
-                                    <div wire:key="nominal-single-field" class="space-y-1">
-                                        <div class="flex justify-between items-center">
-                                            <label
-                                                class="text-[10px] font-bold text-gray-500 uppercase tracking-wide ml-1">Nominal
-                                                Diterima</label>
-                                            <button type="button" wire:click="setNominal('pas')"
-                                                class="text-[9px] font-bold uppercase text-primary-600 hover:underline">Pas
-                                                (Lunas)</button>
-                                        </div>
-                                        <div class="flex items-center gap-1.5 border-b border-primary-500 pb-0.5">
-                                            <span class="text-lg font-bold text-primary-600">Rp</span>
-                                            <input type="text" :value="format(nominal)"
-                                                @input="
-                                                    let raw = $event.target.value.replace(/\D/g, '');
-                                                    nominal = raw ? parseInt(raw) : 0;
-                                                    $el.value = format(nominal);
-                                                "
-                                                class="w-full bg-transparent border-none p-0 text-xl lg:text-2xl font-black focus:ring-0 tracking-tight"
-                                                placeholder="0" />
+
+                                        {{-- Ringkasan split --}}
+                                        <div
+                                            class="bg-gray-50/50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+                                            <div class="pt-0.5 flex justify-between items-center">
+                                                <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
+                                                    x-text="akanLunas ? 'Status' : 'Sisa Setelah Ini'"></span>
+                                                <span class="text-base lg:text-lg font-bold"
+                                                    :class="akanLunas ? 'text-green-500' : 'text-red-500'"
+                                                    x-text="akanLunas ? 'LUNAS ✓' : format(sisaSetelah)">
+                                                </span>
+                                            </div>
+                                            <template x-if="!akanLunas && totalInput > 0">
+                                                <p class="text-[10px] font-semibold text-red-500 ml-1 pt-0.5">
+                                                    Total A + B harus pas menutup sisa tagihan.
+                                                </p>
+                                            </template>
                                         </div>
                                     </div>
                                 @endif
-
-                                <div class="pt-0.5 flex justify-between items-center">
-                                    <span class="text-[9px] font-bold text-gray-400 uppercase ml-1"
-                                        x-text="akanLunas ? 'Status' : 'Sisa Setelah Ini'"></span>
-                                    <span class="text-base lg:text-lg font-bold"
-                                        :class="akanLunas ? 'text-green-500' : 'text-red-500'"
-                                        x-text="akanLunas ? 'LUNAS ✓' : format(sisaSetelah)">
-                                    </span>
-                                </div>
-
-                                <template x-if="!akanLunas && totalInput > 0">
-                                    <p class="text-[10px] font-semibold text-red-500 ml-1 pt-0.5">
-                                        Nominal harus pas menutup sisa tagihan. Tidak bisa dicicil.
-                                    </p>
-                                </template>
                             </div>
 
                             {{-- CATATAN --}}
@@ -408,7 +539,7 @@
                                     class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-sm focus:ring-2 focus:ring-primary-500/10 dark:text-white dark:placeholder-gray-600"></textarea>
                             </div>
 
-                            {{-- RIWAYAT (placeholder, menunggu tabel riwayat) --}}
+                            {{-- RIWAYAT --}}
                             <div class="pt-2 border-t border-gray-100 dark:border-gray-800">
                                 <span
                                     class="text-[10px] font-bold text-gray-400 uppercase tracking-wide block mb-2">Riwayat
@@ -427,9 +558,12 @@
                                 <button :disabled="!akanLunas"
                                     @click="
                                         if (!akanLunas) return;
-                                        $wire.set('nominal', nominal);
-                                        $wire.set('nominal_tunai', nominal_tunai);
-                                        $wire.set('nominal_transfer', nominal_transfer);
+                                        if (mode === 'PELUNASAN') {
+                                            $wire.set('nominal', nominal);
+                                        } else {
+                                            $wire.set('nominal_split_a', nominal_split_a);
+                                            $wire.set('nominal_split_b', nominal_split_b);
+                                        }
                                         $wire.simpanPelunasan();
                                     "
                                     :class="akanLunas ? '' : 'opacity-40 cursor-not-allowed pointer-events-none'"
@@ -477,4 +611,5 @@
             outline: none;
         }
     </style>
+
 </x-filament::page>
