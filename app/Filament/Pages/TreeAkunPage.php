@@ -31,6 +31,7 @@ class TreeAkunPage extends Page
     // Key pembeli yang dipilih di level 1, dibuka ke detail level 2.
     // Formatnya "id:<id_pembeli>" untuk pembeli bermaster, atau
     // "nama:<nama>" untuk baris jurnal lama yang belum ada id_pembeli-nya.
+    // Untuk akun bertipe 'campuran': "sup:<id_supplier>" / "pem:<id_pembeli>".
     public ?string $selectedPembeliKey = null;
 
     public function getViewData(): array
@@ -170,17 +171,20 @@ class TreeAkunPage extends Page
 
     /*
     |--------------------------------------------------------------------------
-    | BUKU PEMBANTU PIUTANG (per Pembeli)
+    | BUKU PEMBANTU PIUTANG / UTANG / CAMPURAN
     |--------------------------------------------------------------------------
     | Dipicu dari leaf row di tree COA untuk sub akun yang tipe_buku_pembantu-
-    | nya = 'piutang'. Alurnya 2 level:
-    |   Level 1 (openPiutangModal)  -> daftar pembeli + saldo piutang berjalan
-    |   Level 2 (openPiutangDetail) -> kartu piutang 1 pembeli: tanggal,
+    | nya = 'piutang', 'utang' atau 'campuran'. Alurnya 2 level:
+    |   Level 1 (openPiutangModal)  -> daftar pihak + saldo berjalan
+    |   Level 2 (openPiutangDetail) -> kartu 1 pihak: tanggal,
     |                                  no dokumen (SJ/nota), debit, kredit,
     |                                  saldo berjalan.
     | Sumber data: jurnal_umums yang sudah ke-posting (no_akun = kode sub akun
-    | terpilih). Baris lama yang belum punya id_pembeli tetap ikut kehitung,
-    | dikelompokkan berdasarkan kolom teks `nama`.
+    | terpilih). Baris lama yang belum punya id_pembeli/id_supplier tetap ikut
+    | kehitung, dikelompokkan berdasarkan kolom teks `nama`.
+    |
+    | Tipe 'campuran' (mis. 2228.1 Titipan): pihaknya bisa Supplier ATAU
+    | Pembeli, dibedakan lewat id_supplier / id_pembeli di jurnal.
     */
 
     public function openPiutangModal(int $subAkunId): void
@@ -199,14 +203,6 @@ class TreeAkunPage extends Page
         return SubAnakAkun::find($this->selectedPiutangSubAkunId);
     }
 
-    /**
-     * Level 1: daftar pembeli yang punya transaksi di akun piutang terpilih,
-     * beserta saldo berjalan (debit - kredit, karena piutang saldo normalnya
-     * debit). Dikelompokkan by id_pembeli, fallback ke nama teks kalau
-     * id_pembeli-nya NULL (data lama).
-     *
-     * @return \Illuminate\Support\Collection<int, object{key:string,nama:string,debit:float,kredit:float,saldo:float,jumlah_transaksi:int}>
-     */
     /**
      * Hitung "hari sejak" dari sebuah tanggal ke hari ini, HANYA kalau
      * tanggal itu sudah lewat (<= hari ini). Tanggal yang masih di masa
@@ -232,6 +228,54 @@ class TreeAkunPage extends Page
         return $this->selectedPiutangSubAkun?->tipe_buku_pembantu === 'utang';
     }
 
+    /** True kalau sub akun bertipe 'campuran' (pihaknya bisa Supplier ATAU Pembeli, mis. 2228.1 Titipan). */
+    public function getSelectedBukuIsCampuranProperty(): bool
+    {
+        return $this->selectedPiutangSubAkun?->tipe_buku_pembantu === 'campuran';
+    }
+
+    /**
+     * Hitung saldo satu baris/kelompok.
+     * Piutang: saldo normal debit. Utang: saldo normal kredit.
+     * Campuran: ikut saldo normal akun (Titipan = kredit).
+     */
+    private function hitungSaldo(float $debit, float $kredit, bool $isUtang, bool $isCampuran, ?SubAnakAkun $subAkun): float
+    {
+        if ($isCampuran) {
+            return strtolower((string) $subAkun?->saldo_normal) === 'debet' ? $debit - $kredit : $kredit - $debit;
+        }
+
+        return $isUtang ? $kredit - $debit : $debit - $kredit;
+    }
+
+    /**
+     * Key pengelompokan baris jurnal. Untuk campuran dibedakan prefix
+     * sup:/pem: karena id supplier & id pembeli bisa kembar.
+     */
+    private function keyPihak(JurnalUmum $r, bool $isUtang, bool $isCampuran): string
+    {
+        if ($isCampuran) {
+            if ($r->id_supplier) {
+                return 'sup:'.$r->id_supplier;
+            }
+            if ($r->id_pembeli) {
+                return 'pem:'.$r->id_pembeli;
+            }
+
+            return 'nama:'.trim((string) $r->nama);
+        }
+
+        $kolomId = $isUtang ? 'id_supplier' : 'id_pembeli';
+
+        return $r->{$kolomId} ? 'id:'.$r->{$kolomId} : 'nama:'.trim((string) $r->nama);
+    }
+
+    /**
+     * Level 1: daftar pihak (pembeli/supplier) yang punya transaksi di akun
+     * terpilih, beserta saldo berjalan.
+     *
+     * @return \Illuminate\Support\Collection<int, object>
+     */
     public function getPiutangPembeliListProperty()
     {
         $subAkun = $this->selectedPiutangSubAkun;
@@ -247,23 +291,37 @@ class TreeAkunPage extends Page
             ->get();
 
         $isUtang = $this->selectedBukuIsUtang;
-        $kolomId = $isUtang ? 'id_supplier' : 'id_pembeli';
+        $isCampuran = $this->selectedBukuIsCampuran;
 
         return $rows
-            ->groupBy(fn (JurnalUmum $r) => $r->{$kolomId} ? 'id:'.$r->{$kolomId} : 'nama:'.trim((string) $r->nama))
-            ->map(function ($group, $key) use ($isUtang) {
+            ->groupBy(fn (JurnalUmum $r) => $this->keyPihak($r, $isUtang, $isCampuran))
+            ->map(function ($group, $key) use ($isUtang, $isCampuran, $subAkun) {
                 $first = $group->first();
                 $debit = (float) $group->sum('debit');
                 $kredit = (float) $group->sum('kredit');
                 $tglTerakhir = $group->max('tgl');
 
+                if ($isCampuran) {
+                    $jenisPihak = str_starts_with($key, 'sup:') ? 'Supplier' : (str_starts_with($key, 'pem:') ? 'Pembeli' : null);
+                    $namaPihak = match ($jenisPihak) {
+                        'Supplier' => $first->supplier?->nama,
+                        'Pembeli' => $first->pembeli?->nama,
+                        default => null,
+                    };
+                } else {
+                    $jenisPihak = null;
+                    $namaPihak = $isUtang ? $first->supplier?->nama : $first->pembeli?->nama;
+                }
+
                 return (object) [
                     'key' => $key,
-                    'nama' => ($isUtang ? $first->supplier?->nama : $first->pembeli?->nama) ?: ($first->nama ?: 'Tanpa Nama'),
+                    'jenis_pihak' => $jenisPihak,
+                    'nama' => $namaPihak ?: ($first->nama ?: 'Tanpa Nama'),
                     'debit' => $debit,
                     'kredit' => $kredit,
                     // Piutang: saldo normal debit. Utang: saldo normal kredit.
-                    'saldo' => $isUtang ? $kredit - $debit : $debit - $kredit,
+                    // Campuran: ikut saldo normal akun (Titipan = kredit).
+                    'saldo' => $this->hitungSaldo($debit, $kredit, $isUtang, $isCampuran, $subAkun),
                     // Jumlah NOTA unik (bukan jumlah baris jurnal — 1 nota
                     // bisa punya 2+ baris: tagihan + pelunasan/DP, jadi kalau
                     // dihitung dari baris jurnal angkanya bisa 2x lipat dari
@@ -271,11 +329,8 @@ class TreeAkunPage extends Page
                     'jumlah_transaksi' => $group->pluck('no_dokumen')->filter()->unique()->count(),
                     'tgl_terakhir' => $tglTerakhir,
                     // Cuma dihitung kalau tanggal transaksi <= hari ini.
-                    // Sebelumnya pakai abs() yang salah — tanggal transaksi
-                    // yang MAJU (di masa depan, mis. data testing) malah ikut
-                    // dihitung seolah "sudah lewat sekian hari", padahal
-                    // seharusnya belum terjadi. Sekarang: transaksi di masa
-                    // depan -> 0 (belum lewat), bukan dipaksa positif.
+                    // Transaksi di masa depan -> 0 (belum lewat), bukan
+                    // dipaksa positif.
                     'hari_sejak_terakhir' => $this->hitungHariSejak($tglTerakhir),
                 ];
             })
@@ -284,7 +339,7 @@ class TreeAkunPage extends Page
     }
 
     /**
-     * Buka detail level 2 untuk 1 pembeli (dari baris yang diklik di level 1).
+     * Buka detail level 2 untuk 1 pihak (dari baris yang diklik di level 1).
      */
     public function openPiutangDetail(string $pembeliKey): void
     {
@@ -293,7 +348,7 @@ class TreeAkunPage extends Page
     }
 
     /**
-     * Data ringkas pembeli yang sedang dibuka di level 2 (nama + total saldo),
+     * Data ringkas pihak yang sedang dibuka di level 2 (nama + total saldo),
      * diambil dari hasil level 1 supaya tidak query ulang.
      */
     public function getSelectedPembeliRingkasanProperty(): ?object
@@ -306,7 +361,7 @@ class TreeAkunPage extends Page
     }
 
     /**
-     * Level 2: rincian transaksi 1 pembeli pada akun piutang terpilih,
+     * Level 2: rincian transaksi 1 pihak pada akun terpilih,
      * diurutkan tanggal, dengan saldo berjalan (running balance).
      *
      * @return \Illuminate\Support\Collection<int, object{tgl:mixed,no_dokumen:?string,keterangan:?string,debit:float,kredit:float,saldo_berjalan:float}>
@@ -325,13 +380,22 @@ class TreeAkunPage extends Page
             ->orderBy('id');
 
         $isUtang = $this->selectedBukuIsUtang;
+        $isCampuran = $this->selectedBukuIsCampuran;
         $kolomId = $isUtang ? 'id_supplier' : 'id_pembeli';
+        $key = $this->selectedPembeliKey;
 
-        if (str_starts_with($this->selectedPembeliKey, 'id:')) {
-            $query->where($kolomId, (int) substr($this->selectedPembeliKey, 3));
+        if ($isCampuran) {
+            if (str_starts_with($key, 'sup:')) {
+                $query->where('id_supplier', (int) substr($key, 4));
+            } elseif (str_starts_with($key, 'pem:')) {
+                $query->whereNull('id_supplier')->where('id_pembeli', (int) substr($key, 4));
+            } else {
+                $query->whereNull('id_supplier')->whereNull('id_pembeli')->where('nama', substr($key, 5));
+            }
+        } elseif (str_starts_with($key, 'id:')) {
+            $query->where($kolomId, (int) substr($key, 3));
         } else {
-            $nama = substr($this->selectedPembeliKey, 5);
-            $query->whereNull($kolomId)->where('nama', $nama);
+            $query->whereNull($kolomId)->where('nama', substr($key, 5));
         }
 
         $saldoBerjalan = 0.0;
@@ -341,8 +405,8 @@ class TreeAkunPage extends Page
         // dilakukan setelah saldo_berjalan selesai dihitung, lewat reverse()
         // di akhir — supaya angkanya tetap benar tapi baris terbaru muncul
         // di atas.
-        return $query->get()->map(function (JurnalUmum $r) use (&$saldoBerjalan, $isUtang) {
-            $saldoBerjalan += $isUtang ? $r->kredit - $r->debit : $r->debit - $r->kredit;
+        return $query->get()->map(function (JurnalUmum $r) use (&$saldoBerjalan, $isUtang, $isCampuran, $subAkun) {
+            $saldoBerjalan += $this->hitungSaldo((float) $r->debit, (float) $r->kredit, $isUtang, $isCampuran, $subAkun);
 
             return (object) [
                 'tgl' => $r->tgl,

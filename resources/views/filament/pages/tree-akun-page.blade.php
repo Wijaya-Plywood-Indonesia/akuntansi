@@ -936,7 +936,7 @@
      ============================================================ --}}
     <x-filament::modal id="piutang-pembeli-modal" width="5xl">
         <x-slot name="heading">
-            Buku Pembantu {{ $this->selectedBukuIsUtang ? 'Utang' : 'Piutang' }}
+            Buku Pembantu {{ $this->selectedBukuIsCampuran ? '' : ($this->selectedBukuIsUtang ? 'Utang' : 'Piutang') }}
             @if ($this->selectedPiutangSubAkun)
                 <span style="font-weight:400; color:var(--tree-text-muted,#9aa0bb);">
                     — {{ $this->selectedPiutangSubAkun->kode_sub_anak_akun }}
@@ -947,8 +947,9 @@
 
         @php
             $pembeliList = $this->piutangPembeliList->sortByDesc('saldo')->values();
-            $labelPihak = $this->selectedBukuIsUtang ? 'Supplier' : 'Pembeli';
-            $labelBuku = $this->selectedBukuIsUtang ? 'Utang' : 'Piutang';
+            $isCampuranBuku = $this->selectedBukuIsCampuran;
+            $labelPihak = $isCampuranBuku ? 'Supplier / Pembeli' : ($this->selectedBukuIsUtang ? 'Supplier' : 'Pembeli');
+            $labelBuku = $isCampuranBuku ? 'Titipan' : ($this->selectedBukuIsUtang ? 'Utang' : 'Piutang');
         @endphp
 
         @if ($pembeliList->isEmpty())
@@ -990,7 +991,12 @@
                                 @endif
                             </div>
                             <div class="pembeli-card-nama" title="{{ $labelBuku }} {{ $p->nama }}">
-                                {{ $labelBuku }} {{ $p->nama }}
+                                {{ $isCampuranBuku ? '' : $labelBuku.' ' }}{{ $p->nama }}
+                                @if ($isCampuranBuku && $p->jenis_pihak)
+                                    <span style="font-size:10px; font-weight:600; padding:1px 6px; border-radius:9999px; margin-left:4px;
+                                        background:{{ $p->jenis_pihak === 'Supplier' ? 'rgba(96,165,250,0.15)' : 'rgba(52,211,153,0.15)' }};
+                                        color:{{ $p->jenis_pihak === 'Supplier' ? '#60a5fa' : '#34d399' }};">{{ $p->jenis_pihak }}</span>
+                                @endif
                             </div>
                             <div class="pembeli-card-saldo barang-list-stok {{ $saldoClass }}">
                                 Rp {{ number_format($p->saldo, 0, ',', '.') }}
@@ -1008,7 +1014,7 @@
      ============================================================ --}}
     <x-filament::modal id="piutang-detail-modal" width="4xl">
         <x-slot name="heading">
-            Kartu {{ $this->selectedBukuIsUtang ? 'Utang' : 'Piutang' }}
+            Kartu {{ $this->selectedBukuIsCampuran ? 'Titipan' : ($this->selectedBukuIsUtang ? 'Utang' : 'Piutang') }}
             @if ($this->selectedPembeliRingkasan)
                 <span style="font-weight:400; color:var(--tree-text-muted,#9aa0bb);">
                     — {{ $this->selectedPembeliRingkasan->nama }}
@@ -1025,7 +1031,7 @@
             <div style="display:flex; gap:16px; margin-bottom:12px; font-size:12px; color:var(--tree-text-muted,#9aa0bb); flex-wrap:wrap; align-items:center;">
                 <span>Total Debit: <strong style="color:#34d399;">Rp {{ number_format($ringkasan->debit, 0, ',', '.') }}</strong></span>
                 <span>Total Kredit: <strong style="color:#f87171;">Rp {{ number_format($ringkasan->kredit, 0, ',', '.') }}</strong></span>
-                <span>Sisa {{ $this->selectedBukuIsUtang ? 'Utang' : 'Piutang' }}: <strong>Rp {{ number_format($ringkasan->saldo, 0, ',', '.') }}</strong></span>
+                <span>Sisa {{ $this->selectedBukuIsCampuran ? 'Titipan' : ($this->selectedBukuIsUtang ? 'Utang' : 'Piutang') }}: <strong>Rp {{ number_format($ringkasan->saldo, 0, ',', '.') }}</strong></span>
                 @if ($ringkasan->saldo > 0 && $ringkasan->hari_sejak_terakhir !== null)
                     <span style="padding:2px 8px; border-radius:9999px; font-weight:600;
                         background:{{ $ringkasan->hari_sejak_terakhir >= 30 ? 'rgba(248,113,113,0.15)' : 'rgba(154,160,187,0.15)' }};
@@ -1038,7 +1044,7 @@
 
         @if ($transaksi->isEmpty())
             <div class="barang-empty-state">
-                Tidak ada rincian transaksi untuk {{ $this->selectedBukuIsUtang ? 'supplier' : 'pembeli' }} ini.
+                Tidak ada rincian transaksi untuk {{ $this->selectedBukuIsCampuran ? 'pihak' : ($this->selectedBukuIsUtang ? 'supplier' : 'pembeli') }} ini.
             </div>
         @else
             <div style="overflow-x:auto;">
