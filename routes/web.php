@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\JurnalProduksiController;
+use App\Http\Controllers\PurchaseOrderPdfController;
 use App\Http\Controllers\PenjualanExportController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\NotaThermalController;
@@ -73,3 +74,8 @@ Route::get('/internal/supplier-detail/{id}', function ($id) {
 })->middleware(['web', 'auth'])->name('internal.supplier-detail');
 
 Route::post('/jurnal-produksi/import', [JurnalProduksiController::class, 'importExcel'])->name('jurnal-produksi.import');
+
+// Purchase Order PDF
+Route::get('/purchase-order/{purchaseOrder}/cetak-pdf', [PurchaseOrderPdfController::class, 'cetak'])
+    ->middleware(['web', 'auth'])
+    ->name('purchase-order.cetak-pdf');

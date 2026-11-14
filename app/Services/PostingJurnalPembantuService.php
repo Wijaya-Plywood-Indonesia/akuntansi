@@ -24,19 +24,13 @@ class PostingJurnalPembantuService
     /**
      * Posting satu nomor jurnal pembantu ke Jurnal Umum.
      *
-     * Seluruh proses dibungkus advisory lock (di LUAR transaksi) supaya dua
-     * posting yang berjalan bersamaan tidak mendapat nomor max(JU)+1 yang sama,
-     * dan lock baru dilepas setelah transaksi commit.
-     *
      * @throws \Exception
      */
     public function postingByNomorJurnal(int|string $nomorJurnal, ?int $userId = null): void
     {
         $userId = $userId ?? Auth::id() ?? 1;
 
-        NomorJurnalService::dalamLock(function () use ($nomorJurnal, $userId) {
-            $this->prosesPosting($nomorJurnal, $userId);
-        });
+        $this->prosesPosting($nomorJurnal, $userId);
     }
 
     private function prosesPosting(int|string $nomorJurnal, int $userId): void

@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\Penjualan;
 use App\Models\RekeningPerusahaan;
+use App\Models\SubAnakAkun;
 use App\Services\PenjualanPelunasanService;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -40,12 +41,28 @@ class PelunasanPenjualan extends Page
 
     public ?Penjualan $selectedNota = null;
 
-    // Payment fields
+    // ── Mode: 'PELUNASAN' | 'SPLIT' ──────────────────────────────────────────
+    public string $mode_ui = 'PELUNASAN';
+
+    // ── PELUNASAN: 1 akun dipilih dari 1101.x (kecuali .0) ──────────────────
+    // sub_anak_akun_id untuk slot tunggal
+    public ?int $akun_pelunasan_id = null;
+
+    public int $nominal = 0;
+
+    // ── SPLIT: 2 slot, masing-masing pilih akun + nominal ───────────────────
+    public ?int $akun_split_a_id = null;
+
+    public int $nominal_split_a = 0;
+
+    public ?int $akun_split_b_id = null;
+
+    public int $nominal_split_b = 0;
+
+    // ── Legacy / internal (dipakai PenjualanPelunasanService) ───────────────
     public string $metode_pembayaran = 'TUNAI';
 
     public ?int $rekening_perusahaan_id = null;
-
-    public int $nominal = 0;
 
     public int $nominal_tunai = 0;
 
@@ -59,11 +76,31 @@ class PelunasanPenjualan extends Page
         'search' => ['except' => ''],
     ];
 
+    // ── Kas tunai: akun 1101.1 dan 1101.2 (tidak punya RekeningPerusahaan) ──
+    private const KODE_KAS_TUNAI = ['1101.1', '1101.2'];
+
     #[Computed]
     public function notaResults(): Collection
     {
         return app(PenjualanPelunasanService::class)
             ->getBelumLunas($this->search, self::BATAS_DAFTAR_NOTA);
+    }
+
+    /** Semua SubAnakAkun 1101.x kecuali .0, diurutkan. */
+    #[Computed]
+    public function akunKasList(): Collection
+    {
+        return SubAnakAkun::where('kode_sub_anak_akun', 'like', '1101.%')
+            ->where('kode_sub_anak_akun', '!=', '1101.0')
+            ->orderBy('kode_sub_anak_akun')
+            ->get();
+    }
+
+    /** RekeningPerusahaan yang terhubung ke SubAnakAkun tertentu. */
+    #[Computed]
+    public function rekeningPerSubAkun(): Collection
+    {
+        return RekeningPerusahaan::with('subAnakAkun')->get();
     }
 
     #[Computed]
@@ -80,6 +117,28 @@ class PelunasanPenjualan extends Page
         }
 
         return RekeningPerusahaan::find($this->rekening_perusahaan_id);
+    }
+
+    /** Ambil RekeningPerusahaan yang terhubung ke SubAnakAkun id tertentu (null jika kas tunai). */
+    public function getRekeningUntukAkun(?int $akunId): ?RekeningPerusahaan
+    {
+        if (! $akunId) {
+            return null;
+        }
+
+        return $this->rekeningPerSubAkun->firstWhere('sub_anak_akun_id', $akunId);
+    }
+
+    /** Apakah akun (by id) termasuk kas tunai (1101.1 / 1101.2)? */
+    public function isKasTunai(?int $akunId): bool
+    {
+        if (! $akunId) {
+            return false;
+        }
+
+        $akun = $this->akunKasList->firstWhere('id', $akunId);
+
+        return $akun && in_array($akun->kode_sub_anak_akun, self::KODE_KAS_TUNAI, true);
     }
 
     public function pilihNota(int $id): void
@@ -113,10 +172,16 @@ class PelunasanPenjualan extends Page
         $this->nominal = $service->sisaTagihan($nota);
         $this->nominal_tunai = 0;
         $this->nominal_transfer = 0;
+        $this->nominal_split_a = 0;
+        $this->nominal_split_b = 0;
+        $this->akun_pelunasan_id = null;
+        $this->akun_split_a_id = null;
+        $this->akun_split_b_id = null;
         $this->rekening_perusahaan_id = null;
         $this->keterangan = '';
         $this->tanggal_pelunasan = now()->format('Y-m-d');
-        $this->metode_pembayaran = self::_defaultMetode();
+        $this->metode_pembayaran = PenjualanPelunasanService::METODE_TUNAI;
+        $this->mode_ui = 'PELUNASAN';
     }
 
     public function batalPilihNota(): void
@@ -126,10 +191,16 @@ class PelunasanPenjualan extends Page
         $this->nominal = 0;
         $this->nominal_tunai = 0;
         $this->nominal_transfer = 0;
+        $this->nominal_split_a = 0;
+        $this->nominal_split_b = 0;
+        $this->akun_pelunasan_id = null;
+        $this->akun_split_a_id = null;
+        $this->akun_split_b_id = null;
         $this->rekening_perusahaan_id = null;
         $this->keterangan = '';
         $this->tanggal_pelunasan = null;
-        $this->metode_pembayaran = self::_defaultMetode();
+        $this->metode_pembayaran = PenjualanPelunasanService::METODE_TUNAI;
+        $this->mode_ui = 'PELUNASAN';
     }
 
     public function getSisa(): int
@@ -148,6 +219,19 @@ class PelunasanPenjualan extends Page
         }
     }
 
+    /**
+     * Simpan pelunasan. Menerjemahkan mode UI (PELUNASAN / SPLIT) ke
+     * payload yang dimengerti PenjualanPelunasanService.
+     *
+     * PELUNASAN (1 akun):
+     *   - 1101.1 / 1101.2 → METODE_TUNAI, nominal_tunai = nominal
+     *   - 1101.3–.8       → METODE_TRANSFER, rekening_perusahaan_id dari rekening yang terhubung
+     *
+     * SPLIT (2 akun):
+     *   - Selalu METODE_CAMPUR
+     *   - Slot yang akunnya kas tunai → nominal_tunai
+     *   - Slot yang akunnya bank     → nominal_transfer + rekening_perusahaan_id dari rekening terhubung
+     */
     public function simpanPelunasan(): void
     {
         if (! $this->selectedNota) {
@@ -163,15 +247,9 @@ class PelunasanPenjualan extends Page
         $service = app(PenjualanPelunasanService::class);
 
         try {
-            $service->prosesPelunasan($this->selectedNota, [
-                'metode_pembayaran' => $this->metode_pembayaran,
-                'nominal' => $this->nominal,
-                'nominal_tunai' => $this->nominal_tunai,
-                'nominal_transfer' => $this->nominal_transfer,
-                'rekening_perusahaan_id' => $this->rekening_perusahaan_id,
-                'keterangan' => $this->keterangan,
-                'tanggal_pelunasan' => $this->tanggal_pelunasan,
-            ]);
+            $payload = $this->buildPayload();
+
+            $service->prosesPelunasan($this->selectedNota, $payload);
 
             Notification::make()
                 ->title('Sukses')
@@ -179,7 +257,6 @@ class PelunasanPenjualan extends Page
                 ->success()
                 ->send();
 
-            // Refresh selected note or reset if fully paid
             $fresh = $this->selectedNota->fresh();
             if ($service->sisaTagihan($fresh) <= 0) {
                 $this->batalPilihNota();
@@ -195,17 +272,79 @@ class PelunasanPenjualan extends Page
         }
     }
 
+    /** Bangun payload untuk PenjualanPelunasanService dari state UI. */
+    private function buildPayload(): array
+    {
+        $base = [
+            'keterangan'       => $this->keterangan,
+            'tanggal_pelunasan' => $this->tanggal_pelunasan,
+        ];
+
+        if ($this->mode_ui === 'PELUNASAN') {
+            $akunId = $this->akun_pelunasan_id;
+
+            if ($this->isKasTunai($akunId)) {
+                // Kas tunai
+                return array_merge($base, [
+                    'metode_pembayaran' => PenjualanPelunasanService::METODE_TUNAI,
+                    'nominal'           => $this->nominal,
+                    'nominal_tunai'     => $this->nominal,
+                    'nominal_transfer'  => 0,
+                    'rekening_perusahaan_id' => null,
+                ]);
+            } else {
+                // Bank / transfer
+                $rek = $this->getRekeningUntukAkun($akunId);
+
+                return array_merge($base, [
+                    'metode_pembayaran'      => PenjualanPelunasanService::METODE_TRANSFER,
+                    'nominal'                => $this->nominal,
+                    'nominal_tunai'          => 0,
+                    'nominal_transfer'       => $this->nominal,
+                    'rekening_perusahaan_id' => $rek?->id,
+                ]);
+            }
+        }
+
+        // ── SPLIT ────────────────────────────────────────────────────────────
+        $isTunaiA = $this->isKasTunai($this->akun_split_a_id);
+        $isTunaiB = $this->isKasTunai($this->akun_split_b_id);
+
+        // Hitung nominal tunai dan transfer dari dua slot
+        $nominalTunai    = 0;
+        $nominalTransfer = 0;
+        $rekId           = null;
+
+        if ($isTunaiA) {
+            $nominalTunai += $this->nominal_split_a;
+        } else {
+            $nominalTransfer += $this->nominal_split_a;
+            $rekId = $this->getRekeningUntukAkun($this->akun_split_a_id)?->id;
+        }
+
+        if ($isTunaiB) {
+            $nominalTunai += $this->nominal_split_b;
+        } else {
+            $nominalTransfer += $this->nominal_split_b;
+            $rekId = $rekId ?? $this->getRekeningUntukAkun($this->akun_split_b_id)?->id;
+        }
+
+        return array_merge($base, [
+            'metode_pembayaran'      => PenjualanPelunasanService::METODE_CAMPUR,
+            'nominal_tunai'          => $nominalTunai,
+            'nominal_transfer'       => $nominalTransfer,
+            'rekening_perusahaan_id' => $rekId,
+        ]);
+    }
+
     protected function getViewData(): array
     {
         return [
-            'notaResults' => $this->notaResults,
+            'notaResults'      => $this->notaResults,
+            'akunKasList'      => $this->akunKasList,
+            'rekeningPerSubAkun' => $this->rekeningPerSubAkun,
             'rekeningPerusahaan' => $this->rekeningPerusahaan,
-            'selectedBank' => $this->selectedBank,
+            'selectedBank'     => $this->selectedBank,
         ];
-    }
-
-    private static function _defaultMetode(): string
-    {
-        return PenjualanPelunasanService::METODE_TUNAI;
     }
 }
