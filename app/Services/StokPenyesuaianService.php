@@ -68,22 +68,7 @@ class StokPenyesuaianService
                 ->get();
 
             foreach ($details as $detail) {
-                $barang = Barang::find($detail->barang_id);
-
-                // FIX: Validasi stok sekarang pakai $barang->stok_matrix
-                // (accessor getStokMatrixAttribute -> hitungStokMatrixQty), yaitu
-                // sumber yang SAMA persis dengan yang dipakai StokMatrix::mount().
-                // Sebelumnya pakai stok_buku_besar yang masih punya fallback ke
-                // baris jurnal legacy (id_barang kosong, hanya cocok lewat no_akun),
-                // sehingga bisa gabung dengan barang lain yang berbagi akun yang
-                // sama dan menghasilkan angka stok yang beda dengan tampilan Matrix.
-                $stokMatrix = $barang ? $barang->stok_matrix : 0;
-
-                if ($stokMatrix - (float) $detail->qty < 0) {
-                    throw ValidationException::withMessages([
-                        'stok' => "Stok {$detail->nama_barang} tidak mencukupi",
-                    ]);
-                }
+                // Diperbolehkan stok minus saat validasi penjualan (stok fisik & kontrol stok utama dikelola di ERP)
             }
 
             Notification::make()

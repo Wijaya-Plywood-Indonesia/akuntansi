@@ -25,3 +25,6 @@ Route::get('/barang/resolve-kayu', [\App\Http\Controllers\Api\BarangController::
 
 // API generik jurnal produksi dari ERP (semua jenis produksi). Auth: header X-API-KEY.
 Route::post('/jurnal/produksi', [JurnalProduksiApiController::class, 'store']);
+
+// API Penjualan dari ERP. Auth: header X-API-KEY.
+Route::post('/penjualan/store', [\App\Http\Controllers\Api\PenjualanApiController::class, 'store']);
