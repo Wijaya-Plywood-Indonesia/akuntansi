@@ -527,33 +527,38 @@
                                 class="font-black text-sm text-gray-900 dark:text-white">Rp{{ number_format($this->ppn_nominal) }}</span>
                         </div>
                         <div class="flex justify-between items-center">
-                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Pajak PPN
-                                (+)</span>
-                            {{--
-                                FIX BUG: sebelumnya input ini polos wire:model.live tanpa
-                                pembersihan nilai, jadi kalau kursor ditaruh di depan karakter
-                                lama (mis. "0") lalu diketik "11", hasilnya numpuk jadi "110"
-                                dan ke-clamp jadi 100%. Sekarang dibungkus x-data seperti field
-                                lain (format ulang tiap input) + auto-select saat fokus, supaya
-                                ketikan baru menggantikan nilai lama, bukan menyisipkannya.
-                            --}}
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Pajak PPN (11%)</span>
                             <div class="relative flex items-center" x-data="{
-                                ppn: @entangle('ppn_persen').live,
+                                ppn: @entangle('ppn_persen').live
+                            }">
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" :checked="ppn > 0"
+                                        @change="ppn = $event.target.checked ? 11 : 0"
+                                        class="rounded border-gray-300 dark:border-gray-700 text-primary-600 shadow-sm focus:ring-primary-500 h-4 w-4">
+                                    <span class="ml-2 text-xs font-bold text-gray-700 dark:text-gray-300">PPN 11%</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Biaya Ongkir
+                                (+)</span>
+                            <div class="relative flex items-center" x-data="{
+                                ongkirVal: @entangle('ongkir').live,
                                 format(val) {
-                                    if (val === null || val === undefined || val === '') return '';
-                                    return val.toString().replace(',', '.');
+                                    if (val === null || val === undefined || val === '' || val == 0) return '0';
+                                    let cleaned = val.toString().replace(/\D/g, '');
+                                    return cleaned.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                                 }
                             }">
-                                <input type="text" inputmode="decimal" :value="format(ppn)"
+                                <span class="absolute left-2.5 text-[10px] font-bold text-gray-400 pointer-events-none">Rp</span>
+                                <input type="text" inputmode="numeric" :value="format(ongkirVal)"
                                     @input="
-                                        let raw = $event.target.value.replace(/[^0-9.,]/g, '').replace(',', '.');
-                                        ppn = raw === '' ? 0 : parseFloat(raw);
-                                        $el.value = raw;
+                                        let raw = $event.target.value.replace(/\D/g, '');
+                                        ongkirVal = raw === '' ? 0 : parseInt(raw);
+                                        $el.value = format(ongkirVal);
                                     "
                                     @focus="$event.target.select()"
-                                    class="w-24 pl-2.5 pr-7 py-1 text-right font-black text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none" />
-                                <span
-                                    class="absolute right-2.5 text-[10px] font-bold text-gray-400 pointer-events-none">%</span>
+                                    class="w-32 pl-7 pr-2.5 py-1 text-right font-black text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg dark:text-white focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none" />
                             </div>
                         </div>
                     </div>
@@ -904,7 +909,8 @@
                             kendaraan: @this.kendaraan,
                             plat_kendaraan: @this.plat_kendaraan,
                             nama_sopir: @this.nama_sopir,
-                            ppn_persen: @this.ppn_persen
+                            ppn_persen: @this.ppn_persen,
+                            ongkir: @this.ongkir
                         };
                         localStorage.setItem('pos_state', JSON.stringify(state));
                     }

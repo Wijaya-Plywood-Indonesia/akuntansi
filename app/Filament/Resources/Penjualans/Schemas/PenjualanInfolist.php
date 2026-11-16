@@ -56,6 +56,11 @@ class PenjualanInfolist
                             ->label('No Rekening')
                             ->visible(fn($record) => $record->metode_pembayaran === 'TRANSFER'),
 
+                        TextEntry::make('ongkir')
+                            ->label('Ongkir')
+                            ->money('IDR', locale: 'id_ID')
+                            ->placeholder('Rp 0'),
+
                         TextEntry::make('total')
                             ->money('IDR', locale: 'id_ID')
                             ->weight(FontWeight::Bold),
