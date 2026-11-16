@@ -369,6 +369,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 'no_akun',
                 'nama_akun',
                 'nama',
+                'mm',
                 'keterangan',
                 'hit_kbk',
                 'banyak',
@@ -828,7 +829,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'id_supplier' => $idSupplierItem,
             'nama_akun' => $this->nama_akun,
             'nama' => $namaAkun,
-            'mm' => $this->mm === '' ? null : (int) $this->mm,
+            'mm' => trim((string) $this->mm) === '' ? null : trim((string) $this->mm),
             'keterangan' => $this->keterangan,
             'hit_kbk' => $this->hit_kbk,
             'banyak' => $banyak,
@@ -1127,7 +1128,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                         ->exists())
                     ->live(),
 
-                TextInput::make('mm')->label('MM (Tebal Plywood)')->numeric(),
+                TextInput::make('mm')->label('MM / Ukuran / Jenis')->maxLength(150),
                 TextInput::make('keterangan')->label('Keterangan'),
 
                 Select::make('hit_kbk')

@@ -925,9 +925,8 @@
 
                     <div class="space-y-1.5">
                         <label
-                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">MM
-                            (Tebal Plywood)</label>
-                        <input type="text" inputmode="decimal" x-model="mm" placeholder="Contoh: 18"
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">MM / Ukuran / Jenis</label>
+                        <input type="text" inputmode="text" x-model="mm" placeholder="Contoh: 18, 4 dim, ban belakang fuso"
                             class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
                     </div>
                     <div class="space-y-1.5">
@@ -1358,7 +1357,7 @@
                                     <div x-show="row.mm" class="mt-1">
                                         <span
                                             class="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-[10px] font-black text-amber-600 dark:text-amber-400 tracking-wider">
-                                            <span x-text="row.mm + ' mm'"></span>
+                                            <span x-text="/^\d+([.,]\d+)?$/.test(String(row.mm).trim()) ? row.mm + ' mm' : row.mm"></span>
                                         </span>
                                     </div>
                                 </div>
@@ -1989,8 +1988,7 @@
                                             @endif
                                             @if ($hj->mm)
                                                 <span
-                                                    class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }}
-                                                    mm</span>
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ is_numeric($hj->mm) ? $hj->mm . ' mm' : $hj->mm }}</span>
                                             @endif
                                         </div>
                                         <div
@@ -2152,8 +2150,7 @@
                                                 @endif
                                                 @if ($hj->mm)
                                                     <span
-                                                        class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }}
-                                                        mm</span>
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ is_numeric($hj->mm) ? $hj->mm . ' mm' : $hj->mm }}</span>
                                                 @endif
                                             </div>
 
