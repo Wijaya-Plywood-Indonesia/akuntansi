@@ -45,10 +45,12 @@ class PosPenjualan extends Page
     /* ================= TOTAL & PPN ================= */
     public int $subtotal = 0;
 
-    // PENTING: dibuat nullable agar tidak error saat input dikosongkan lewat wire:model.live
-    public ?float $ppn_persen = 0;
+    // PENTING: default PPN 11% sesuai aturan penjualan
+    public ?float $ppn_persen = 11;
 
     public int $ppn_nominal = 0;
+
+    public int $ongkir = 0;
 
     public int $total = 0;
 
@@ -251,9 +253,10 @@ class PosPenjualan extends Page
 
         // Guard null agar tidak error saat ppn_persen kosong/null
         $ppnPersen = (float) ($this->ppn_persen ?? 0);
+        $ongkir = max(0, (int) ($this->ongkir ?? 0));
 
         $this->ppn_nominal = (int) round($this->subtotal * $ppnPersen / 100);
-        $this->total = max(0, $this->subtotal + $this->ppn_nominal);
+        $this->total = max(0, $this->subtotal + $this->ppn_nominal + $ongkir);
     }
 
     /**
@@ -267,6 +270,12 @@ class PosPenjualan extends Page
         $ppn = max(0, min(100, $ppn));
         $this->ppn_persen = $ppn;
 
+        $this->calculateTotal();
+    }
+
+    public function updatedOngkir(): void
+    {
+        $this->ongkir = max(0, (int) ($this->ongkir ?? 0));
         $this->calculateTotal();
     }
 
@@ -750,6 +759,7 @@ class PosPenjualan extends Page
                     'sub_total' => $this->subtotal,
                     'ppn_persen' => $this->ppn_persen,
                     'ppn_nominal' => $this->ppn_nominal,
+                    'ongkir' => $this->ongkir,
                     'total' => $this->total,
                     'bayar' => $totalBayar,
                     'bayar_tunai' => ($this->metode_pembayaran === 'TUNAI & TRANSFER') ? $this->bayar_tunai : ($this->metode_pembayaran === 'TUNAI' ? $this->bayar : 0),
@@ -857,6 +867,7 @@ class PosPenjualan extends Page
         $this->plat_kendaraan = $state['plat_kendaraan'] ?? null;
         $this->nama_sopir = $state['nama_sopir'] ?? null;
         $this->ppn_persen = (float) ($state['ppn_persen'] ?? 0);
+        $this->ongkir = (int) ($state['ongkir'] ?? 0);
 
         if ($this->jenis_transaksi !== 'COD'
             && ($this->metode_pembayaran === 'TRANSFER' || $this->metode_pembayaran === 'TUNAI & TRANSFER')) {

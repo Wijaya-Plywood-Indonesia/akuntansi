@@ -265,9 +265,14 @@ class DetailsRelationManager extends RelationManager
             ->recordTitleAttribute('no_nota')
             ->columns([
 
-                TextColumn::make('barang.nama_barang')
+                TextColumn::make('nama_barang')
                     ->label('Barang')
-                    ->searchable()
+                    ->getStateUsing(fn ($record) => $record->barang?->nama_barang ?? $record->nama_barang ?? '-')
+                    ->description(fn ($record) => empty($record->barang_id) ? 'Belum terhubung master barang' : null)
+                    ->searchable(query: function (Builder $query, string $search) {
+                        $query->where('nama_barang', 'like', "%{$search}%")
+                              ->orWhereHas('barang', fn ($q) => $q->where('nama_barang', 'like', "%{$search}%"));
+                    })
                     ->sortable(),
 
                 TextColumn::make('satuan')

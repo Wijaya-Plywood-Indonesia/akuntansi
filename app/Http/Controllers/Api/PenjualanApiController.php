@@ -50,6 +50,7 @@ class PenjualanApiController extends Controller
             'sub_total' => 'nullable|numeric|min:0',
             'ppn_persen' => 'nullable|numeric|min:0',
             'ppn_nominal' => 'nullable|numeric|min:0',
+            'ongkir' => 'nullable|numeric|min:0',
             'total' => 'required|numeric|min:0',
             'bayar' => 'nullable|numeric|min:0',
             'kembalian' => 'nullable|numeric|min:0',
@@ -120,6 +121,7 @@ class PenjualanApiController extends Controller
                     'sub_total' => $validated['sub_total'] ?? $validated['total'],
                     'ppn_persen' => $validated['ppn_persen'] ?? 0,
                     'ppn_nominal' => $validated['ppn_nominal'] ?? 0,
+                    'ongkir' => $validated['ongkir'] ?? 0,
                     'total' => $validated['total'],
                     'bayar' => $validated['bayar'] ?? 0,
                     'kembalian' => $validated['kembalian'] ?? 0,
@@ -150,7 +152,9 @@ class PenjualanApiController extends Controller
                         }
                     }
 
-                    $hitungDari = $item['hitung_dari'] ?? (!empty($item['m3']) ? 'kubikasi' : 'qty');
+                    // Default hit_kbk adalah 'banyak' ('b') kecuali dipilih 'm3' ('m')
+                    $hitKbk = $item['hit_kbk'] ?? (($item['hitung_dari'] ?? '') === 'm3' ? 'm' : 'b');
+                    $hitungDari = ($hitKbk === 'm') ? 'm3' : 'qty';
 
                     DetailPenjualan::create([
                         'penjualan_id' => $penjualan->id,
@@ -208,8 +212,9 @@ class PenjualanApiController extends Controller
             return $barang;
         }
 
-        // 2. Jika nama barang dari format Plywood ERP (contoh: "Plywood - 18 mm - Meranti - KW BETTER")
-        if (stripos($clean, 'plywood') !== false) {
+        // 2. Jika nama barang dari format Plywood ERP (contoh: "Plywood - 18 mm - Meranti - KW BETTER" atau "18 mm KW BETTER")
+        $isPlywoodFormat = stripos($clean, 'plywood') !== false || preg_match('/\b\d+(?:\.\d+)?\s*mm\b/i', $clean);
+        if ($isPlywoodFormat) {
             preg_match('/(\d+(?:\.\d+)?)\s*mm/i', $clean, $mThick);
             $tebal = $mThick[1] ?? '';
 
@@ -221,10 +226,12 @@ class PenjualanApiController extends Controller
             $grade = '';
             if (stripos($clean, 'better') !== false) {
                 $grade = 'better';
-            } elseif (stripos($clean, 'uty') !== false) {
+            } elseif (stripos($clean, 'uty') !== false || stripos($clean, 'utility') !== false) {
                 $grade = 'uty';
             } elseif (stripos($clean, 'fm') !== false) {
                 $grade = 'fm';
+            } elseif (preg_match('/(?:kw|grade)\s*([a-zA-Z0-9]+)/i', $clean, $mGr)) {
+                $grade = strtolower($mGr[1]);
             }
 
             if ($tebal !== '' && $grade !== '') {
@@ -232,11 +239,21 @@ class PenjualanApiController extends Controller
                 // Prioritaskan exact match "18m better" sebelum "18m better lokal"
                 $foundPlywood = Barang::where('nama_barang', $targetPattern)
                     ->orWhere('nama_barang', 'like', "{$targetPattern}%")
+                    ->orWhere('nama_barang', 'like', "{$tebal}mm%{$grade}%")
+                    ->orWhere('nama_barang', 'like', "{$tebal} mm%{$grade}%")
                     ->orderByRaw("CASE WHEN LOWER(nama_barang) = ? THEN 1 ELSE 2 END", [strtolower($targetPattern)])
                     ->first();
 
                 if ($foundPlywood) {
                     return $foundPlywood;
+                }
+            } elseif ($tebal !== '') {
+                // Fallback berdasarkan tebal saja jika ada
+                $foundByThick = Barang::where('nama_barang', 'like', "{$tebal}{$kodeKayu}%")
+                    ->orWhere('nama_barang', 'like', "{$tebal}mm%")
+                    ->first();
+                if ($foundByThick) {
+                    return $foundByThick;
                 }
             }
         }
