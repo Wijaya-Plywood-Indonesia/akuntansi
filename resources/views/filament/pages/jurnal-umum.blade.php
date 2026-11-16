@@ -877,12 +877,12 @@
                         <div class="flex items-center gap-1 mb-1">
                             <span
                                 class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Pilih
-                                <span x-text="pihakTipe === 'utang' ? 'Supplier (Utang)' : 'Pembeli (Piutang)'"></span></span>
+                                <span x-text="pihakTipe === 'campuran' ? 'Supplier / Pembeli' : (pihakTipe === 'utang' ? 'Supplier (Utang)' : 'Pembeli (Piutang)')"></span></span>
                             <span class="text-rose-500 text-[11px]">*</span>
                         </div>
                         <div class="relative">
                             <input type="text" x-model="pembeliSearchTerm" @focus="isPembeliDropdownOpen = true"
-                                :placeholder="pihakTipe === 'utang' ? 'Cari supplier...' : 'Cari pembeli...'"
+                                :placeholder="pihakTipe === 'campuran' ? 'Cari supplier / pembeli...' : (pihakTipe === 'utang' ? 'Cari supplier...' : 'Cari pembeli...')"
                                 class="w-full px-3.5 py-2.5 pr-10 text-sm bg-indigo-50 dark:bg-gray-800 border border-indigo-300 dark:border-indigo-900 rounded-lg font-medium text-gray-800 dark:text-gray-200 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm">
                             <button type="button" x-show="pembeliSearchTerm.length > 0 || id_pembeli"
                                 @click="clearPembeli()"
@@ -925,9 +925,8 @@
 
                     <div class="space-y-1.5">
                         <label
-                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">MM
-                            (Tebal Plywood)</label>
-                        <input type="text" inputmode="decimal" x-model="mm" placeholder="Contoh: 18"
+                            class="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">MM / Ukuran / Jenis</label>
+                        <input type="text" inputmode="text" x-model="mm" placeholder="Contoh: 18, 4 dim, ban belakang fuso"
                             class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg outline-none font-medium text-gray-800 dark:text-gray-200 placeholder:text-sm shadow-sm">
                     </div>
                     <div class="space-y-1.5">
@@ -1358,7 +1357,7 @@
                                     <div x-show="row.mm" class="mt-1">
                                         <span
                                             class="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-[10px] font-black text-amber-600 dark:text-amber-400 tracking-wider">
-                                            <span x-text="row.mm + ' mm'"></span>
+                                            <span x-text="/^\d+([.,]\d+)?$/.test(String(row.mm).trim()) ? row.mm + ' mm' : row.mm"></span>
                                         </span>
                                     </div>
                                 </div>
@@ -1989,8 +1988,7 @@
                                             @endif
                                             @if ($hj->mm)
                                                 <span
-                                                    class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }}
-                                                    mm</span>
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ is_numeric($hj->mm) ? $hj->mm . ' mm' : $hj->mm }}</span>
                                             @endif
                                         </div>
                                         <div
@@ -2152,8 +2150,7 @@
                                                 @endif
                                                 @if ($hj->mm)
                                                     <span
-                                                        class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ $hj->mm }}
-                                                        mm</span>
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400">{{ is_numeric($hj->mm) ? $hj->mm . ' mm' : $hj->mm }}</span>
                                                 @endif
                                             </div>
 
@@ -2292,6 +2289,7 @@
                                     <th class="px-4 py-4 text-center">Foto</th>
                                     <th class="px-4 py-4 text-center">MM</th>
                                     <th class="px-4 py-4">Nama</th>
+                                    <th class="px-4 py-4">Diposting Oleh</th>
                                     <th class="px-4 py-4 min-w-[240px]">Keterangan</th>
                                     <th class="px-4 py-4 text-center">Hit KBK</th>
                                     <th class="px-4 py-4 text-right">Kuantitas</th>
@@ -2363,6 +2361,9 @@
                                             <td class="px-4 py-5">
                                                 <div class="h-3 rounded w-8 mx-auto bg-gray-200 dark:bg-gray-700">
                                                 </div>
+                                            </td>
+                                            <td class="px-4 py-5">
+                                                <div class="h-3 rounded w-16 bg-gray-200 dark:bg-gray-700"></div>
                                             </td>
                                             <td class="px-4 py-5"></td>
                                         </tr>
@@ -2437,6 +2438,17 @@
                                             @else
                                                 <span
                                                     class="text-gray-800 dark:text-gray-200 font-medium">{{ $hj->nama ?? '-' }}</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-4 whitespace-nowrap">
+                                            @if ($hj->nama_pemosting)
+                                                <span
+                                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-900/20 text-[10px] font-black text-sky-700 dark:text-sky-400 tracking-wider"
+                                                    title="Diposting oleh {{ $hj->nama_pemosting }}">
+                                                    {{ $hj->nama_pemosting }}
+                                                </span>
+                                            @else
+                                                <span class="text-gray-300 dark:text-gray-600">-</span>
                                             @endif
                                         </td>
                                         <td
@@ -2527,7 +2539,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="17" class="px-6 py-16 text-center">
+                                        <td colspan="18" class="px-6 py-16 text-center">
                                             <div class="flex flex-col items-center gap-3 text-gray-400">
                                                 <svg class="w-10 h-10 opacity-30" fill="none"
                                                     stroke="currentColor" viewBox="0 0 24 24">
@@ -2547,7 +2559,7 @@
                             <tfoot
                                 class="bg-gray-50/80 dark:bg-gray-800/80 border-t-2 border-gray-200 dark:border-gray-700 font-black text-[10px] uppercase">
                                 <tr>
-                                    <td colspan="14"
+                                    <td colspan="15"
                                         class="px-4 py-5 text-right text-gray-600 tracking-widest uppercase">Total
                                         Akumulasi</td>
                                     <td
@@ -2561,7 +2573,7 @@
                                     <td></td>
                                 </tr>
                                 <tr class="border-t border-gray-200 dark:border-gray-700">
-                                    <td colspan="17" class="px-4 py-3">
+                                    <td colspan="18" class="px-4 py-3">
                                         @if ($isHistoryBalanced)
                                             <div class="flex items-center justify-end gap-2">
                                                 <div

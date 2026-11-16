@@ -369,6 +369,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 'no_akun',
                 'nama_akun',
                 'nama',
+                'mm',
                 'keterangan',
                 'hit_kbk',
                 'banyak',
@@ -376,6 +377,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 'harga',
                 'map',
                 'id_barang',
+                'diposting_oleh',
             ])
             ->selectRaw("
                 CASE LOWER(hit_kbk)
@@ -401,6 +403,18 @@ class JurnalUmum extends Page implements HasActions, HasForms
                 $hj->nama_barang = null;
             });
         }
+
+        // ── Ambil nama user pemosting untuk kolom "Diposting Oleh" ──
+        $pemostingIds = $historyJurnals->pluck('diposting_oleh')->filter()->unique()->values();
+        $pemostingNames = $pemostingIds->isNotEmpty()
+            ? \App\Models\User::whereIn('id', $pemostingIds)->pluck('name', 'id')
+            : collect();
+
+        $historyJurnals->each(function ($hj) use ($pemostingNames) {
+            $hj->nama_pemosting = $hj->diposting_oleh
+                ? ($pemostingNames[$hj->diposting_oleh] ?? null)
+                : null;
+        });
 
         $totalsQuery = JurnalModel::query();
         if ($modeJurnalTunggal) {
@@ -474,7 +488,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         // di blade untuk nge-badge-in nama pembeli KHUSUS di baris akun
         // piutang (mis. 1122.0), bukan di semua baris transaksi.
         $piutangAkunCodes = cache()->remember('sub_anak_akun_piutang_codes_v2', 600, function () {
-            return SubAnakAkun::whereIn('tipe_buku_pembantu', ['piutang', 'utang'])
+            return SubAnakAkun::whereIn('tipe_buku_pembantu', ['piutang', 'utang', 'campuran'])
                 ->pluck('kode_sub_anak_akun')
                 ->all();
         });
@@ -649,7 +663,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
         }
 
         $tipe = SubAnakAkun::where('kode_sub_anak_akun', $value)
-            ->whereIn('tipe_buku_pembantu', ['piutang', 'utang'])
+            ->whereIn('tipe_buku_pembantu', ['piutang', 'utang', 'campuran'])
             ->value('tipe_buku_pembantu');
 
         if (! $tipe) {
@@ -657,6 +671,23 @@ class JurnalUmum extends Page implements HasActions, HasForms
         }
 
         $this->pihakTipe = $tipe;
+
+        if ($tipe === 'campuran') {
+            // Gabungan Supplier + Pembeli. id option diberi prefix sup:/pem:
+            // karena id supplier & id pembeli bisa kembar.
+            $this->pembeliOptions = Supplier::orderBy('nama')->get(['id', 'nama'])
+                ->map(fn ($p) => ['id' => 'sup:'.$p->id, 'nama' => $p->nama.' (Supplier)'])
+                ->concat(
+                    Pembeli::orderBy('nama')->get(['id', 'nama'])
+                        ->map(fn ($p) => ['id' => 'pem:'.$p->id, 'nama' => $p->nama.' (Pembeli)'])
+                )
+                ->values()
+                ->toArray();
+            $this->showPembeliPicker = true;
+
+            return;
+        }
+
         $model = $tipe === 'utang' ? Supplier::class : Pembeli::class;
         $this->pembeliOptions = $model::orderBy('nama')->get(['id', 'nama'])->map(fn ($p) => [
             'id' => $p->id,
@@ -717,9 +748,11 @@ class JurnalUmum extends Page implements HasActions, HasForms
             $errors[] = 'Akun ini terkait barang, pilih barangnya terlebih dahulu.';
         }
         if ($this->showPembeliPicker && blank($this->id_pembeli)) {
-            $errors[] = $this->pihakTipe === 'utang'
-                ? 'Akun ini pakai Buku Pembantu Utang, pilih suppliernya terlebih dahulu.'
-                : 'Akun ini pakai Buku Pembantu Piutang, pilih pembelinya terlebih dahulu.';
+            $errors[] = match ($this->pihakTipe) {
+                'utang' => 'Akun ini pakai Buku Pembantu Utang, pilih suppliernya terlebih dahulu.',
+                'campuran' => 'Akun ini pakai Buku Pembantu Campuran, pilih supplier atau pembelinya terlebih dahulu.',
+                default => 'Akun ini pakai Buku Pembantu Piutang, pilih pembelinya terlebih dahulu.',
+            };
         }
         // Harga boleh minus; yang tidak boleh hanya kosong / 0.
         if (blank($this->harga) || abs((float) $this->harga) < 0.01) {
@@ -767,7 +800,16 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $idPembeliItem = null;
         $idSupplierItem = null;
         if (! blank($this->id_pembeli)) {
-            if ($this->pihakTipe === 'utang') {
+            if ($this->pihakTipe === 'campuran') {
+                [$jenis, $idPihak] = array_pad(explode(':', (string) $this->id_pembeli, 2), 2, null);
+                if ($jenis === 'sup') {
+                    $idSupplierItem = (int) $idPihak;
+                    $namaAkun = Supplier::find($idSupplierItem)?->nama ?: $this->nama;
+                } else {
+                    $idPembeliItem = (int) $idPihak;
+                    $namaAkun = Pembeli::find($idPembeliItem)?->nama ?: $this->nama;
+                }
+            } elseif ($this->pihakTipe === 'utang') {
                 $idSupplierItem = (int) $this->id_pembeli;
                 $namaAkun = Supplier::find($idSupplierItem)?->nama ?: $this->nama;
             } else {
@@ -787,7 +829,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'id_supplier' => $idSupplierItem,
             'nama_akun' => $this->nama_akun,
             'nama' => $namaAkun,
-            'mm' => $this->mm === '' ? null : (int) $this->mm,
+            'mm' => trim((string) $this->mm) === '' ? null : trim((string) $this->mm),
             'keterangan' => $this->keterangan,
             'hit_kbk' => $this->hit_kbk,
             'banyak' => $banyak,
@@ -1065,8 +1107,9 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->searchable()
                     ->options(fn () => Pembeli::orderBy('nama')->pluck('nama', 'id'))
                     ->visible(fn (Get $get) => SubAnakAkun::where('kode_sub_anak_akun', $get('no_akun'))
-                        ->where('tipe_buku_pembantu', 'piutang')
+                        ->whereIn('tipe_buku_pembantu', ['piutang', 'campuran'])
                         ->exists())
+                    // Akun campuran: boleh isi salah satu (pembeli ATAU supplier).
                     ->required(fn (Get $get) => SubAnakAkun::where('kode_sub_anak_akun', $get('no_akun'))
                         ->where('tipe_buku_pembantu', 'piutang')
                         ->exists())
@@ -1078,14 +1121,14 @@ class JurnalUmum extends Page implements HasActions, HasForms
                     ->searchable()
                     ->options(fn () => Supplier::orderBy('nama')->pluck('nama', 'id'))
                     ->visible(fn (Get $get) => SubAnakAkun::where('kode_sub_anak_akun', $get('no_akun'))
-                        ->where('tipe_buku_pembantu', 'utang')
+                        ->whereIn('tipe_buku_pembantu', ['utang', 'campuran'])
                         ->exists())
                     ->required(fn (Get $get) => SubAnakAkun::where('kode_sub_anak_akun', $get('no_akun'))
                         ->where('tipe_buku_pembantu', 'utang')
                         ->exists())
                     ->live(),
 
-                TextInput::make('mm')->label('MM (Tebal Plywood)')->numeric(),
+                TextInput::make('mm')->label('MM / Ukuran / Jenis')->maxLength(150),
                 TextInput::make('keterangan')->label('Keterangan'),
 
                 Select::make('hit_kbk')

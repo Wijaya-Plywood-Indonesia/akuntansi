@@ -11,6 +11,12 @@ use Illuminate\Support\Facades\DB;
 class SyncPenjualanService
 {
     /**
+     * Jenis transaksi yang uangnya masuk LEWAT menu Pelunasan.
+     * Kolom bayar/kembalian untuk jenis ini tidak boleh diubah dari sinkronisasi.
+     */
+    public const JENIS_BAYAR_TERKUNCI = ['COD', 'DP'];
+
+    /**
      * Kalkulasi total dari detail_penjualans (Return float untuk decimal 15,2)
      */
     public static function calculateCurrentTotal(int $penjualanId): float
@@ -49,12 +55,24 @@ class SyncPenjualanService
             $ppnPersen = (float) ($penjualan->ppn_persen ?? 0);
             $ppnNominalBaru = $ppnPersen > 0 ? round($subTotalBaru * ($ppnPersen / 100), 2) : 0.0;
 
+            // GUARD: untuk COD/DP, nilai bayar TIDAK boleh ditimpa dari sinkronisasi.
+            // Uang yang diterima hanya boleh bertambah lewat menu Pelunasan
+            // (yang sekaligus membuat jurnal pelunasannya). Kalau tidak, nota
+            // tampak "LUNAS" padahal tidak ada jurnal kas/piutang yang menutup.
+            if (in_array($penjualan->jenis_transaksi, self::JENIS_BAYAR_TERKUNCI, true)) {
+                $bayarBaru = (float) $penjualan->bayar;
+                $kembalianBaru = 0.0;
+            } else {
+                $bayarBaru = $data['bayar'];
+                $kembalianBaru = $data['kembalian'];
+            }
+
             $penjualan->update([
                 'sub_total' => $subTotalBaru,
                 'ppn_nominal' => $ppnNominalBaru,
                 'total' => $data['total'],
-                'bayar' => $data['bayar'],
-                'kembalian' => $data['kembalian'],
+                'bayar' => $bayarBaru,
+                'kembalian' => $kembalianBaru,
                 // 'metode_pembayaran' => strtoupper($data['metode_bayar']),
                 'keterangan_pembayaran' => $data['keterangan'] ?? $penjualan->keterangan_pembayaran,
             ]);
