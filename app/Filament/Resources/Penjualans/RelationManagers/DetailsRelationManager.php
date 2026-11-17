@@ -155,6 +155,11 @@ class DetailsRelationManager extends RelationManager
                                 )
                             ),
 
+                        TextInput::make('mm')
+                            ->label('MM / Keterangan')
+                            ->placeholder('mis. 18 / 4 dim')
+                            ->maxLength(150),
+
                         Select::make('hitung_dari')
                             ->label('Dasar Harga')
                             ->options([
@@ -287,6 +292,11 @@ class DetailsRelationManager extends RelationManager
                 TextColumn::make('kubikasi')
                     ->label('M³')
                     ->numeric(decimalPlaces: 4)
+                    ->alignCenter(),
+
+                TextColumn::make('mm')
+                    ->label('MM / Ket')
+                    ->placeholder('-')
                     ->alignCenter(),
 
                 TextColumn::make('hitung_dari')

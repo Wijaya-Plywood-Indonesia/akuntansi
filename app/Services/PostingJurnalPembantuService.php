@@ -110,8 +110,16 @@ class PostingJurnalPembantuService
                 }
 
                 if (empty($namaGlobal)) {
-                    $parts = explode('|', $h->keterangan);
+                    $parts = explode('|', (string) $h->keterangan);
                     $parsedNama = isset($parts[2]) ? trim($parts[2]) : null;
+
+                    // Modul penjualan: segmen ke-3 pada keterangan BUKAN nama pihak. Ia muncul
+                    // kalau catatan user mengandung "|" (mis. catatan pelunasan digabung
+                    // "catatan lama | catatan baru") dan dulu salah terbaca sebagai Nama.
+                    // Nama selalu diambil dari nama_pihak item (= nama customer).
+                    if (in_array($h->modul_asal, ['penjualan_triplek', 'pelunasan_penjualan'], true)) {
+                        $parsedNama = null;
+                    }
 
                     if (! empty($parsedNama)) {
                         $namaGlobal = $parsedNama;
@@ -248,6 +256,13 @@ class PostingJurnalPembantuService
                         $hargaFinal = $totalNilaiGrup;
                     }
 
+                    // MM / keterangan ukuran: gabungkan nilai unik dari item di grup ini.
+                    $mmFinal = $items->pluck('mm')
+                        ->map(fn ($v) => trim((string) $v))
+                        ->filter()
+                        ->unique()
+                        ->implode(', ');
+
                     JurnalUmum::create([
                         'tgl' => $header->tgl_transaksi
                             ? $header->tgl_transaksi->format('Y-m-d')
@@ -265,6 +280,7 @@ class PostingJurnalPembantuService
                         'm3' => $m3Final !== null ? round($m3Final, 4) : null,
                         'harga' => round($hargaFinal, 2),
                         'hit_kbk' => $hitKbk,
+                        'mm' => $mmFinal !== '' ? mb_substr($mmFinal, 0, 150) : null,
                         'map' => strtolower($header->map),
                         'diposting_oleh' => $userId,
                     ]);

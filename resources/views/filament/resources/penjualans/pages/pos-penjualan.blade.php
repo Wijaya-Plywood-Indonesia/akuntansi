@@ -176,30 +176,33 @@
                     <div>
                         {{-- Desktop Table --}}
                         <div class="hidden md:block w-full overflow-x-auto">
-                            <table class="w-full min-w-[900px] text-left table-fixed border-collapse">
+                            <table class="w-full min-w-[1050px] text-left table-fixed border-collapse">
                                 <thead class="bg-gray-50/50 dark:bg-gray-800/50">
                                     <tr
                                         class="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[20%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[16%]">
                                             Item</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[18%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[15%]">
                                             Qty</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[10%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[9%]">
                                             M³</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[11%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[10%]">
                                             Dasar Harga</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[15%]">
-                                            H. Jual</th>
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-[13%]">
+                                            MM / Ket</th>
                                         <th
                                             class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[12%]">
+                                            H. Jual</th>
+                                        <th
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[10%]">
                                             Potongan</th>
                                         <th
-                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[11%]">
+                                            class="px-2 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right w-[12%]">
                                             Total</th>
                                         <th class="px-2 py-2 w-[3%]"></th>
                                     </tr>
@@ -275,6 +278,11 @@
                                                     <option value="qty">Per Qty</option>
                                                     <option value="m3">Per M³</option>
                                                 </select>
+                                            </td>
+                                            <td class="px-2 py-2">
+                                                <input type="text" wire:model.blur="cart.{{ $id }}.mm" maxlength="150"
+                                                    placeholder="mis. 18 / 4 dim"
+                                                    class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md py-1 px-1 text-xs font-bold text-center focus:ring-2 focus:ring-primary-500/10 dark:text-white outline-none" />
                                             </td>
                                             <td class="px-2 py-2" x-data="{
                                                 harga: @entangle('cart.' . $id . '.harga_jual'),
@@ -402,6 +410,12 @@
                                                 <option value="qty">Per Qty</option>
                                                 <option value="m3">Per M³ (Kubikasi)</option>
                                             </select>
+                                        </div>
+                                        <div class="space-y-1">
+                                            <label
+                                                class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">MM / Keterangan</label>
+                                            <input type="text" wire:model.blur="cart.{{ $id }}.mm" maxlength="150" placeholder="mis. 18 / 4 dim"
+                                                class="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-xl py-2 px-3 text-sm font-bold focus:ring-2 focus:ring-primary-500/10 transition-all" />
                                         </div>
                                         <div class="space-y-1" x-data="{
                                             harga: @entangle('cart.' . $id . '.harga_jual'),

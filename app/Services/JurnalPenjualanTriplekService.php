@@ -22,6 +22,26 @@ class JurnalPenjualanTriplekService
 {
     private const HUTANG_GAJI_TETAP = 300000.0;
 
+    /**
+     * Keterangan baris jurnal penjualan dibuat RINGKAS (tanpa "| Nota: ..." karena
+     * No. Dokumen sudah punya kolom sendiri). Baris kas/uang muka (nominal_kas,
+     * dp_penjualan) ikut diringkas; ArusKasPerAkunService sudah disesuaikan
+     * supaya tetap membaca catatan user dari "(...)" di ujung keterangan.
+     */
+    private const VARIABEL_KET_RINGKAS = [
+        'piutang_usaha',
+        'hpp',
+        'ppn_keluaran',
+        'nilai_penjualan',
+        'persediaan_barang_jadi',
+        'hutang_gaji',
+        'nominal_kas',
+        'dp_penjualan',
+    ];
+
+    /** Keterangan baris HPP dikosongkan. */
+    private const VARIABEL_KET_KOSONG = ['hpp'];
+
     private const KODE_PERSEDIAAN_FALLBACK = '1404.0';
 
     /**
@@ -128,6 +148,8 @@ class JurnalPenjualanTriplekService
                     ],
                     splitHeaderPerBarang: ['persediaan_barang_jadi', 'hpp', 'nilai_penjualan'],
                     noJurnalOverride: $noJurnal,
+                    variabelKeteranganRingkas: self::VARIABEL_KET_RINGKAS,
+                    variabelKeteranganKosong: self::VARIABEL_KET_KOSONG,
                     tampilkanMeskiNol: self::BARIS_TAMPIL_MESKI_NOL,
                 );
 
@@ -163,6 +185,8 @@ class JurnalPenjualanTriplekService
                 ],
                 splitHeaderPerBarang: ['persediaan_barang_jadi', 'hpp', 'nilai_penjualan'],
                 noJurnalOverride: $noJurnal,
+                variabelKeteranganRingkas: self::VARIABEL_KET_RINGKAS,
+                variabelKeteranganKosong: self::VARIABEL_KET_KOSONG,
                 tampilkanMeskiNol: self::BARIS_TAMPIL_MESKI_NOL,
             );
         });
@@ -223,6 +247,10 @@ class JurnalPenjualanTriplekService
                 $infoM3 = [];
             }
 
+            // MM / keterangan ukuran (teks bebas, mis. "18" atau "4 dim") -> kolom mm Jurnal Umum.
+            // Hanya dipakai di baris PERSEDIAAN (per barang), tidak di HPP / Pendapatan.
+            $infoMm = filled($detail->mm ?? null) ? ['mm' => trim((string) $detail->mm)] : [];
+
             // Barang harga 0 (sampel/bonus/promo) -> HPP/persediaan 0.
             $isHargaNol = ($hargaJualSatuan <= 0 || $subtotalDetail <= 0);
             $hargaBeli = $isHargaNol ? 0.0 : (float) ($detail->barang->harga_beli ?? 0);
@@ -251,8 +279,8 @@ class JurnalPenjualanTriplekService
                 'nama_barang' => $detail->nama_barang,
                 'banyak' => $qty,
                 'harga' => $hargaBeli,
-                'keterangan' => 'Keluar stok '.$detail->nama_barang,
-            ] + $infoM3;
+                'keterangan' => $detail->nama_barang,
+            ] + $infoM3 + $infoMm;
 
             $kodeAkunHpp = $detail->barang?->akunHpp?->kode_sub_anak_akun;
             $namaAkunHpp = $detail->barang?->akunHpp?->nama_sub_anak_akun;
@@ -263,7 +291,7 @@ class JurnalPenjualanTriplekService
                 'nama_barang' => $detail->nama_barang,
                 'banyak' => $qty,
                 'harga' => $hargaBeli,
-                'keterangan' => 'HPP '.$detail->nama_barang,
+                'keterangan' => '',
             ] + $infoM3;
 
             $kodeAkunPendapatan = $detail->barang?->akunPendapatan?->kode_sub_anak_akun;
@@ -277,7 +305,7 @@ class JurnalPenjualanTriplekService
                 'nama_barang' => $detail->nama_barang,
                 'banyak' => $qty,
                 'harga' => $hargaJualBersih,
-                'keterangan' => 'Penjualan '.$detail->nama_barang,
+                'keterangan' => $detail->nama_barang,
             ] + $infoM3;
         }
 
@@ -355,6 +383,8 @@ class JurnalPenjualanTriplekService
                 itemBreakdown: $itemBreakdown,
                 splitHeaderPerBarang: $splitHeaderPerBarang,
                 noJurnalOverride: $noJurnal,
+                variabelKeteranganRingkas: self::VARIABEL_KET_RINGKAS,
+                variabelKeteranganKosong: self::VARIABEL_KET_KOSONG,
                 catatanPerVariabel: [
                     'nominal_kas' => trim((string) ($penjualan->keterangan_pembayaran ?? '')),
                 ],

@@ -93,6 +93,8 @@ class BukuKitabJurnalService
         ?int $noJurnalOverride = null,
         array $catatanPerVariabel = [],
         array $tampilkanMeskiNol = [],
+        array $variabelKeteranganRingkas = [],
+        array $variabelKeteranganKosong = [],
     ) {
         $barisTemplate = BukuKitab::templateAkun($kodeKitab);
 
@@ -132,6 +134,8 @@ class BukuKitabJurnalService
             $noJurnalOverride,
             $catatanPerVariabel,
             $tampilkanMeskiNol,
+            $variabelKeteranganRingkas,
+            $variabelKeteranganKosong,
         ) {
             $noJurnal = $noJurnalOverride ?? NomorJurnalService::nextJurnal();
 
@@ -190,6 +194,7 @@ class BukuKitabJurnalService
                             'hit_kbk' => $b['hit_kbk'] ?? 'b',
                             'nama_barang' => $b['nama_barang'] ?? null,
                             'id_barang' => $idBarang,
+                            'mm' => $b['mm'] ?? null,
                         ];
 
                         if (! empty($idBarang)) {
@@ -251,6 +256,25 @@ class BukuKitabJurnalService
                                 : ($baris->keterangan ?: $keteranganDefault ?: $kodeKitab);
                         }
 
+                        // Keterangan: default "ket | Nota: xxx (catatan)". Untuk variabel yang
+                        // didaftarkan di $variabelKeteranganRingkas dibuat ringkas: hanya nama
+                        // barang (+ catatan), tanpa nomor nota. Variabel di
+                        // $variabelKeteranganKosong dikosongkan.
+                        $ketFinal = "{$ketHeader} | Nota: {$noDokumen}".($catatanBaris !== '' ? " ({$catatanBaris})" : '');
+                        if (in_array($baris->variabel_nilai, $variabelKeteranganRingkas, true)) {
+                            if (in_array($baris->variabel_nilai, $variabelKeteranganKosong, true)) {
+                                $ketRingkas = '';
+                            } elseif (count($items) === 1) {
+                                $ketRingkas = (string) $items[0]['ket_item'];
+                            } else {
+                                $ketRingkas = (string) collect($items)->pluck('nama_barang')->filter()->unique()->implode(', ');
+                            }
+                            if ($ketRingkas === '' && ! in_array($baris->variabel_nilai, $variabelKeteranganKosong, true)) {
+                                $ketRingkas = (string) ($baris->keterangan ?: $keteranganDefault ?: $kodeKitab);
+                            }
+                            $ketFinal = trim($ketRingkas.($catatanBaris !== '' ? " ({$catatanBaris})" : ''));
+                        }
+
                         $headerBarang = JurnalPembantuHeader::create([
                             'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                             'tgl_transaksi' => $tglTransaksi,
@@ -260,7 +284,7 @@ class BukuKitabJurnalService
                             'no_akun' => $grup['no_akun'],
                             'nama_akun' => $grup['nama_akun'],
                             'map' => $baris->posisi,
-                            'keterangan' => "{$ketHeader} | Nota: {$noDokumen}".($catatanBaris !== '' ? " ({$catatanBaris})" : ''),
+                            'keterangan' => $ketFinal,
                             'no_dokumen' => $noDokumen,
                             'total_nilai' => $totalNominalGrup,
                             'status' => JurnalPembantuHeader::STATUS_DRAFT,
@@ -282,6 +306,7 @@ class BukuKitabJurnalService
                                 'm3' => $it['m3'] ?? 0,
                                 'harga' => $it['harga'],
                                 'hit_kbk' => $it['hit_kbk'] ?? 'b',
+                                'mm' => $it['mm'] ?? null,
                                 'jumlah' => $it['nominal'],
                                 'status' => true,
                                 'created_by' => $userId,
@@ -320,6 +345,13 @@ class BukuKitabJurnalService
 
                 $catatanBaris = trim((string) ($catatanPerVariabel[$baris->variabel_nilai] ?? ''));
 
+                // Keterangan ringkas (lihat catatan di jalur breakdown di atas).
+                $ketFinalB = "{$ketBaris} | Nota: {$noDokumen}".($catatanBaris !== '' ? " ({$catatanBaris})" : '');
+                if (in_array($baris->variabel_nilai, $variabelKeteranganRingkas, true)) {
+                    $ketRingkasB = in_array($baris->variabel_nilai, $variabelKeteranganKosong, true) ? '' : (string) $ketBaris;
+                    $ketFinalB = trim($ketRingkasB.($catatanBaris !== '' ? " ({$catatanBaris})" : ''));
+                }
+
                 $header = JurnalPembantuHeader::create([
                     'no_jurnal_pembantu' => NomorJurnalService::nextNoJP(),
                     'tgl_transaksi' => $tglTransaksi,
@@ -329,7 +361,7 @@ class BukuKitabJurnalService
                     'no_akun' => $baris->no_akun,
                     'nama_akun' => $this->resolveNamaAkun($baris->no_akun, $baris->nama_akun),
                     'map' => $baris->posisi,
-                    'keterangan' => "{$ketBaris} | Nota: {$noDokumen}".($catatanBaris !== '' ? " ({$catatanBaris})" : ''),
+                    'keterangan' => $ketFinalB,
                     'no_dokumen' => $noDokumen,
                     'total_nilai' => $nominal,
                     'status' => JurnalPembantuHeader::STATUS_DRAFT,
@@ -356,6 +388,7 @@ class BukuKitabJurnalService
                             'm3' => (float) ($b['m3'] ?? 0),
                             'harga' => $hargaItem,
                             'hit_kbk' => $b['hit_kbk'] ?? 'b',
+                            'mm' => $b['mm'] ?? null,
                             'jumlah' => $nominalItem,
                             'status' => true,
                             'created_by' => $userId,

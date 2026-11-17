@@ -21,6 +21,7 @@ class JurnalPembantuItem extends Model
         'no_referensi',
         'keterangan',
         'ukuran',
+        'mm',
         'kualitas',
         'banyak',
         'm3',

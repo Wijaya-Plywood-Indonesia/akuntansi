@@ -288,6 +288,7 @@ class JurnalPenjualanPelunasanService
                     keteranganDefault: 'Pelunasan Piutang Penjualan (Tunai, split)'.($dpUntukTunai ? ' + Reklas Uang Muka Pelanggan' : ''),
                     noJurnalOverride: $noJurnal,
                     catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpUntukTunai),
+                    variabelKeteranganRingkas: ['piutang_usaha', 'nominal_kas', 'dp_penjualan'],
                 );
             }
 
@@ -315,6 +316,7 @@ class JurnalPenjualanPelunasanService
                     keteranganDefault: "Pelunasan Piutang Penjualan (Transfer {$rekening->namaAkun()}, split)".($dpUntukTransfer ? ' + Reklas Uang Muka Pelanggan' : ''),
                     noJurnalOverride: $noJurnal,
                     catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpUntukTransfer),
+                    variabelKeteranganRingkas: ['piutang_usaha', 'nominal_kas', 'dp_penjualan'],
                 );
             }
 
@@ -425,6 +427,7 @@ class JurnalPenjualanPelunasanService
                 keteranganDefault: $keteranganDefault,
                 noJurnalOverride: $noJurnal,
                 catatanPerVariabel: $this->catatanPelunasan($nota, sertakanDp: (bool) $dpAwal),
+                variabelKeteranganRingkas: ['piutang_usaha', 'nominal_kas', 'dp_penjualan'],
             );
         });
     }
