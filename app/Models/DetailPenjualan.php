@@ -17,6 +17,7 @@ class DetailPenjualan extends Model
         'qty',
         'kubikasi',
         'hitung_dari',
+        'mm',
         'harga_awal',
         'harga_jual',
         'potongan',

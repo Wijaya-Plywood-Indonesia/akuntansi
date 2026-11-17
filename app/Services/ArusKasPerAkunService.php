@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalUmum;
 use App\Models\SubAnakAkun;
 use Carbon\Carbon;
@@ -245,6 +246,7 @@ class ArusKasPerAkunService
             $catatanUser = trim($m[1]);
         } elseif (
             $keteranganKasMentah !== ''
+            && ! $this->isJurnalPenjualanOtomatis($noJurnal)
             && !($noNota && str_contains($keteranganKasMentah, (string) $noNota))
             && !($namaPihak && str_contains($keteranganKasMentah, (string) $namaPihak))
         ) {
@@ -273,6 +275,25 @@ class ArusKasPerAkunService
         )->nama_akun;
 
         return $keteranganKas ?: ($namaAkunLawan ?: 'Transaksi #' . $noJurnal);
+    }
+
+    /** @var array<int|string, int>|null Nomor jurnal hasil posting otomatis modul penjualan/pelunasan. */
+    private ?array $jurnalPenjualanOtomatis = null;
+
+    /**
+     * Jurnal penjualan/pelunasan otomatis memakai keterangan ringkas (tanpa
+     * "| Nota: ..."). Keterangan baris kasnya TIDAK boleh dianggap catatan
+     * manual user, jadi catatan hanya diambil dari "(...)" di ujung keterangan.
+     */
+    private function isJurnalPenjualanOtomatis(int|string $noJurnal): bool
+    {
+        $this->jurnalPenjualanOtomatis ??= JurnalPembantuHeader::query()
+            ->whereIn('modul_asal', ['penjualan_triplek', 'pelunasan_penjualan'])
+            ->pluck('jurnal')
+            ->flip()
+            ->all();
+
+        return isset($this->jurnalPenjualanOtomatis[$noJurnal]);
     }
 
     private function nilaiBaris(JurnalUmum $baris): float

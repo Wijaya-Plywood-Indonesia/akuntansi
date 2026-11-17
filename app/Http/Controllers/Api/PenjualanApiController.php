@@ -63,6 +63,7 @@ class PenjualanApiController extends Controller
             'items.*.qty' => 'required|numeric|min:0',
             'items.*.m3' => 'nullable|numeric|min:0',
             'items.*.hitung_dari' => 'nullable|string', // qty | kubikasi
+            'items.*.mm' => 'nullable|string|max:150',
             'items.*.harga_awal' => 'nullable|numeric|min:0',
             'items.*.harga_jual' => 'required|numeric|min:0',
             'items.*.potongan' => 'nullable|numeric|min:0',
@@ -164,6 +165,7 @@ class PenjualanApiController extends Controller
                         'qty' => $item['qty'],
                         'kubikasi' => $item['m3'] ?? 0,
                         'hitung_dari' => $hitungDari,
+                        'mm' => filled($item['mm'] ?? null) ? mb_substr(trim((string) $item['mm']), 0, 150) : null,
                         'harga_awal' => $item['harga_awal'] ?? $item['harga_jual'],
                         'harga_jual' => $item['harga_jual'],
                         'potongan' => $item['potongan'] ?? 0,
