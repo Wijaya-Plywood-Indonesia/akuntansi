@@ -428,6 +428,23 @@ class PosPenjualan extends Page
             ->get();
     }
 
+    /**
+     * Kasir mengetik/menimpa nama setelah memilih customer dari daftar:
+     * lepaskan ID lama kalau nama tidak lagi sama dengan master yang dipilih.
+     */
+    public function updatedNamaCustomer(): void
+    {
+        if (! $this->pembeli_id) {
+            return;
+        }
+
+        $pembeli = Pembeli::find($this->pembeli_id);
+
+        if (! $pembeli || mb_strtolower(trim($pembeli->nama)) !== mb_strtolower(trim($this->nama_customer))) {
+            $this->pembeli_id = null;
+        }
+    }
+
     public function updatedKodeMember(): void
     {
         if (strlen($this->kode_member) < 2) {
@@ -718,14 +735,26 @@ class PosPenjualan extends Page
             return;
         }
 
+        if (trim($this->nama_customer) === '') {
+            Notification::make()
+                ->title('Nama Customer Kosong')
+                ->body('Isi nama customer atau pilih dari daftar member.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         try {
             DB::transaction(function () {
-                $pembeli = $this->pembeli_id
-                    ? Pembeli::find($this->pembeli_id)
-                    : Pembeli::firstOrCreate(
-                        ['nama' => $this->nama_customer],
-                        ['alamat' => $this->alamat, 'telepon' => $this->telepon]
-                    );
+                // ID hanya dipakai kalau namanya masih cocok; kalau tidak, cari/buat
+                // berdasarkan nama (mencegah ID basi / nama ditimpa kasir).
+                $pembeli = Pembeli::resolveUntukNota(
+                    $this->pembeli_id,
+                    $this->nama_customer,
+                    $this->alamat,
+                    $this->telepon
+                );
 
                 $rekening = ($this->metode_pembayaran === 'TRANSFER' || $this->metode_pembayaran === 'TUNAI & TRANSFER')
                     ? RekeningPerusahaan::find($this->rekening_perusahaan_id)
@@ -745,7 +774,7 @@ class PosPenjualan extends Page
                     'no_nota' => $this->no_nota,
                     'tanggal' => $this->tanggal,
                     'pembeli_id' => $pembeli->id,
-                    'nama_customer' => $this->nama_customer,
+                    'nama_customer' => trim($this->nama_customer),
                     'alamat' => $this->alamat,
                     'is_member' => (bool) $this->is_member,
                     'jenis_transaksi' => $this->jenis_transaksi,
@@ -853,6 +882,15 @@ class PosPenjualan extends Page
         $this->is_member = (int) ($state['is_member'] ?? 0);
         $this->pembeli_id = $state['pembeli_id'] ?? null;
         $this->nama_customer = $state['nama_customer'] ?? '';
+
+        // Buang ID basi dari localStorage: harus ada di master dan namanya cocok.
+        if ($this->pembeli_id) {
+            $pembeli = Pembeli::find($this->pembeli_id);
+
+            if (! $pembeli || mb_strtolower(trim($pembeli->nama)) !== mb_strtolower(trim($this->nama_customer))) {
+                $this->pembeli_id = null;
+            }
+        }
         $this->alamat = $state['alamat'] ?? '';
         $this->telepon = $state['telepon'] ?? '';
         $this->kode_member = $state['kode_member'] ?? '';

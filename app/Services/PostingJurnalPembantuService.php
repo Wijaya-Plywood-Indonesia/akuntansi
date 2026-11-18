@@ -100,6 +100,9 @@ class PostingJurnalPembantuService
             }
 
             $namaGlobal = null;
+            // true kalau nama jurnal TIDAK berasal dari pihak (customer/supplier) melainkan
+            // jatuh ke nama barang -> nama harus per barang, bukan disamakan satu jurnal.
+            $namaDariBarang = false;
             $noDokumenGlobal = null;
             $pihakIdGlobal = null;
             $supplierIdGlobal = null;
@@ -127,6 +130,7 @@ class PostingJurnalPembantuService
                         $firstItem = $h->items->first();
                         if ($firstItem) {
                             $namaGlobal = $firstItem->nama_pihak ?: $firstItem->nama_barang;
+                            $namaDariBarang = blank($firstItem->nama_pihak);
                         }
                     }
                 }
@@ -271,7 +275,9 @@ class PostingJurnalPembantuService
                         'no_akun' => $header->no_akun,
                         'nama_akun' => $header->nama_akun,
                         'no-dokumen' => $noDokumenGlobal,
-                        'nama' => $namaGlobal,
+                        'nama' => $namaDariBarang
+                            ? ($items->first()->nama_pihak ?: ($items->first()->nama_barang ?: $namaGlobal))
+                            : $namaGlobal,
                         'keterangan' => $header->keterangan,
                         'id_barang' => $idBarangFinal,
                         'id_pembeli' => $pihakIdGlobal,

@@ -240,13 +240,22 @@ class ArusKasPerAkunService
         // ditaruh paling depan (mis. "beli lem | sj-9218 | DOVER CHEMICAL").
         $keteranganKasMentah = (string) (optional($barisKasDiJurnalIni->first())->keterangan ?? '');
         $catatanUser = null;
-        if (preg_match('/\(([^()]+)\)\s*$/', $keteranganKasMentah, $m)) {
+        $modulOtomatis = $this->modulJurnalPenjualanOtomatis($noJurnal);
+        if (
+            $modulOtomatis === 'pelunasan_penjualan'
+            && $keteranganKasMentah !== ''
+            && ! str_contains($keteranganKasMentah, '| Nota:')
+        ) {
+            // Pelunasan penjualan (format baru): keterangan baris kas HANYA berisi
+            // catatan user, tanpa teks bawaan / nomor nota -> pakai apa adanya.
+            $catatanUser = trim($keteranganKasMentah);
+        } elseif (preg_match('/\(([^()]+)\)\s*$/', $keteranganKasMentah, $m)) {
             // Format otomatis dari Penjualan/Pembelian, mis.
             // "KAS TUNAI | Nota: sj-9218 | DOVER CHEMICAL (beli lem)".
             $catatanUser = trim($m[1]);
         } elseif (
             $keteranganKasMentah !== ''
-            && ! $this->isJurnalPenjualanOtomatis($noJurnal)
+            && $modulOtomatis === null
             && !($noNota && str_contains($keteranganKasMentah, (string) $noNota))
             && !($namaPihak && str_contains($keteranganKasMentah, (string) $namaPihak))
         ) {
@@ -277,23 +286,24 @@ class ArusKasPerAkunService
         return $keteranganKas ?: ($namaAkunLawan ?: 'Transaksi #' . $noJurnal);
     }
 
-    /** @var array<int|string, int>|null Nomor jurnal hasil posting otomatis modul penjualan/pelunasan. */
+    /** @var array<int|string, string>|null Nomor jurnal => modul_asal (penjualan/pelunasan otomatis). */
     private ?array $jurnalPenjualanOtomatis = null;
 
     /**
      * Jurnal penjualan/pelunasan otomatis memakai keterangan ringkas (tanpa
      * "| Nota: ..."). Keterangan baris kasnya TIDAK boleh dianggap catatan
-     * manual user, jadi catatan hanya diambil dari "(...)" di ujung keterangan.
+     * manual user, kecuali format pelunasan baru yang memang hanya berisi catatan.
+     *
+     * @return string|null modul_asal jurnal ini, atau null kalau bukan jurnal otomatis penjualan.
      */
-    private function isJurnalPenjualanOtomatis(int|string $noJurnal): bool
+    private function modulJurnalPenjualanOtomatis(int|string $noJurnal): ?string
     {
         $this->jurnalPenjualanOtomatis ??= JurnalPembantuHeader::query()
             ->whereIn('modul_asal', ['penjualan_triplek', 'pelunasan_penjualan'])
-            ->pluck('jurnal')
-            ->flip()
+            ->pluck('modul_asal', 'jurnal')
             ->all();
 
-        return isset($this->jurnalPenjualanOtomatis[$noJurnal]);
+        return $this->jurnalPenjualanOtomatis[$noJurnal] ?? null;
     }
 
     private function nilaiBaris(JurnalUmum $baris): float

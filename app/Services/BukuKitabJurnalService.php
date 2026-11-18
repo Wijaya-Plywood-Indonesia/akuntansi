@@ -95,6 +95,7 @@ class BukuKitabJurnalService
         array $tampilkanMeskiNol = [],
         array $variabelKeteranganRingkas = [],
         array $variabelKeteranganKosong = [],
+        array $variabelKeteranganCatatanSaja = [],
     ) {
         $barisTemplate = BukuKitab::templateAkun($kodeKitab);
 
@@ -136,6 +137,7 @@ class BukuKitabJurnalService
             $tampilkanMeskiNol,
             $variabelKeteranganRingkas,
             $variabelKeteranganKosong,
+            $variabelKeteranganCatatanSaja,
         ) {
             $noJurnal = $noJurnalOverride ?? NomorJurnalService::nextJurnal();
 
@@ -350,6 +352,11 @@ class BukuKitabJurnalService
                 if (in_array($baris->variabel_nilai, $variabelKeteranganRingkas, true)) {
                     $ketRingkasB = in_array($baris->variabel_nilai, $variabelKeteranganKosong, true) ? '' : (string) $ketBaris;
                     $ketFinalB = trim($ketRingkasB.($catatanBaris !== '' ? " ({$catatanBaris})" : ''));
+                }
+                // Variabel "catatan saja": keterangan HANYA berisi catatan yang diketik user
+                // (tanpa teks bawaan Buku Kitab, tanpa nomor nota). Kosong kalau tak ada catatan.
+                if (in_array($baris->variabel_nilai, $variabelKeteranganCatatanSaja, true)) {
+                    $ketFinalB = $catatanBaris;
                 }
 
                 $header = JurnalPembantuHeader::create([
