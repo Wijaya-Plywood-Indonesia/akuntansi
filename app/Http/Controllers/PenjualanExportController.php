@@ -54,6 +54,7 @@ class PenjualanExportController extends Controller
     public function loadLaporan()
     {
         $this->laporanGabungan = Penjualan::whereBetween('created_at', [$this->dariTanggal.' 00:00:00', $this->sampaiTanggal.' 23:59:59'])
+            ->scopes(['aktif'])
             ->whereNotNull('validated_by')
             ->with(['user', 'validator'])
             ->get()
@@ -89,6 +90,7 @@ class PenjualanExportController extends Controller
     public function loadLaporanDetail()
     {
         $this->laporanGabungan = Penjualan::whereBetween('created_at', [$this->dariTanggal.' 00:00:00', $this->sampaiTanggal.' 23:59:59'])
+            ->scopes(['aktif'])
             ->whereNotNull('validated_by')
             ->with(['user', 'validator'])
 

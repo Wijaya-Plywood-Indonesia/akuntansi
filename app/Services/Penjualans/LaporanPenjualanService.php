@@ -22,6 +22,7 @@ class LaporanPenjualanService
     protected function baseQuery(?string $from, ?string $to)
     {
         return Penjualan::query()
+            ->scopes(['aktif'])
             ->whereNotNull('validated_by')
             ->when($from && $to, fn ($q) =>
                 $q->whereBetween('created_at', [

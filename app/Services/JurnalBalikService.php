@@ -104,6 +104,125 @@ class JurnalBalikService
         });
     }
 
+    /**
+     * Pembatalan nota PENJUALAN (jurnal modul penjualan_triplek / penjualan_telur).
+     *
+     *  - Header yang sudah DIPOSTING : dibuatkan jurnal balik (D/K dibalik) dan
+     *                                  LANGSUNG diposting ke Jurnal Umum.
+     *  - Header yang masih DRAFT     : ditandai DIBATALKAN (belum berefek ke Jurnal Umum).
+     *  - Header yang sudah DIBALIK   : dilewati, jadi aman kalau jurnalnya sebelumnya
+     *                                  sudah dibalik manual lewat Jurnal Pembantu Headers.
+     *
+     * Stok persediaan mengikuti Jurnal Umum, jadi stok ikut kembali lewat jurnal balik.
+     *
+     * @return array{dibatalkan:int, dibalik:int, jurnal_balik:array<int,int>}
+     */
+    public function batalkanJurnalPenjualan(string $noNota, int $userId, string $alasan): array
+    {
+        return DB::transaction(function () use ($noNota, $userId, $alasan) {
+            $headers = JurnalPembantuHeader::query()
+                ->with(['items' => fn ($q) => $q->where('status', true)])
+                ->where('no_dokumen', $noNota)
+                ->where('adalah_jurnal_balik', false)
+                ->whereIn('modul_asal', ['penjualan_triplek', 'penjualan_telur'])
+                ->orderBy('map')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $hasil = ['dibatalkan' => 0, 'dibalik' => 0, 'jurnal_balik' => []];
+
+            // 1) Draft -> dibatalkan
+            foreach ($headers->where('status', JurnalPembantuHeader::STATUS_DRAFT) as $header) {
+                $header->update([
+                    'status'      => JurnalPembantuHeader::STATUS_DIBATALKAN,
+                    'diubah_oleh' => $userId,
+                ]);
+                $hasil['dibatalkan']++;
+            }
+
+            // 2) Diposting -> jurnal balik, lalu diposting
+            $diposting = $headers
+                ->where('status', JurnalPembantuHeader::STATUS_DIPOSTING)
+                ->groupBy('jurnal');
+
+            foreach ($diposting as $noJurnalAsli => $grup) {
+                $nums = NomorJurnalService::nextJurnalDanNoJP();
+                $noJurnalBalik = $nums['jurnal'];
+                $noJP = $nums['no_jp'];
+
+                // Foto nota asli ikut disalin ke jurnal balik.
+                $lampiranAsli = \App\Models\JurnalLampiran::where('jurnal', (int) $noJurnalAsli)->first();
+                if ($lampiranAsli && filled($lampiranAsli->paths)) {
+                    \App\Models\JurnalLampiran::updateOrCreate(
+                        ['jurnal' => $noJurnalBalik],
+                        ['paths' => $lampiranAsli->paths, 'uploaded_by' => $userId]
+                    );
+                }
+
+                foreach ($grup as $headerAsli) {
+                    $ket = trim((string) $headerAsli->keterangan);
+
+                    $headerBalik = JurnalPembantuHeader::create([
+                        'no_jurnal_pembantu'  => $noJP++,
+                        'tgl_transaksi'       => now()->toDateString(),
+                        'jenis_transaksi'     => 'balik',
+                        'modul_asal'          => $headerAsli->modul_asal,
+                        'jurnal'              => $noJurnalBalik,
+                        'no_akun'             => $headerAsli->no_akun,
+                        'nama_akun'           => $headerAsli->nama_akun,
+                        'map'                 => strtolower($headerAsli->map) === 'd' ? 'k' : 'd',
+                        'keterangan'          => ($ket !== '' ? 'BALIK: '.$ket : 'BALIK').' // batal',
+                        'no_dokumen'          => $headerAsli->no_dokumen,
+                        'catatan_internal'    => "Pembatalan nota {$noNota}: {$alasan}",
+                        'total_nilai'         => $headerAsli->total_nilai,
+                        'status'              => JurnalPembantuHeader::STATUS_DRAFT,
+                        'adalah_jurnal_balik' => true,
+                        'membalik_id'         => $headerAsli->id,
+                        'dibuat_oleh'         => $userId,
+                    ]);
+
+                    foreach ($headerAsli->items as $item) {
+                        JurnalPembantuItem::create([
+                            'jurnal_pembantu_header_id' => $headerBalik->id,
+                            'urut'         => $item->urut,
+                            'jenis_pihak'  => $item->jenis_pihak,
+                            'pihak_id'     => $item->pihak_id,
+                            'nama_pihak'   => $item->nama_pihak,
+                            'nama_barang'  => $item->nama_barang,
+                            'id_barang'    => $item->id_barang,
+                            'no_dokumen'   => $item->no_dokumen,
+                            'no_referensi' => $item->no_referensi,
+                            'keterangan'   => $item->keterangan,
+                            'ukuran'       => $item->ukuran,
+                            'kualitas'     => $item->kualitas,
+                            'banyak'       => $item->banyak,
+                            'm3'           => $item->m3,
+                            'harga'        => $item->harga,
+                            'jumlah'       => $item->jumlah,
+                            'hit_kbk'      => $item->hit_kbk,
+                            'mm'           => $item->mm,
+                            'status'       => true,
+                            'created_by'   => $userId,
+                            'updated_by'   => $userId,
+                        ]);
+                    }
+
+                    $headerAsli->update([
+                        'status'      => JurnalPembantuHeader::STATUS_DIBALIK,
+                        'diubah_oleh' => $userId,
+                    ]);
+                    $hasil['dibalik']++;
+                }
+
+                app(PostingJurnalPembantuService::class)->postingByNomorJurnal($noJurnalBalik, $userId);
+                $hasil['jurnal_balik'][] = (int) $noJurnalBalik;
+            }
+
+            return $hasil;
+        });
+    }
+
     private function nextNomorJurnal(): int
     {
         return NomorJurnalService::nextJurnal();

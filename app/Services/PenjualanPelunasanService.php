@@ -28,6 +28,7 @@ class PenjualanPelunasanService
     public function queryBelumLunas(?string $search = null): Builder
     {
         return Penjualan::query()
+            ->scopes(['aktif'])
             ->whereNotNull('validated_by')
             ->when($search, function (Builder $query) use ($search) {
                 $query->where(function (Builder $q) use ($search) {
@@ -54,7 +55,8 @@ class PenjualanPelunasanService
 
     public function bisaDilunasi(Penjualan $penjualan): bool
     {
-        return in_array($penjualan->jenis_transaksi, self::JENIS_BISA_DILUNASI, true)
+        return ! $penjualan->isDibatalkan()
+            && in_array($penjualan->jenis_transaksi, self::JENIS_BISA_DILUNASI, true)
             && $this->sisaTagihan($penjualan) > 0;
     }
 
@@ -98,6 +100,10 @@ class PenjualanPelunasanService
         return DB::transaction(function () use ($penjualan, $payload, $metode, $nominal) {
             /** @var Penjualan $nota */
             $nota = Penjualan::query()->lockForUpdate()->findOrFail($penjualan->id);
+
+            if ($nota->isDibatalkan()) {
+                throw new RuntimeException('Nota '.$nota->no_nota.' sudah dibatalkan, tidak bisa dilunasi.');
+            }
 
             if (! in_array($nota->jenis_transaksi, self::JENIS_BISA_DILUNASI, true)) {
                 throw new RuntimeException('Transaksi jenis '.$nota->jenis_transaksi.' tidak memerlukan pelunasan.');

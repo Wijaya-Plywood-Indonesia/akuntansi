@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Penjualans\Pages;
 
+use App\Filament\Resources\Penjualans\Actions\BatalkanPenjualanAction;
 use App\Filament\Resources\Penjualans\PenjualanResource;
 use App\Models\JurnalPembantuHeader;
 use App\Models\JurnalUmum;
@@ -50,7 +51,7 @@ class ViewPenjualan extends ViewRecord
      * Transaksi" supaya tidak bisa diklik dobel (yang akan bikin jurnal
      * DP/Piutang/Penjualan ke-posting 2x).
      */
-    private const STATUS_SUDAH_DIVALIDASI = ['LUNAS', 'DP', 'PIUTANG'];
+    private const STATUS_SUDAH_DIVALIDASI = ['LUNAS', 'DP', 'PIUTANG', 'DIBATALKAN'];
 
     /**
      * Jenis transaksi yang uangnya masuk LEWAT menu Pelunasan. Untuk jenis
@@ -169,6 +170,9 @@ class ViewPenjualan extends ViewRecord
                         ->success()
                         ->send();
                 }),
+
+            // 🚫 ACTION: BATALKAN PENJUALAN (jurnal dibalik otomatis, nota ditandai DIBATALKAN)
+            BatalkanPenjualanAction::make(),
 
             // ❌ ACTION: BATAL VALIDASI (Termasuk Logika Auto-Post Jurnal Asli)
             Action::make('batal_validasi')

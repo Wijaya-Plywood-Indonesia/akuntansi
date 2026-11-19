@@ -36,6 +36,9 @@ class Penjualan extends Model
         'toko_id',
         'bayar_tunai',
         'bayar_transfer',
+        'dibatalkan_oleh',
+        'dibatalkan_pada',
+        'alasan_batal',
     ];
 
     protected $casts = [
@@ -52,7 +55,28 @@ class Penjualan extends Model
         'is_member' => 'boolean',
         'user_id' => 'integer',
         'validated_by' => 'integer',
+        'dibatalkan_oleh' => 'integer',
+        'dibatalkan_pada' => 'datetime',
     ];
+
+    public const STATUS_DIBATALKAN = 'DIBATALKAN';
+
+    /**
+     * Hanya nota yang TIDAK dibatalkan. Status NULL (nota POS yang belum
+     * divalidasi) tetap ikut, makanya tidak cukup pakai "!= DIBATALKAN".
+     */
+    public function scopeAktif($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('status_transaksi')
+                ->orWhere('status_transaksi', '!=', self::STATUS_DIBATALKAN);
+        });
+    }
+
+    public function isDibatalkan(): bool
+    {
+        return $this->status_transaksi === self::STATUS_DIBATALKAN;
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -83,6 +107,11 @@ class Penjualan extends Model
     public function validator()
     {
         return $this->belongsTo(User::class, 'validated_by');
+    }
+
+    public function pembatal()
+    {
+        return $this->belongsTo(User::class, 'dibatalkan_oleh');
     }
 
     public function rekeningPerusahaan()
