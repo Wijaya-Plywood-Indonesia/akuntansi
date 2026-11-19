@@ -61,6 +61,7 @@ class DownloadExcel extends Page
     protected function fetchData($type, $startDate, $endDate)
     {
         $query = Penjualan::query()
+            ->scopes(['aktif'])
             ->whereNotNull('validated_by')
             ->whereBetween('created_at', [
                 $startDate . ' 00:00:00',

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Penjualans\Tables;
 
+use App\Filament\Resources\Penjualans\Actions\BatalkanPenjualanAction;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -79,6 +80,10 @@ class PenjualansTable
 
                 EditAction::make()
                     ->visible(function ($record) {
+                        if ($record->status_transaksi === 'DIBATALKAN') {
+                            return false;
+                        }
+
                         $user = filament()->auth()->user();
                         if ($user->hasRole('super_admin')) {
                             return true;
@@ -156,6 +161,8 @@ class PenjualansTable
                             ->success()
                             ->send();
                     }),
+
+                BatalkanPenjualanAction::make(),
 
                 DeleteAction::make()
                     ->visible(function ($record) {

@@ -349,7 +349,7 @@ class DetailsRelationManager extends RelationManager
                             return false;
                         }
 
-                        return $penjualan->status_transaksi !== 'LUNAS';
+                        return ! in_array($penjualan->status_transaksi, ['LUNAS', 'DIBATALKAN'], true);
                     })
                     ->mutateFormDataUsing(function (array $data): array {
                         try {

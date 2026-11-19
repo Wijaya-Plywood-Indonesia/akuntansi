@@ -55,6 +55,7 @@ class PreviewExport extends Page
     {
         // Gunakan filter tanggal agar data di tabel preview sinkron
         $this->laporanGabungan = Penjualan::query()
+            ->scopes(['aktif'])
             ->whereNotNull('validated_by')
             ->whereBetween('created_at', [
                 (string) $this->startDate.' 00:00:00',
@@ -109,6 +110,7 @@ class PreviewExport extends Page
     public function loadLaporanDetail()
     {
         $this->laporanGabungan = Penjualan::query()
+            ->scopes(['aktif'])
             ->whereNotNull('validated_by')
             ->whereBetween('created_at', [
                 (string) $this->startDate.' 00:00:00',
