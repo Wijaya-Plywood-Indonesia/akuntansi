@@ -28,3 +28,6 @@ Route::post('/jurnal/produksi', [JurnalProduksiApiController::class, 'store']);
 
 // API Penjualan dari ERP. Auth: header X-API-KEY.
 Route::post('/penjualan/store', [\App\Http\Controllers\Api\PenjualanApiController::class, 'store']);
+
+// API Retur Penjualan dari ERP. Auth: header X-API-KEY.
+Route::post('/retur-penjualan/store', [\App\Http\Controllers\Api\ReturnPenjualanApiController::class, 'store']);
