@@ -11,9 +11,10 @@ use RuntimeException;
 /**
  * Pembatalan nota penjualan.
  *
- * Satu langkah: jurnal dibalik otomatis (dan diposting), status nota menjadi
- * DIBATALKAN, dan nota hilang dari menu Pelunasan serta laporan penjualan.
- * Nota tidak dihapus supaya jejak pembukuannya tetap ada.
+ * Satu langkah: jurnal balik dibuat sebagai DRAFT di Jurnal Pembantu Headers
+ * (diposting manual oleh user), status nota menjadi DIBATALKAN, dan nota hilang
+ * dari menu Pelunasan serta laporan penjualan. Nota tidak dihapus supaya jejak
+ * pembukuannya tetap ada.
  */
 class PenjualanPembatalanService
 {

@@ -29,8 +29,9 @@ class BatalkanPenjualanAction
             ->requiresConfirmation()
             ->modalHeading(fn ($record) => 'Batalkan Nota '.$record->no_nota.'?')
             ->modalDescription(
-                'Jurnal nota ini akan dibalik otomatis dan nota ditandai DIBATALKAN, sehingga hilang dari menu '
-                .'Pelunasan dan laporan penjualan. Nota tidak dihapus. Tindakan ini tidak bisa dibatalkan.'
+                'Nota ditandai DIBATALKAN dan hilang dari menu Pelunasan serta laporan penjualan. Jurnal baliknya '
+                .'dibuat sebagai Draft di Jurnal Pembantu Headers dan harus Anda posting manual. Nota tidak dihapus. '
+                .'Tindakan ini tidak bisa dibatalkan.'
             )
             ->modalSubmitActionLabel('Ya, Batalkan')
             ->form([
@@ -68,7 +69,7 @@ class BatalkanPenjualanAction
                 }
 
                 $info = $hasil['dibalik'] > 0
-                    ? 'Jurnal balik No. '.implode(', ', $hasil['jurnal_balik']).' sudah diposting.'
+                    ? 'Jurnal balik No. '.implode(', ', $hasil['jurnal_balik']).' dibuat sebagai Draft di Jurnal Pembantu Headers. Silakan posting manual agar masuk Jurnal Umum.'
                     : 'Tidak ada jurnal baru yang perlu dibuat (jurnal sebelumnya sudah dibalik atau belum diposting).';
 
                 Notification::make()
