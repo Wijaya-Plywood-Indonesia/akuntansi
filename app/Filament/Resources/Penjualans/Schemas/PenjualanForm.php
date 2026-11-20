@@ -26,8 +26,6 @@ class PenjualanForm
                 TextInput::make('no_nota')
                     ->label('No Nota')
                     ->default(fn() => 'INV-' . now()->format('YmdHis'))
-                    ->disabled()
-                    ->dehydrated()
                     ->required(),
 
                 DateTimePicker::make('tanggal')

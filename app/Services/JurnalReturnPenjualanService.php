@@ -271,11 +271,16 @@ class JurnalReturnPenjualanService
             $hargaJual = (float) ($item['harga_jual'] ?? 0);
             $hargaBeli = (float) ($item['harga_beli'] ?? 0);
             $potongan = (float) ($item['potongan'] ?? 0);
+            $m3 = isset($item['m3']) && (float)$item['m3'] > 0 ? (float)$item['m3'] : null;
+            $hitungDari = $item['hitung_dari'] ?? 'qty';
 
-            $nilaiBarang = ($qty * $hargaJual) - $potongan;
+            // Jika hitung_dari === 'm3' dan m3 valid, pengali kalkulasi adalah m3
+            $multiplier = ($hitungDari === 'm3' && $m3 !== null && $m3 > 0) ? $m3 : $qty;
+
+            $nilaiBarang = ($multiplier * $hargaJual) - $potongan;
             $subtotalRetur += max(0, $nilaiBarang);
 
-            $nilaiHppBarang = $qty * $hargaBeli;
+            $nilaiHppBarang = $multiplier * $hargaBeli;
             $totalHpp += $nilaiHppBarang;
 
             $namaBarang = $item['nama_barang'] ?? 'Barang';
@@ -286,6 +291,8 @@ class JurnalReturnPenjualanService
                 'id_barang' => $idBarang,
                 'nama_barang' => $namaBarang,
                 'banyak' => $qty,
+                'm3' => $m3,
+                'hit_kbk' => ($hitungDari === 'm3' ? 'm' : 'b'),
                 'harga' => $hargaBeli,
                 'keterangan' => "Retur Masuk Stok: {$namaBarang}",
             ];
@@ -294,6 +301,8 @@ class JurnalReturnPenjualanService
             $breakdownHpp[] = [
                 'nama_barang' => $namaBarang,
                 'banyak' => $qty,
+                'm3' => $m3,
+                'hit_kbk' => ($hitungDari === 'm3' ? 'm' : 'b'),
                 'harga' => $hargaBeli,
                 'keterangan' => "Retur HPP: {$namaBarang}",
             ];

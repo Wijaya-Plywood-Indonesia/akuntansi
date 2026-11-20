@@ -20,8 +20,17 @@ class ReturnPenjualanResource extends Resource
 {
     protected static ?string $model = ReturnPenjualan::class;
 
-    // protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static ?string $modelLabel = 'Retur Penjualan';
+
+    protected static ?string $pluralModelLabel = 'Retur Penjualan';
+
+    protected static ?string $navigationLabel = 'Retur Penjualan';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowUturnLeft;
+
     protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
+
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $recordTitleAttribute = 'ReturnPenjualan';
 

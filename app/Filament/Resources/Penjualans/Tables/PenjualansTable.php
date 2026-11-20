@@ -13,14 +13,19 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class PenjualansTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->orderByRaw('validated_by IS NOT NULL ASC'))
             ->columns([
-                TextColumn::make('no_nota')->searchable(),
+                TextColumn::make('no_nota')
+                    ->label('No. SJ')
+                    ->searchable()
+                    ->sortable(),
 
                 TextColumn::make('status_transaksi')
                     ->label('Status')
@@ -61,6 +66,7 @@ class PenjualansTable
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('nama_customer')
+                    ->sortable(query: fn ($query, string $direction) => $query->orderByRaw("TRIM(LOWER(nama_customer)) {$direction}"))
                     ->searchable()
                     ->placeholder('Tidak Dicatat'),
 
@@ -73,7 +79,7 @@ class PenjualansTable
                     ->sortable(),
             ])
 
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('no_nota', 'desc')
 
             ->recordActions([
                 ViewAction::make(),

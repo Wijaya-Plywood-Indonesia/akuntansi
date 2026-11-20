@@ -253,11 +253,17 @@ class BarangController extends Controller
         }
 
         // Sub anak akun ID untuk bahan penolong:
-        // 197: Lem, 198: Hardner, 199: Isi Staples, 200: Pewarna, 201: Tepung, 202: Solasi Coklat, 203: Solasi Putih
+        // 197: Lem, 198: Hardner, 199: Isi Staples, 200: Pewarna, 201: Tepung, 202: Solasi Coklat / Gummed Tape, 203: Solasi Putih, 247: Persediaan Reeling Tape
         $targetSubAkun = null;
         $searchKeyword = '';
 
-        if (str_contains($rawNama, 'pai')) {
+        if (str_contains($rawNama, 'reeling') || str_contains($rawNama, 'relling')) {
+            $targetSubAkun = 247;
+            $searchKeyword = 'Reeling Tape';
+        } elseif (str_contains($rawNama, 'gummed')) {
+            $targetSubAkun = 202;
+            $searchKeyword = 'Gummed Tape';
+        } elseif (str_contains($rawNama, 'pai')) {
             $targetSubAkun = 197;
             $searchKeyword = 'Lem PAI';
         } elseif (str_contains($rawNama, 'aruki')) {

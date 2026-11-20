@@ -88,8 +88,11 @@ class FormReturnPenjualan extends Page
     public function notaResults(): Collection
     {
         $notas = Penjualan::query()
-            ->whereNotNull('validated_by')
-            ->where('status_transaksi', 'LUNAS')
+            ->where(function ($q) {
+                $q->whereNotNull('validated_by')
+                    ->orWhere('status_transaksi', 'LUNAS')
+                    ->orWhereNotNull('status_transaksi');
+            })
             ->with(['details'])
             ->when($this->searchNota, function ($q) {
                 $q->where(function ($sub) {
