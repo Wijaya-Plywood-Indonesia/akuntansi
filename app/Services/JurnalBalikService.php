@@ -107,13 +107,15 @@ class JurnalBalikService
     /**
      * Pembatalan nota PENJUALAN (jurnal modul penjualan_triplek / penjualan_telur).
      *
-     *  - Header yang sudah DIPOSTING : dibuatkan jurnal balik (D/K dibalik) dan
-     *                                  LANGSUNG diposting ke Jurnal Umum.
+     *  - Header yang sudah DIPOSTING : dibuatkan jurnal balik (D/K dibalik) berstatus
+     *                                  DRAFT di Jurnal Pembantu Headers. TIDAK diposting
+     *                                  otomatis; user memposting manual.
      *  - Header yang masih DRAFT     : ditandai DIBATALKAN (belum berefek ke Jurnal Umum).
      *  - Header yang sudah DIBALIK   : dilewati, jadi aman kalau jurnalnya sebelumnya
      *                                  sudah dibalik manual lewat Jurnal Pembantu Headers.
      *
-     * Stok persediaan mengikuti Jurnal Umum, jadi stok ikut kembali lewat jurnal balik.
+     * Stok persediaan mengikuti Jurnal Umum, jadi stok baru kembali setelah jurnal
+     * balik diposting manual.
      *
      * @return array{dibatalkan:int, dibalik:int, jurnal_balik:array<int,int>}
      */
@@ -215,7 +217,6 @@ class JurnalBalikService
                     $hasil['dibalik']++;
                 }
 
-                app(PostingJurnalPembantuService::class)->postingByNomorJurnal($noJurnalBalik, $userId);
                 $hasil['jurnal_balik'][] = (int) $noJurnalBalik;
             }
 
