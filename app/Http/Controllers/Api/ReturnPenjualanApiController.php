@@ -39,6 +39,7 @@ class ReturnPenjualanApiController extends Controller
         $validated = $request->validate([
             'no_retur' => 'required|string|max:100',
             'no_nota' => 'required|string|max:100',
+            'penjualan_id_akuntansi' => 'nullable|integer',
             'tanggal' => 'required|date',
             'nama_customer' => 'nullable|string|max:255',
             'alamat' => 'nullable|string',
@@ -71,7 +72,59 @@ class ReturnPenjualanApiController extends Controller
         try {
             $returnRecord = DB::transaction(function () use ($validated) {
                 // 1. Cari nota penjualan asal
-                $penjualan = Penjualan::where('no_nota', $validated['no_nota'])->first();
+                $penjualan = null;
+
+                // 1a. Coba cari berdasarkan ID Penjualan Akuntansi (jika dikirim dari respon sync penjualan)
+                if (!empty($validated['penjualan_id_akuntansi'])) {
+                    $penjualan = Penjualan::find($validated['penjualan_id_akuntansi']);
+                }
+
+                // 1b. Coba cari exact match no_nota
+                if (!$penjualan) {
+                    $penjualan = Penjualan::where('no_nota', $validated['no_nota'])->first();
+                }
+
+                // 1c. Coba cari variasi no_nota (case-insensitive / spasi / pemisah seperti "SJ 9940" vs "sj 9940" vs "9940" vs "SJ9940" vs "SJ 9940//...")
+                if (!$penjualan) {
+                    $noNotaClean = trim($validated['no_nota']);
+                    $noNotaNoSpace = str_replace(' ', '', $noNotaClean);
+
+                    // Ambil angka SJ-nya saja, misal 'SJ 9940' -> '9940'
+                    preg_match('/\d+/', $noNotaClean, $matches);
+                    $digitNota = $matches[0] ?? null;
+
+                    $penjualan = Penjualan::where(function ($q) use ($noNotaClean, $noNotaNoSpace, $digitNota) {
+                        $q->whereRaw('LOWER(no_nota) = ?', [strtolower($noNotaClean)])
+                            ->orWhereRaw("REPLACE(LOWER(no_nota), ' ', '') = ?", [strtolower($noNotaNoSpace)])
+                            ->orWhere('no_nota', 'like', "%{$noNotaClean}%");
+
+                        if ($digitNota) {
+                            $q->orWhere('no_nota', 'like', "%{$digitNota}%");
+                        }
+                    })
+                    ->orderByRaw("
+                        CASE 
+                            WHEN LOWER(no_nota) = ? THEN 1
+                            WHEN REPLACE(LOWER(no_nota), ' ', '') = ? THEN 2
+                            WHEN no_nota LIKE ? THEN 3
+                            ELSE 4
+                        END
+                    ", [
+                        strtolower($noNotaClean),
+                        strtolower($noNotaNoSpace),
+                        "%{$noNotaClean}%",
+                    ])
+                    ->first();
+                }
+
+                // 1d. Coba cari berdasarkan kecocokan nama customer dan total penjualan
+                if (!$penjualan && !empty($validated['nama_customer']) && isset($validated['total'])) {
+                    $customerName = trim($validated['nama_customer']);
+                    $penjualan = Penjualan::whereRaw('LOWER(nama_customer) = ?', [strtolower($customerName)])
+                        ->orderByDesc('id')
+                        ->first();
+                }
+
                 if (!$penjualan) {
                     throw new \RuntimeException("Nota penjualan '{$validated['no_nota']}' belum terdaftar di Akuntansi. Silakan sinkronkan penjualan terlebih dahulu.");
                 }
