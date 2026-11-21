@@ -280,13 +280,38 @@ class ReturnPenjualanApiController extends Controller
                 $grade = strtolower($mGr[1]);
             }
 
+            // Cek apakah ada penanda "lokal" / "local"
+            $isLokal = (stripos($clean, 'lokal') !== false || stripos($clean, 'local') !== false);
+
             if ($tebal !== '' && $grade !== '') {
-                $targetPattern = "{$tebal}{$kodeKayu} {$grade}";
+                if ($isLokal) {
+                    $targetPattern = "{$tebal}{$kodeKayu} {$grade} lokal";
+                    $fallbackPattern = "{$tebal}{$kodeKayu} {$grade}";
+                } else {
+                    $targetPattern = "{$tebal}{$kodeKayu} {$grade}";
+                    $fallbackPattern = "{$tebal}{$kodeKayu} {$grade} lokal";
+                }
+
                 $foundPlywood = Barang::where('nama_barang', $targetPattern)
                     ->orWhere('nama_barang', 'like', "{$targetPattern}%")
+                    ->orWhere('nama_barang', $fallbackPattern)
+                    ->orWhere('nama_barang', 'like', "{$fallbackPattern}%")
                     ->orWhere('nama_barang', 'like', "{$tebal}mm%{$grade}%")
                     ->orWhere('nama_barang', 'like', "{$tebal} mm%{$grade}%")
-                    ->orderByRaw("CASE WHEN LOWER(nama_barang) = ? THEN 1 ELSE 2 END", [strtolower($targetPattern)])
+                    ->orderByRaw("
+                        CASE 
+                            WHEN LOWER(nama_barang) = ? THEN 1
+                            WHEN LOWER(nama_barang) LIKE ? THEN 2
+                            WHEN LOWER(nama_barang) = ? THEN 3
+                            WHEN LOWER(nama_barang) LIKE ? THEN 4
+                            ELSE 5
+                        END
+                    ", [
+                        strtolower($targetPattern),
+                        strtolower($targetPattern) . '%',
+                        strtolower($fallbackPattern),
+                        strtolower($fallbackPattern) . '%',
+                    ])
                     ->first();
 
                 if ($foundPlywood) {
