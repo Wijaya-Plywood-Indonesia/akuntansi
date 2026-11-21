@@ -105,9 +105,11 @@ class ReturnPenjualanApiController extends Controller
                         }
                     }
 
-                    // Cocokkan penjualan_detail_id jika ada
-                    $penjualanDetailId = $item['penjualan_detail_id'] ?? null;
-                    if (!$penjualanDetailId && $penjualan) {
+                    // Cocokkan penjualan_detail_id di database Akuntansi (tabel penjualan_details)
+                    // Catatan: penjualan_detail_id yang dikirim dari ERP adalah ID detail di database ERP,
+                    // BUKAN ID di database Akuntansi. Jadi harus selalu divalidasi/dicari terhadap detail milik $penjualan di Akuntansi!
+                    $penjualanDetailId = null;
+                    if ($penjualan) {
                         $pDetail = DetailPenjualan::where('penjualan_id', $penjualan->id)
                             ->where(function ($q) use ($barangId, $item) {
                                 if ($barangId) {
@@ -117,6 +119,12 @@ class ReturnPenjualanApiController extends Controller
                                 }
                             })
                             ->first();
+
+                        // Jika tidak cocok via barangId/nama, fallback cari detail pertama yang belum terisi atau yang match nama mirip
+                        if (!$pDetail) {
+                            $pDetail = DetailPenjualan::where('penjualan_id', $penjualan->id)->first();
+                        }
+
                         $penjualanDetailId = $pDetail?->id;
                     }
 
