@@ -64,6 +64,9 @@
 .bb-loader-ring::before { inset:0; border-top-color:var(--bb-accent); animation:bb-spin 1s linear infinite; }
 .bb-loader-ring::after  { inset:10px; border-top-color:var(--bb-amber); animation:bb-spin .65s linear infinite reverse; }
 
+/* Overlay loading saat pindah bulan / toggle akun (muncul selama request Livewire berjalan) */
+.bb-overlay { position:fixed; inset:0; z-index:50; flex-direction:column; align-items:center; justify-content:center; gap:1.25rem; background:color-mix(in srgb, var(--bb-bg) 78%, transparent); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
+
 .bb-topbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.875rem; padding:1rem 1.5rem; background:var(--bb-surface); border:1px solid var(--bb-border); border-radius:var(--bb-r-lg); box-shadow:var(--bb-shadow-sm); }
 .bb-topbar-icon { width:40px; height:40px; background:var(--bb-accent-soft); border:1.5px solid var(--bb-accent-mid); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .bb-topbar-icon svg { width:20px; height:20px; color:var(--bb-accent); stroke-width:1.8; }
@@ -105,6 +108,15 @@
 
 <div class="bb space-y-4">
 
+    {{-- Loading saat ganti periode / toggle "Tampilkan Semua Akun" --}}
+    <div class="bb-overlay" wire:loading.flex wire:target="filterBulan,tampilkanSemua">
+        <div class="bb-loader-ring"></div>
+        <div style="text-align:center">
+            <div style="font-size:1rem;font-weight:700;color:var(--bb-text-1)">Memuat Buku Besar…</div>
+            <div style="font-size:.76rem;color:var(--bb-text-3);margin-top:4px;font-weight:600">Menghitung saldo periode yang dipilih</div>
+        </div>
+    </div>
+
     @if($isLoading)
     <div class="bb-loading">
         <div class="bb-loader-ring"></div>
@@ -145,7 +157,7 @@
                 <svg style="width:13px;height:13px;color:var(--bb-text-3);flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
-                <input type="month" wire:model.live="filterBulan" class="bb-period-input">
+                <input type="month" wire:model.live="filterBulan" wire:loading.attr="disabled" wire:target="filterBulan" class="bb-period-input">
             </div>
         </div>
     </div>
