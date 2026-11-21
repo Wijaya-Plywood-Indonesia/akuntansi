@@ -179,7 +179,9 @@ class ReturnPenjualanApiController extends Controller
                     excludeReturnId: $returnHeader?->id
                 );
 
-                $statusReturn = $validated['status_return'] ?? 'DITERIMA';
+                // Status default retur dari ERP adalah 'DIPROSES' (belum divalidasi di Akuntansi)
+                // Retur harus divalidasi terlebih dahulu oleh staf Akuntansi agar masuk ke Jurnal Pembantu Header
+                $statusReturn = $validated['status_return'] ?? 'DIPROSES';
                 $tokoId = $penjualan->toko_id ?? 1;
 
                 $dataHeader = [
@@ -207,7 +209,7 @@ class ReturnPenjualanApiController extends Controller
                     'kode_kitab' => $calc['kode_kitab'],
                     'akun_pengembalian' => $akunPengembalian,
                     'created_by' => $returnHeader ? $returnHeader->created_by : $userId,
-                    'validate_by' => $userId,
+                    'validate_by' => null, // Belum divalidasi di Akuntansi
                     'toko_id' => $tokoId,
                 ];
 
@@ -224,7 +226,7 @@ class ReturnPenjualanApiController extends Controller
                     ]));
                 }
 
-                // Terbitkan Jurnal Pembantu Retur
+                // Terbitkan Jurnal Pembantu Retur HANYA jika status sudah DITERIMA / SELESAI (sudah divalidasi)
                 if (in_array($statusReturn, ['DITERIMA', 'SELESAI'])) {
                     app(JurnalReturnPenjualanService::class)->buatJurnalReturn($returnHeader, (int) $userId);
                 }
