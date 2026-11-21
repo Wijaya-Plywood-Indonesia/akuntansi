@@ -204,16 +204,20 @@ class FormReturnPenjualan extends Page
         $this->items = [];
 
         foreach ($nota->details as $d) {
+            $namaBarang = $d->barang->nama_barang ?? ($d->nama_barang ?? 'Barang');
+            $namaLower = strtolower(trim($namaBarang));
+            $isVeneer = str_contains($namaLower, 'veneer');
+
             $qtyBeli = (float) $d->qty;
             $qtyTeretur = (float) ($historiRetur[$d->barang_id] ?? 0);
-            $sisaQty = max(0, $qtyBeli - $qtyTeretur);
+            $sisaQty = $isVeneer ? 0 : max(0, $qtyBeli - $qtyTeretur);
             $hargaBeli = (float) ($d->barang->harga_beli ?? 0);
             $hargaJual = (float) $d->harga_jual;
 
             $this->items[] = [
                 'detail_id' => $d->id,
                 'barang_id' => $d->barang_id,
-                'nama_barang' => $d->barang->nama_barang ?? ($d->nama_barang ?? 'Barang'),
+                'nama_barang' => $namaBarang,
                 'satuan' => $d->satuan ?? 'unit',
                 'harga_jual' => $hargaJual,
                 'harga_beli' => $hargaBeli,
@@ -225,6 +229,7 @@ class FormReturnPenjualan extends Page
                 'subtotal' => 0,
                 'keterangan_item' => '',
                 'selected' => false,
+                'is_veneer' => $isVeneer,
             ];
         }
 
@@ -297,6 +302,16 @@ class FormReturnPenjualan extends Page
     public function toggleItem(int $index): void
     {
         if (! isset($this->items[$index])) {
+            return;
+        }
+
+        if (! empty($this->items[$index]['is_veneer'])) {
+            Notification::make()
+                ->title('Barang Tidak Bisa Diretur')
+                ->body('Veneer tidak boleh diretur. Hanya Plywood / Triplek yang dapat diretur.')
+                ->warning()
+                ->send();
+
             return;
         }
 

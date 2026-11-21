@@ -105,6 +105,12 @@ class ReturnPenjualanApiController extends Controller
                         }
                     }
 
+                    // Validasi: Hanya barang Triplek / Plywood yang boleh diretur (Veneer dilarang)
+                    $namaBarangCheck = strtolower(trim(($barang?->nama_barang ?? '') ?: ($item['nama_barang'] ?? '')));
+                    if (str_contains($namaBarangCheck, 'veneer')) {
+                        throw new \RuntimeException("Barang '{$item['nama_barang']}' adalah jenis Veneer. Veneer tidak boleh diretur, hanya Triplek/Plywood yang diizinkan.");
+                    }
+
                     // Cocokkan penjualan_detail_id di database Akuntansi (tabel penjualan_details)
                     // Catatan: penjualan_detail_id yang dikirim dari ERP adalah ID detail di database ERP,
                     // BUKAN ID di database Akuntansi. Jadi harus selalu divalidasi/dicari terhadap detail milik $penjualan di Akuntansi!
