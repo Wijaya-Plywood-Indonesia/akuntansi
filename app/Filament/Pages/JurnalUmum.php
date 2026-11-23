@@ -483,6 +483,13 @@ class JurnalUmum extends Page implements HasActions, HasForms
         $lampiranRows = JurnalLampiran::whereIn('jurnal', $nomorJurnalDiHalamanIni)->get(['jurnal', 'paths']);
         $lampiranCounts = $lampiranRows->mapWithKeys(fn ($l) => [(int) $l->jurnal => count($l->paths ?? [])]);
         $lampiranThumbs = $lampiranRows->mapWithKeys(fn ($l) => [(int) $l->jurnal => ($l->paths[0] ?? null)]);
+        // URL SEMUA foto per nomor jurnal — dipakai modal preview (galeri scroll + zoom).
+        $lampiranUrls = $lampiranRows->mapWithKeys(fn ($l) => [
+            (int) $l->jurnal => collect($l->paths ?? [])
+                ->map(fn ($path) => \Illuminate\Support\Facades\Storage::disk('public')->url($path))
+                ->values()
+                ->all(),
+        ]);
 
         // Kode akun mana saja yang tipe_buku_pembantu = 'piutang' — dipakai
         // di blade untuk nge-badge-in nama pembeli KHUSUS di baris akun
@@ -507,6 +514,7 @@ class JurnalUmum extends Page implements HasActions, HasForms
             'nomorJurnalDitampilkan' => $this->filterJurnalNomor,
             'lampiranCounts' => $lampiranCounts,
             'lampiranThumbs' => $lampiranThumbs,
+            'lampiranUrls' => $lampiranUrls,
         ];
     }
 
