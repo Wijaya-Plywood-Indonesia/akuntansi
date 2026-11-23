@@ -1450,7 +1450,94 @@
             showConfirm: false,
             modeLengkap: window.innerWidth < 768,
             modeLengkapTouched: false,
-            previewImage: null,
+            previewImages: [],
+            previewJurnal: null,
+            zoom: 1,
+            openPreview(jurnal, urls) {
+                this.previewJurnal = jurnal;
+                this.previewImages = urls || [];
+                this.zoom = 1;
+                this.lockPageScroll(true);
+                this.$nextTick(() => { if (this.$refs.zoomScroller) { this.$refs.zoomScroller.scrollTop = 0; this.$refs.zoomScroller.scrollLeft = 0; } });
+            },
+            lockPageScroll(lock) {
+                document.documentElement.style.overflow = lock ? 'hidden' : '';
+                document.body.style.overflow = lock ? 'hidden' : '';
+            },
+            closePreview() {
+                this.previewImages = [];
+                this.previewJurnal = null;
+                this.zoom = 1;
+                this.lockPageScroll(false);
+            },
+            // ---- ZOOM berpusat di titik kursor/jari + drag untuk geser + pinch di HP ----
+            dragging: false,
+            dragStart: null,
+            pinchStartDist: null,
+            pinchStartZoom: 1,
+            applyZoom(newZoom, clientX, clientY) {
+                newZoom = Math.min(6, Math.max(0.5, +newZoom.toFixed(3)));
+                if (newZoom === this.zoom) return;
+                const sc = this.$refs.zoomScroller;
+                const inner = this.$refs.zoomInner;
+                if (!sc || !inner) { this.zoom = newZoom; return; }
+                const sRect = sc.getBoundingClientRect();
+                if (clientX == null) clientX = sRect.left + sRect.width / 2;
+                if (clientY == null) clientY = sRect.top + sRect.height / 2;
+                const iRect = inner.getBoundingClientRect();
+                const px = clientX - iRect.left;
+                const py = clientY - iRect.top;
+                const ratio = newZoom / this.zoom;
+                this.zoom = newZoom;
+                this.$nextTick(() => {
+                    sc.scrollLeft += px * (ratio - 1);
+                    sc.scrollTop += py * (ratio - 1);
+                });
+            },
+            zoomIn() { this.applyZoom(this.zoom * 1.25); },
+            zoomOut() { this.applyZoom(this.zoom / 1.25); },
+            zoomReset() { this.applyZoom(1); },
+            onWheelZoom(e) {
+                if (!e.ctrlKey && !e.metaKey) return;
+                e.preventDefault();
+                this.applyZoom(e.deltaY < 0 ? this.zoom * 1.15 : this.zoom / 1.15, e.clientX, e.clientY);
+            },
+            onDblClickZoom(e) {
+                this.applyZoom(this.zoom >= 2 ? 1 : 3, e.clientX, e.clientY);
+            },
+            startDrag(e) {
+                if (this.zoom <= 1 || e.button !== 0) return;
+                const sc = this.$refs.zoomScroller;
+                this.dragging = true;
+                this.dragStart = { x: e.clientX, y: e.clientY, left: sc.scrollLeft, top: sc.scrollTop };
+            },
+            moveDrag(e) {
+                if (!this.dragging) return;
+                const sc = this.$refs.zoomScroller;
+                sc.scrollLeft = this.dragStart.left - (e.clientX - this.dragStart.x);
+                sc.scrollTop = this.dragStart.top - (e.clientY - this.dragStart.y);
+            },
+            endDrag() { this.dragging = false; },
+            touchDist(t) {
+                return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+            },
+            onTouchStart(e) {
+                if (e.touches.length === 2) {
+                    this.pinchStartDist = this.touchDist(e.touches);
+                    this.pinchStartZoom = this.zoom;
+                }
+            },
+            onTouchMove(e) {
+                if (e.touches.length === 2 && this.pinchStartDist) {
+                    e.preventDefault();
+                    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    this.applyZoom(this.pinchStartZoom * (this.touchDist(e.touches) / this.pinchStartDist), cx, cy);
+                }
+            },
+            onTouchEnd(e) {
+                if (e.touches.length < 2) this.pinchStartDist = null;
+            },
         
             get visibleIds() {
                 return Array.from(document.querySelectorAll('[data-row-id]'))
@@ -1552,29 +1639,69 @@
         });
         @endif">
 
-            {{-- MODAL PREVIEW FOTO LAMPIRAN (klik thumbnail di kolom Aksi) --}}
-            <div x-show="previewImage" x-cloak x-transition.opacity @keydown.escape.window="previewImage = null"
-                class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-                @click.self="previewImage = null">
+            {{-- MODAL PREVIEW FOTO LAMPIRAN (klik thumbnail di kolom Foto): semua foto, scroll vertikal, bisa zoom --}}
+            <div x-show="previewImages.length" x-cloak x-transition.opacity @keydown.escape.window="closePreview()"
+                class="bg-black/70 backdrop-blur-sm"
+                style="position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; padding:1rem;"
+                @click.self="closePreview()">
                 <div
-                    class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                    class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl"
+                    style="width:100%; max-width:1152px; height:calc(100vh - 2rem); margin:0 auto; display:flex; flex-direction:column; overflow:hidden;">
                     <div
-                        class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                        <h3 class="text-sm font-black text-gray-800 dark:text-gray-100">Foto Lampiran</h3>
-                        <button type="button" @click="previewImage = null"
-                            class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
+                        style="flex-shrink:0;" class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                        <h3 class="text-sm font-black text-gray-800 dark:text-gray-100">
+                            Foto Lampiran
+                            <span x-show="previewJurnal" class="text-gray-400 font-semibold">&mdash; Jurnal #<span x-text="previewJurnal"></span></span>
+                            <span class="ml-1 text-xs font-bold text-gray-400">(<span x-text="previewImages.length"></span> foto)</span>
+                        </h3>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="zoomOut()" title="Perkecil"
+                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 font-black">&minus;</button>
+                            <button type="button" @click="zoomReset()" title="Reset zoom"
+                                class="min-w-[3.5rem] h-8 px-2 text-xs font-bold rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                x-text="Math.round(zoom * 100) + '%'"></button>
+                            <button type="button" @click="zoomIn()" title="Perbesar"
+                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 font-black">+</button>
+                            <button type="button" @click="closePreview()"
+                                class="ml-2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-                        <img :src="previewImage" alt="Foto lampiran"
-                            class="max-w-full max-h-[80vh] rounded-lg object-contain">
+
+                    {{-- Area scroll: semua foto ditumpuk ke bawah. Zoom berpusat di kursor/jari, drag untuk geser --}}
+                    <div x-ref="zoomScroller"
+                        class="bg-gray-50 dark:bg-gray-950"
+                        style="flex:1 1 0%; min-height:0; overflow:auto; overscroll-behavior:contain; padding:1rem;"
+                        :class="zoom > 1 ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : ''"
+                        @wheel="onWheelZoom($event)"
+                        @mousedown="startDrag($event)"
+                        @mousemove.window="moveDrag($event)"
+                        @mouseup.window="endDrag()"
+                        @touchstart.passive="onTouchStart($event)"
+                        @touchmove="onTouchMove($event)"
+                        @touchend="onTouchEnd($event)">
+                        <div x-ref="zoomInner" class="space-y-4 select-none" :style="'width:' + (zoom * 100) + '%; min-width:100%'">
+                            <template x-for="(url, i) in previewImages" :key="url">
+                                <div>
+                                    <div class="text-[10px] font-bold text-gray-400 mb-1"
+                                        x-text="'Foto ' + (i + 1) + ' dari ' + previewImages.length"></div>
+                                    <img :src="url" :alt="'Foto lampiran ' + (i + 1)"
+                                        @dblclick="onDblClickZoom($event)"
+                                        class="w-full h-auto rounded-lg border border-gray-200 dark:border-gray-800 select-none"
+                                        :class="zoom > 1 ? '' : 'cursor-zoom-in'"
+                                        draggable="false">
+                                </div>
+                            </template>
+                        </div>
                     </div>
-                    <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex justify-end">
-                        <button type="button" @click="previewImage = null"
+
+                    <div style="flex-shrink:0;" class="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2">
+                        <span class="text-[10px] text-gray-400 hidden sm:block">Zoom: tombol +/&minus;, Ctrl + scroll, klik 2x, atau cubit (HP). Saat zoom, drag untuk geser</span>
+                        <button type="button" @click="closePreview()"
                             class="px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
                             Tutup
                         </button>
@@ -2013,7 +2140,7 @@
                                         @if ($thumbPathRingkas)
                                             @php $urlLampiranRingkas = Illuminate\Support\Facades\Storage::disk('public')->url($thumbPathRingkas); @endphp
                                             <button type="button"
-                                                @click="previewImage = '{{ $urlLampiranRingkas }}'"
+                                                @click='openPreview({{ (int) $hj->jurnal }}, @json($lampiranUrls[(int) $hj->jurnal] ?? [], JSON_HEX_APOS | JSON_HEX_AMP))'
                                                 title="Klik untuk lihat foto lampiran"
                                                 class="w-8 h-8 mx-auto rounded border border-gray-200 dark:border-gray-700 overflow-hidden block">
                                                 <img src="{{ $urlLampiranRingkas }}"
@@ -2413,7 +2540,7 @@
                                             @php $thumbPath = $lampiranThumbs[(int) $hj->jurnal] ?? null; @endphp
                                             @if ($thumbPath)
                                                 @php $urlLampiran = Illuminate\Support\Facades\Storage::disk('public')->url($thumbPath); @endphp
-                                                <button type="button" @click="previewImage = '{{ $urlLampiran }}'"
+                                                <button type="button" @click='openPreview({{ (int) $hj->jurnal }}, @json($lampiranUrls[(int) $hj->jurnal] ?? [], JSON_HEX_APOS | JSON_HEX_AMP))'
                                                     title="Klik untuk lihat foto lampiran"
                                                     class="w-8 h-8 mx-auto rounded border border-gray-200 dark:border-gray-700 overflow-hidden block">
                                                     <img src="{{ $urlLampiran }}"
