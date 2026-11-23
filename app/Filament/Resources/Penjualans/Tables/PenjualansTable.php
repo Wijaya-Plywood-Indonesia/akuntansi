@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Penjualans\Tables;
 
+use App\Exports\PenjualanExport;
 use App\Filament\Resources\Penjualans\Actions\BatalkanPenjualanAction;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -9,11 +10,14 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Grid;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Maatwebsite\Excel\Facades\Excel;
 
 class PenjualansTable
 {
@@ -213,7 +217,39 @@ class PenjualansTable
                     }),
             ])
             ->headerActions([
-                //
+                Action::make('exportExcel')
+                    ->label('Export Excel')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('success')
+                    ->modalHeading('Export Penjualan ke Excel')
+                    ->modalDescription('Hanya data penjualan yang SUDAH DIVALIDASI yang akan diexport. Pilih rentang tanggal transaksi (kosongkan jika ingin export seluruh data).')
+                    ->modalSubmitActionLabel('Export')
+                    ->form([
+                        Grid::make(2)->schema([
+                            DatePicker::make('tgl_dari')
+                                ->label('Dari Tanggal')
+                                ->native(true),
+                            DatePicker::make('tgl_sampai')
+                                ->label('Sampai Tanggal')
+                                ->native(true)
+                                ->default(now()->format('Y-m-d')),
+                        ]),
+                    ])
+                    ->action(function (array $data) {
+                        $tglDari = $data['tgl_dari'] ?? null;
+                        $tglSampai = $data['tgl_sampai'] ?? null;
+
+                        $fileName = 'penjualan_tervalidasi';
+                        if ($tglDari || $tglSampai) {
+                            $fileName .= '_' . ($tglDari ?: 'awal') . '_sd_' . ($tglSampai ?: 'akhir');
+                        }
+                        $fileName .= '.xlsx';
+
+                        return Excel::download(
+                            new PenjualanExport($tglDari, $tglSampai),
+                            $fileName
+                        );
+                    }),
             ])
             ->toolbarActions([
                 // BulkActionGroup::make([

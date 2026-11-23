@@ -240,8 +240,8 @@ class JurnalPembantuHeader extends Model
 
         }
 
-        // Hilangkan koma/desimal secara general untuk semua modul (floor/pembulatan ke bawah)
-        $this->update(['total_nilai' => floor($total)]);
+        // Round 2 desimal agar presisi sen/rupiah terjaga dan balance antar baris debit/kredit
+        $this->update(['total_nilai' => round($total, 2)]);
     }
 
     // ── Auto-set total_nilai dari items saat items berubah ────────────

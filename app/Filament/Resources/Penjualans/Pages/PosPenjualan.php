@@ -271,6 +271,11 @@ class PosPenjualan extends Page
         $ppn = max(0, min(100, $ppn));
         $this->ppn_persen = $ppn;
 
+        // Recalculate subtotal seluruh item di keranjang dengan presisi DPP PPN
+        foreach (array_keys($this->cart) as $id) {
+            $this->updateSubtotal($id);
+        }
+
         $this->calculateTotal();
     }
 
@@ -400,6 +405,30 @@ class PosPenjualan extends Page
         $this->calculateTotal();
     }
 
+    /**
+     * Hitung subtotal presisi tinggi (mendukung presisi desimal DPP Excel saat PPN ON).
+     * Selaras dengan perhitungan Penjualan di ERP.
+     */
+    public static function calculateItemSubtotal(float $qty, float $harga, float $potongan = 0, ?float $m3 = null, string $hitungDari = 'qty', float $ppnPersen = 11.0, bool $pakaiPpn = true): float
+    {
+        $multiplier = ($hitungDari === 'm3' && $m3 !== null) ? $m3 : $qty;
+
+        if ($pakaiPpn && $ppnPersen > 0) {
+            $factors = array_unique([1 + ($ppnPersen / 100), 1.11, 1.12]);
+            foreach ($factors as $f) {
+                if ($f <= 1) continue;
+                $inc = $harga * $f;
+                $roundInc = round($inc);
+                if (abs($inc - $roundInc) < 0.05) {
+                    $baseSub = round(($multiplier * $roundInc) / $f, 2);
+                    return max(0, $baseSub - ($qty * $potongan));
+                }
+            }
+        }
+
+        return max(0, round(($multiplier * $harga) - ($qty * $potongan), 2));
+    }
+
     protected function updateSubtotal(int $id): void
     {
         if (! isset($this->cart[$id])) {
@@ -407,8 +436,23 @@ class PosPenjualan extends Page
         }
 
         $item = $this->cart[$id];
-        $pengali = $this->pengali($item);
-        $this->cart[$id]['subtotal'] = max(0, ($item['harga_jual'] * $pengali) - ($item['total_potongan'] ?? 0));
+        $qty = (float) ($item['qty'] ?? 0);
+        $m3 = isset($item['kubikasi']) && $item['kubikasi'] !== null ? (float) $item['kubikasi'] : null;
+        $harga = (float) ($item['harga_jual'] ?? 0);
+        $potongan = (float) ($item['potongan'] ?? 0);
+        $hitungDari = ($item['hitung_dari'] ?? 'qty') === 'm3' ? 'm3' : 'qty';
+        $ppnPersen = (float) ($this->ppn_persen ?? 0);
+        $pakaiPpn = $ppnPersen > 0;
+
+        $this->cart[$id]['subtotal'] = self::calculateItemSubtotal(
+            $qty,
+            $harga,
+            $potongan,
+            $m3,
+            $hitungDari,
+            $ppnPersen,
+            $pakaiPpn
+        );
     }
 
     /* ================= CUSTOMER SEARCH ================= */

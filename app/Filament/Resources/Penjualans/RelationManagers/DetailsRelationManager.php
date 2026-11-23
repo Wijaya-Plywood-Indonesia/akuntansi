@@ -31,15 +31,32 @@ class DetailsRelationManager extends RelationManager
 
     /**
      * Subtotal mengikuti dasar hitung: Per M3 -> kubikasi, Per Qty -> qty.
-     * Potongan dihitung per satuan dasar yang sama.
+     * Mendukung presisi DPP Excel saat transaksi menggunakan PPN ON (sama seperti di ERP).
      */
-    protected static function hitungSubtotal($hargaJual, $qty, $kubikasi, $hitungDari, $potongan): float
+    protected static function hitungSubtotal($hargaJual, $qty, $kubikasi, $hitungDari, $potongan, float $ppnPersen = 0, bool $pakaiPpn = false): float
     {
-        $pengali = ($hitungDari ?? 'qty') === 'm3'
+        $multiplier = ($hitungDari ?? 'qty') === 'm3'
             ? (float) $kubikasi
             : (float) $qty;
 
-        return max(0, ((float) $hargaJual * $pengali) - ((float) $potongan * $pengali));
+        $qtyFloat = (float) $qty;
+        $hargaFloat = (float) $hargaJual;
+        $potonganFloat = (float) $potongan;
+
+        if ($pakaiPpn && $ppnPersen > 0) {
+            $factors = array_unique([1 + ($ppnPersen / 100), 1.11, 1.12]);
+            foreach ($factors as $f) {
+                if ($f <= 1) continue;
+                $inc = $hargaFloat * $f;
+                $roundInc = round($inc);
+                if (abs($inc - $roundInc) < 0.05) {
+                    $baseSub = round(($multiplier * $roundInc) / $f, 2);
+                    return max(0, $baseSub - ($qtyFloat * $potonganFloat));
+                }
+            }
+        }
+
+        return max(0, round(($multiplier * $hargaFloat) - ($qtyFloat * $potonganFloat), 2));
     }
     public function form(Schema $schema): Schema
     {
@@ -368,12 +385,18 @@ class DetailsRelationManager extends RelationManager
                                 ]);
                             }
 
+                            $penjualan = $this->getOwnerRecord();
+                            $ppnPersen = (float) ($penjualan?->ppn_persen ?? 0);
+                            $pakaiPpn = $ppnPersen > 0;
+
                             $subtotalCek = static::hitungSubtotal(
                                 $data['harga_jual'] ?? 0,
                                 $data['qty'] ?? 0,
                                 $data['kubikasi'] ?? 0,
                                 $data['hitung_dari'] ?? 'qty',
-                                $data['potongan'] ?? 0
+                                $data['potongan'] ?? 0,
+                                $ppnPersen,
+                                $pakaiPpn
                             );
 
                             if ($subtotalCek <= 0) {
@@ -412,12 +435,18 @@ class DetailsRelationManager extends RelationManager
                                 ]);
                             }
 
+                            $penjualan = $this->getOwnerRecord();
+                            $ppnPersen = (float) ($penjualan?->ppn_persen ?? 0);
+                            $pakaiPpn = $ppnPersen > 0;
+
                             $subtotalCek = static::hitungSubtotal(
                                 $data['harga_jual'] ?? 0,
                                 $data['qty'] ?? 0,
                                 $data['kubikasi'] ?? 0,
                                 $data['hitung_dari'] ?? 'qty',
-                                $data['potongan'] ?? 0
+                                $data['potongan'] ?? 0,
+                                $ppnPersen,
+                                $pakaiPpn
                             );
 
                             if ($subtotalCek <= 0) {

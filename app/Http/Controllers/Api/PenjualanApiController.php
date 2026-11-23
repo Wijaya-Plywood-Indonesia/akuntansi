@@ -141,7 +141,7 @@ class PenjualanApiController extends Controller
                     'kembalian' => $isCodOrDp ? 0 : ($validated['kembalian'] ?? 0),
                     'keterangan' => $validated['keterangan'] ?? null,
                     'keterangan_pembayaran' => $validated['keterangan_pembayaran'] ?? null,
-                    'status_transaksi' => $validated['status_transaksi'] ?? null,
+                    'status_transaksi' => $validated['status_transaksi'] ?? 'BELUM DIBAYAR',
                     'user_id' => $penjualan ? $penjualan->user_id : $userId,
                     'validated_by' => null,
                 ];
@@ -251,6 +251,8 @@ class PenjualanApiController extends Controller
                 $grade = 'uty';
             } elseif (stripos($clean, 'fm') !== false) {
                 $grade = 'fm';
+            } elseif (stripos($clean, 'pg') !== false) {
+                $grade = 'pg';
             } elseif (preg_match('/(?:kw|grade)\s*([a-zA-Z0-9]+)/i', $clean, $mGr)) {
                 $grade = strtolower($mGr[1]);
             }

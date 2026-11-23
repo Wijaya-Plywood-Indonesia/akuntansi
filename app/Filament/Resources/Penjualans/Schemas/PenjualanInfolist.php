@@ -56,6 +56,17 @@ class PenjualanInfolist
                             ->label('No Rekening')
                             ->visible(fn($record) => $record->metode_pembayaran === 'TRANSFER'),
 
+                        TextEntry::make('sub_total')
+                            ->label('Subtotal (DPP)')
+                            ->money('IDR', locale: 'id_ID')
+                            ->placeholder('Rp 0'),
+
+                        TextEntry::make('ppn_nominal')
+                            ->label(fn($record) => 'PPN (' . ($record->ppn_persen > 0 ? (float)$record->ppn_persen : 11) . '%)')
+                            ->money('IDR', locale: 'id_ID')
+                            ->placeholder('Rp 0')
+                            ->visible(fn($record) => (float)$record->ppn_nominal > 0 || (float)$record->ppn_persen > 0),
+
                         TextEntry::make('ongkir')
                             ->label('Ongkir')
                             ->money('IDR', locale: 'id_ID')
