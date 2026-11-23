@@ -14,6 +14,11 @@ class PembeliInfolist
                 TextEntry::make('nama'),
                 TextEntry::make('nik')
                     ->placeholder('Belum Input NIK'),
+                TextEntry::make('alamat')
+                    ->placeholder('-'),
+                TextEntry::make('npwp')
+                    ->label('NPWP')
+                    ->placeholder('-'),
                 TextEntry::make('telepon'),
                 TextEntry::make('email')
                     ->label('Email address'),

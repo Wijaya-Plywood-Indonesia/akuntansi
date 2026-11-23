@@ -11,6 +11,7 @@ class Pembeli extends Model
         'nama',
         'nik',
         'alamat',
+        'npwp',
         'telepon',
         'email',
     ];

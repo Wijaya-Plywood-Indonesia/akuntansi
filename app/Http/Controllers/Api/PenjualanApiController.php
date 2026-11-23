@@ -39,6 +39,7 @@ class PenjualanApiController extends Controller
             'tanggal' => 'required|date',
             'nama_customer' => 'required|string|max:255',
             'alamat' => 'nullable|string',
+            'npwp' => 'nullable|string|max:100',
             'telepon' => 'nullable|string|max:50',
             'metode_pembayaran' => 'required|string', // TUNAI, TRANSFER, COD, etc
             'jenis_transaksi' => 'nullable|string',   // BAYAR_DIMUKA, COD, DP
@@ -75,13 +76,34 @@ class PenjualanApiController extends Controller
         try {
             $penjualan = DB::transaction(function () use ($validated) {
                 // Cari atau buat master customer / pembeli
-                $pembeli = Pembeli::firstOrCreate(
-                    ['nama' => trim($validated['nama_customer'])],
-                    [
+                $namaCustomer = trim($validated['nama_customer']);
+                $pembeli = Pembeli::whereRaw('LOWER(TRIM(nama)) = ?', [mb_strtolower($namaCustomer)])->first();
+
+                if ($pembeli) {
+                    $pembeliUpdated = false;
+                    if (!empty($validated['alamat']) && (empty($pembeli->alamat) || $pembeli->alamat !== $validated['alamat'])) {
+                        $pembeli->alamat = $validated['alamat'];
+                        $pembeliUpdated = true;
+                    }
+                    if (!empty($validated['npwp']) && (empty($pembeli->npwp) || $pembeli->npwp !== $validated['npwp'])) {
+                        $pembeli->npwp = $validated['npwp'];
+                        $pembeliUpdated = true;
+                    }
+                    if (!empty($validated['telepon']) && (empty($pembeli->telepon) || $pembeli->telepon !== $validated['telepon'])) {
+                        $pembeli->telepon = $validated['telepon'];
+                        $pembeliUpdated = true;
+                    }
+                    if ($pembeliUpdated) {
+                        $pembeli->save();
+                    }
+                } else {
+                    $pembeli = Pembeli::create([
+                        'nama' => $namaCustomer,
                         'alamat' => $validated['alamat'] ?? null,
+                        'npwp' => $validated['npwp'] ?? null,
                         'telepon' => $validated['telepon'] ?? null,
-                    ]
-                );
+                    ]);
+                }
 
                 // Rekening check jika transfer
                 $bank = $validated['bank'] ?? null;
