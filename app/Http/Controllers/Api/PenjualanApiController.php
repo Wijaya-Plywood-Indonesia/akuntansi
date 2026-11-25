@@ -39,6 +39,7 @@ class PenjualanApiController extends Controller
             'tanggal' => 'required|date',
             'nama_customer' => 'required|string|max:255',
             'alamat' => 'nullable|string',
+            'npwp' => 'nullable|string|max:100',
             'telepon' => 'nullable|string|max:50',
             'metode_pembayaran' => 'required|string', // TUNAI, TRANSFER, COD, etc
             'jenis_transaksi' => 'nullable|string',   // BAYAR_DIMUKA, COD, DP
@@ -56,6 +57,7 @@ class PenjualanApiController extends Controller
             'kembalian' => 'nullable|numeric|min:0',
             'keterangan' => 'nullable|string',
             'keterangan_pembayaran' => 'nullable|string',
+            'status_transaksi' => 'nullable|string|max:50',
             'items' => 'required|array|min:1',
             'items.*.nama_barang' => 'required|string',
             'items.*.barang_id' => 'nullable|integer',
@@ -74,13 +76,34 @@ class PenjualanApiController extends Controller
         try {
             $penjualan = DB::transaction(function () use ($validated) {
                 // Cari atau buat master customer / pembeli
-                $pembeli = Pembeli::firstOrCreate(
-                    ['nama' => trim($validated['nama_customer'])],
-                    [
+                $namaCustomer = trim($validated['nama_customer']);
+                $pembeli = Pembeli::whereRaw('LOWER(TRIM(nama)) = ?', [mb_strtolower($namaCustomer)])->first();
+
+                if ($pembeli) {
+                    $pembeliUpdated = false;
+                    if (!empty($validated['alamat']) && (empty($pembeli->alamat) || $pembeli->alamat !== $validated['alamat'])) {
+                        $pembeli->alamat = $validated['alamat'];
+                        $pembeliUpdated = true;
+                    }
+                    if (!empty($validated['npwp']) && (empty($pembeli->npwp) || $pembeli->npwp !== $validated['npwp'])) {
+                        $pembeli->npwp = $validated['npwp'];
+                        $pembeliUpdated = true;
+                    }
+                    if (!empty($validated['telepon']) && (empty($pembeli->telepon) || $pembeli->telepon !== $validated['telepon'])) {
+                        $pembeli->telepon = $validated['telepon'];
+                        $pembeliUpdated = true;
+                    }
+                    if ($pembeliUpdated) {
+                        $pembeli->save();
+                    }
+                } else {
+                    $pembeli = Pembeli::create([
+                        'nama' => $namaCustomer,
                         'alamat' => $validated['alamat'] ?? null,
+                        'npwp' => $validated['npwp'] ?? null,
                         'telepon' => $validated['telepon'] ?? null,
-                    ]
-                );
+                    ]);
+                }
 
                 // Rekening check jika transfer
                 $bank = $validated['bank'] ?? null;
@@ -96,14 +119,22 @@ class PenjualanApiController extends Controller
                 // Cek apakah penjualan dengan no_nota ini sudah ada (idempotent / update)
                 $penjualan = Penjualan::where('no_nota', $validated['no_nota'])->first();
 
+                // Normalize metode_pembayaran: Akuntansi hanya mengenal TUNAI atau TRANSFER.
+                // ERP bisa mengirim 'Tunai', 'Transfer', 'TUNAI', 'TRANSFER', atau nilai lain.
                 $metode = strtoupper($validated['metode_pembayaran']);
                 if (str_contains($metode, 'TRANSFER')) {
                     $metodeBayar = 'TRANSFER';
-                } elseif (str_contains($metode, 'TUNAI')) {
-                    $metodeBayar = 'TUNAI';
                 } else {
+                    // Tunai, Cek / Giro, atau apapun lain → TUNAI
                     $metodeBayar = 'TUNAI';
                 }
+
+                // Tentukan jenis_transaksi dari payload.
+                // Semua penjualan dari ERP masuk sebagai COD (Piutang), sehingga:
+                //   - bayar tetap 0 saat create; uang masuk via menu Pelunasan.
+                //   - Untuk update (re-sync), jangan timpa bayar yang sudah ada.
+                $jenisTransaksi = strtoupper($validated['jenis_transaksi'] ?? 'COD');
+                $isCodOrDp = in_array($jenisTransaksi, ['COD', 'DP'], true);
 
                 $dataHeader = [
                     'no_nota' => $validated['no_nota'],
@@ -113,7 +144,7 @@ class PenjualanApiController extends Controller
                     'is_member' => false,
                     'alamat' => $validated['alamat'] ?? null,
                     'metode_pembayaran' => $metodeBayar,
-                    'jenis_transaksi' => $validated['jenis_transaksi'] ?? 'BAYAR_DIMUKA',
+                    'jenis_transaksi' => $jenisTransaksi,
                     'bank' => $bank,
                     'no_rekening' => $noRekening,
                     'kendaraan' => $validated['kendaraan'] ?? null,
@@ -124,16 +155,26 @@ class PenjualanApiController extends Controller
                     'ppn_nominal' => $validated['ppn_nominal'] ?? 0,
                     'ongkir' => $validated['ongkir'] ?? 0,
                     'total' => $validated['total'],
-                    'bayar' => $validated['bayar'] ?? 0,
-                    'kembalian' => $validated['kembalian'] ?? 0,
+                    // COD/DP: bayar hanya boleh berubah lewat menu Pelunasan, bukan dari sync.
+                    // Untuk data baru, bayar = 0. Untuk update, pertahankan nilai bayar yang ada.
+                    'bayar' => ($isCodOrDp && $penjualan)
+                        ? (float) $penjualan->bayar
+                        : ($isCodOrDp ? 0 : ($validated['bayar'] ?? 0)),
+                    'kembalian' => $isCodOrDp ? 0 : ($validated['kembalian'] ?? 0),
                     'keterangan' => $validated['keterangan'] ?? null,
                     'keterangan_pembayaran' => $validated['keterangan_pembayaran'] ?? null,
-                    'status_transaksi' => $validated['status_transaksi'] ?? null,
+                    'status_transaksi' => $validated['status_transaksi'] ?? 'BELUM DIBAYAR',
                     'user_id' => $penjualan ? $penjualan->user_id : $userId,
                     'validated_by' => null,
                 ];
 
                 if ($penjualan) {
+                    // Re-sync: jangan timpa validated_by dan status_transaksi
+                    // yang sudah ada (agar data akuntansi yang sudah divalidasi tidak terhapus).
+                    unset($dataHeader['validated_by']);
+                    if ($penjualan->validated_by) {
+                        unset($dataHeader['status_transaksi']);
+                    }
                     $penjualan->update($dataHeader);
                     // Hapus detail lama untuk digantikan detail baru
                     $penjualan->details()->delete();
@@ -232,18 +273,46 @@ class PenjualanApiController extends Controller
                 $grade = 'uty';
             } elseif (stripos($clean, 'fm') !== false) {
                 $grade = 'fm';
+            } elseif (stripos($clean, 'pg') !== false) {
+                $grade = 'pg';
             } elseif (preg_match('/(?:kw|grade)\s*([a-zA-Z0-9]+)/i', $clean, $mGr)) {
                 $grade = strtolower($mGr[1]);
             }
 
+            // Cek apakah ada penanda "lokal" / "local"
+            $isLokal = (stripos($clean, 'lokal') !== false || stripos($clean, 'local') !== false);
+
             if ($tebal !== '' && $grade !== '') {
-                $targetPattern = "{$tebal}{$kodeKayu} {$grade}";
-                // Prioritaskan exact match "18m better" sebelum "18m better lokal"
+                // Pola target berdasarkan ada/tidaknya kata 'lokal'/'local'
+                // Contoh: "9m better lokal" vs "9m better"
+                if ($isLokal) {
+                    $targetPattern = "{$tebal}{$kodeKayu} {$grade} lokal";
+                    $fallbackPattern = "{$tebal}{$kodeKayu} {$grade}";
+                } else {
+                    $targetPattern = "{$tebal}{$kodeKayu} {$grade}";
+                    $fallbackPattern = "{$tebal}{$kodeKayu} {$grade} lokal";
+                }
+
                 $foundPlywood = Barang::where('nama_barang', $targetPattern)
                     ->orWhere('nama_barang', 'like', "{$targetPattern}%")
+                    ->orWhere('nama_barang', $fallbackPattern)
+                    ->orWhere('nama_barang', 'like', "{$fallbackPattern}%")
                     ->orWhere('nama_barang', 'like', "{$tebal}mm%{$grade}%")
                     ->orWhere('nama_barang', 'like', "{$tebal} mm%{$grade}%")
-                    ->orderByRaw("CASE WHEN LOWER(nama_barang) = ? THEN 1 ELSE 2 END", [strtolower($targetPattern)])
+                    ->orderByRaw("
+                        CASE 
+                            WHEN LOWER(nama_barang) = ? THEN 1
+                            WHEN LOWER(nama_barang) LIKE ? THEN 2
+                            WHEN LOWER(nama_barang) = ? THEN 3
+                            WHEN LOWER(nama_barang) LIKE ? THEN 4
+                            ELSE 5
+                        END
+                    ", [
+                        strtolower($targetPattern),
+                        strtolower($targetPattern) . '%',
+                        strtolower($fallbackPattern),
+                        strtolower($fallbackPattern) . '%',
+                    ])
                     ->first();
 
                 if ($foundPlywood) {

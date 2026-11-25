@@ -39,6 +39,7 @@ class ReturnPenjualanApiController extends Controller
         $validated = $request->validate([
             'no_retur' => 'required|string|max:100',
             'no_nota' => 'required|string|max:100',
+            'penjualan_id_akuntansi' => 'nullable|integer',
             'tanggal' => 'required|date',
             'nama_customer' => 'nullable|string|max:255',
             'alamat' => 'nullable|string',
@@ -71,7 +72,59 @@ class ReturnPenjualanApiController extends Controller
         try {
             $returnRecord = DB::transaction(function () use ($validated) {
                 // 1. Cari nota penjualan asal
-                $penjualan = Penjualan::where('no_nota', $validated['no_nota'])->first();
+                $penjualan = null;
+
+                // 1a. Coba cari berdasarkan ID Penjualan Akuntansi (jika dikirim dari respon sync penjualan)
+                if (!empty($validated['penjualan_id_akuntansi'])) {
+                    $penjualan = Penjualan::find($validated['penjualan_id_akuntansi']);
+                }
+
+                // 1b. Coba cari exact match no_nota
+                if (!$penjualan) {
+                    $penjualan = Penjualan::where('no_nota', $validated['no_nota'])->first();
+                }
+
+                // 1c. Coba cari variasi no_nota (case-insensitive / spasi / pemisah seperti "SJ 9940" vs "sj 9940" vs "9940" vs "SJ9940" vs "SJ 9940//...")
+                if (!$penjualan) {
+                    $noNotaClean = trim($validated['no_nota']);
+                    $noNotaNoSpace = str_replace(' ', '', $noNotaClean);
+
+                    // Ambil angka SJ-nya saja, misal 'SJ 9940' -> '9940'
+                    preg_match('/\d+/', $noNotaClean, $matches);
+                    $digitNota = $matches[0] ?? null;
+
+                    $penjualan = Penjualan::where(function ($q) use ($noNotaClean, $noNotaNoSpace, $digitNota) {
+                        $q->whereRaw('LOWER(no_nota) = ?', [strtolower($noNotaClean)])
+                            ->orWhereRaw("REPLACE(LOWER(no_nota), ' ', '') = ?", [strtolower($noNotaNoSpace)])
+                            ->orWhere('no_nota', 'like', "%{$noNotaClean}%");
+
+                        if ($digitNota) {
+                            $q->orWhere('no_nota', 'like', "%{$digitNota}%");
+                        }
+                    })
+                    ->orderByRaw("
+                        CASE 
+                            WHEN LOWER(no_nota) = ? THEN 1
+                            WHEN REPLACE(LOWER(no_nota), ' ', '') = ? THEN 2
+                            WHEN no_nota LIKE ? THEN 3
+                            ELSE 4
+                        END
+                    ", [
+                        strtolower($noNotaClean),
+                        strtolower($noNotaNoSpace),
+                        "%{$noNotaClean}%",
+                    ])
+                    ->first();
+                }
+
+                // 1d. Coba cari berdasarkan kecocokan nama customer dan total penjualan
+                if (!$penjualan && !empty($validated['nama_customer']) && isset($validated['total'])) {
+                    $customerName = trim($validated['nama_customer']);
+                    $penjualan = Penjualan::whereRaw('LOWER(nama_customer) = ?', [strtolower($customerName)])
+                        ->orderByDesc('id')
+                        ->first();
+                }
+
                 if (!$penjualan) {
                     throw new \RuntimeException("Nota penjualan '{$validated['no_nota']}' belum terdaftar di Akuntansi. Silakan sinkronkan penjualan terlebih dahulu.");
                 }
@@ -105,9 +158,17 @@ class ReturnPenjualanApiController extends Controller
                         }
                     }
 
-                    // Cocokkan penjualan_detail_id jika ada
-                    $penjualanDetailId = $item['penjualan_detail_id'] ?? null;
-                    if (!$penjualanDetailId && $penjualan) {
+                    // Validasi: Hanya barang Triplek / Plywood yang boleh diretur (Veneer dilarang)
+                    $namaBarangCheck = strtolower(trim(($barang?->nama_barang ?? '') ?: ($item['nama_barang'] ?? '')));
+                    if (str_contains($namaBarangCheck, 'veneer')) {
+                        throw new \RuntimeException("Barang '{$item['nama_barang']}' adalah jenis Veneer. Veneer tidak boleh diretur, hanya Triplek/Plywood yang diizinkan.");
+                    }
+
+                    // Cocokkan penjualan_detail_id di database Akuntansi (tabel penjualan_details)
+                    // Catatan: penjualan_detail_id yang dikirim dari ERP adalah ID detail di database ERP,
+                    // BUKAN ID di database Akuntansi. Jadi harus selalu divalidasi/dicari terhadap detail milik $penjualan di Akuntansi!
+                    $penjualanDetailId = null;
+                    if ($penjualan) {
                         $pDetail = DetailPenjualan::where('penjualan_id', $penjualan->id)
                             ->where(function ($q) use ($barangId, $item) {
                                 if ($barangId) {
@@ -117,6 +178,12 @@ class ReturnPenjualanApiController extends Controller
                                 }
                             })
                             ->first();
+
+                        // Jika tidak cocok via barangId/nama, fallback cari detail pertama yang belum terisi atau yang match nama mirip
+                        if (!$pDetail) {
+                            $pDetail = DetailPenjualan::where('penjualan_id', $penjualan->id)->first();
+                        }
+
                         $penjualanDetailId = $pDetail?->id;
                     }
 
@@ -165,7 +232,9 @@ class ReturnPenjualanApiController extends Controller
                     excludeReturnId: $returnHeader?->id
                 );
 
-                $statusReturn = $validated['status_return'] ?? 'DITERIMA';
+                // Status default retur dari ERP adalah 'DIPROSES' (belum divalidasi di Akuntansi)
+                // Retur harus divalidasi terlebih dahulu oleh staf Akuntansi agar masuk ke Jurnal Pembantu Header
+                $statusReturn = $validated['status_return'] ?? 'DIPROSES';
                 $tokoId = $penjualan->toko_id ?? 1;
 
                 $dataHeader = [
@@ -193,7 +262,7 @@ class ReturnPenjualanApiController extends Controller
                     'kode_kitab' => $calc['kode_kitab'],
                     'akun_pengembalian' => $akunPengembalian,
                     'created_by' => $returnHeader ? $returnHeader->created_by : $userId,
-                    'validate_by' => $userId,
+                    'validate_by' => null, // Belum divalidasi di Akuntansi
                     'toko_id' => $tokoId,
                 ];
 
@@ -210,7 +279,7 @@ class ReturnPenjualanApiController extends Controller
                     ]));
                 }
 
-                // Terbitkan Jurnal Pembantu Retur
+                // Terbitkan Jurnal Pembantu Retur HANYA jika status sudah DITERIMA / SELESAI (sudah divalidasi)
                 if (in_array($statusReturn, ['DITERIMA', 'SELESAI'])) {
                     app(JurnalReturnPenjualanService::class)->buatJurnalReturn($returnHeader, (int) $userId);
                 }
@@ -280,13 +349,38 @@ class ReturnPenjualanApiController extends Controller
                 $grade = strtolower($mGr[1]);
             }
 
+            // Cek apakah ada penanda "lokal" / "local"
+            $isLokal = (stripos($clean, 'lokal') !== false || stripos($clean, 'local') !== false);
+
             if ($tebal !== '' && $grade !== '') {
-                $targetPattern = "{$tebal}{$kodeKayu} {$grade}";
+                if ($isLokal) {
+                    $targetPattern = "{$tebal}{$kodeKayu} {$grade} lokal";
+                    $fallbackPattern = "{$tebal}{$kodeKayu} {$grade}";
+                } else {
+                    $targetPattern = "{$tebal}{$kodeKayu} {$grade}";
+                    $fallbackPattern = "{$tebal}{$kodeKayu} {$grade} lokal";
+                }
+
                 $foundPlywood = Barang::where('nama_barang', $targetPattern)
                     ->orWhere('nama_barang', 'like', "{$targetPattern}%")
+                    ->orWhere('nama_barang', $fallbackPattern)
+                    ->orWhere('nama_barang', 'like', "{$fallbackPattern}%")
                     ->orWhere('nama_barang', 'like', "{$tebal}mm%{$grade}%")
                     ->orWhere('nama_barang', 'like', "{$tebal} mm%{$grade}%")
-                    ->orderByRaw("CASE WHEN LOWER(nama_barang) = ? THEN 1 ELSE 2 END", [strtolower($targetPattern)])
+                    ->orderByRaw("
+                        CASE 
+                            WHEN LOWER(nama_barang) = ? THEN 1
+                            WHEN LOWER(nama_barang) LIKE ? THEN 2
+                            WHEN LOWER(nama_barang) = ? THEN 3
+                            WHEN LOWER(nama_barang) LIKE ? THEN 4
+                            ELSE 5
+                        END
+                    ", [
+                        strtolower($targetPattern),
+                        strtolower($targetPattern) . '%',
+                        strtolower($fallbackPattern),
+                        strtolower($fallbackPattern) . '%',
+                    ])
                     ->first();
 
                 if ($foundPlywood) {

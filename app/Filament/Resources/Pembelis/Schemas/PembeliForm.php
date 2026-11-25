@@ -34,6 +34,12 @@ class PembeliForm
                             ->required()
                             ->rows(3),
 
+                        TextInput::make('npwp')
+                            ->label('NPWP')
+                            ->placeholder('Contoh: 00.000.000.0-000.000')
+                            ->maxLength(100)
+                            ->nullable(),
+
                         TextInput::make('telepon')
                             ->label('Nomor Telepon')
                             ->tel()

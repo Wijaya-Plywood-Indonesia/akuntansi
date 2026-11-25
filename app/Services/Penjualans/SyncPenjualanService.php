@@ -18,11 +18,23 @@ class SyncPenjualanService
 
     /**
      * Kalkulasi total dari detail_penjualans (Return float untuk decimal 15,2)
+     * Termasuk PPN dan Ongkir jika ada
      */
     public static function calculateCurrentTotal(int $penjualanId): float
     {
-        return (float) DetailPenjualan::where('penjualan_id', $penjualanId)
+        $penjualan = Penjualan::find($penjualanId);
+        $dpp = (float) DetailPenjualan::where('penjualan_id', $penjualanId)
             ->sum('subtotal');
+
+        if (! $penjualan) {
+            return $dpp;
+        }
+
+        $ppnPersen = (float) ($penjualan->ppn_persen ?? 0);
+        $ppnNominal = $ppnPersen > 0 ? round($dpp * ($ppnPersen / 100), 2) : (float) ($penjualan->ppn_nominal ?? 0);
+        $ongkir = (float) ($penjualan->ongkir ?? 0);
+
+        return round($dpp + $ppnNominal + $ongkir, 2);
     }
 
     /**
@@ -67,10 +79,12 @@ class SyncPenjualanService
                 $kembalianBaru = $data['kembalian'];
             }
 
+            $totalBaru = round($subTotalBaru + $ppnNominalBaru + (float) ($penjualan->ongkir ?? 0), 2);
+
             $penjualan->update([
                 'sub_total' => $subTotalBaru,
                 'ppn_nominal' => $ppnNominalBaru,
-                'total' => $data['total'],
+                'total' => $totalBaru,
                 'bayar' => $bayarBaru,
                 'kembalian' => $kembalianBaru,
                 // 'metode_pembayaran' => strtoupper($data['metode_bayar']),

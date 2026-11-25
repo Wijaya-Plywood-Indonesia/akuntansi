@@ -442,11 +442,17 @@ class BukuKitabJurnalService
 
     /**
      * Nilai rupiah satu baris breakdown.
+     * Jika array breakdown sudah menyediakan 'nominal', gunakan nilai tersebut secara presisi.
+     * Selain itu:
      * hit_kbk = 'm' -> m3 x harga (harga = harga PER M3);
      * selain itu -> banyak x harga.
      */
     private function nominalBreakdown(array $b): float
     {
+        if (isset($b['nominal']) && is_numeric($b['nominal'])) {
+            return round((float) $b['nominal'], 4);
+        }
+
         $harga = (float) ($b['harga'] ?? 0);
 
         if (($b['hit_kbk'] ?? 'b') === 'm') {

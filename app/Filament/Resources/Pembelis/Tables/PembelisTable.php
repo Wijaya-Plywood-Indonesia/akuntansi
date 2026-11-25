@@ -18,7 +18,19 @@ class PembelisTable
                 TextColumn::make('nama')
                     ->searchable(),
 
+                TextColumn::make('npwp')
+                    ->label('NPWP')
+                    ->placeholder('Tidak Ada')
+                    ->searchable(),
+
+                TextColumn::make('alamat')
+                    ->label('Alamat')
+                    ->placeholder('-')
+                    ->limit(50)
+                    ->searchable(),
+
                 TextColumn::make('nik')
+                    ->label('NIK')
                     ->placeholder('Belum Input NIK')
                     ->formatStateUsing(function ($state) {
                         if (strlen($state) <= 4) {

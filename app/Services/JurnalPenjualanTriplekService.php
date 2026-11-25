@@ -37,6 +37,7 @@ class JurnalPenjualanTriplekService
         'hutang_gaji',
         'nominal_kas',
         'dp_penjualan',
+        'pendapatan_lainnya',
     ];
 
     /** Keterangan baris HPP dikosongkan. */
@@ -86,11 +87,12 @@ class JurnalPenjualanTriplekService
                     userId: $userId,
                     noJurnal: $noJurnal,
                     contextFull: [
-                        'piutang_usaha' => (float) $penjualan->total,
+                        'piutang_usaha' => $data['total_piutang'],
                         'dp_penjualan' => $totalBayar,
                         'hpp' => $data['hpp'],
                         'ppn_keluaran' => $data['ppn_nominal'],
-                        'nilai_penjualan' => (float) $penjualan->sub_total,
+                        'nilai_penjualan' => $data['sub_total_dari_detail'],
+                        'pendapatan_lainnya' => $data['ongkir'],
                         'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
                         'hutang_gaji' => $data['hutang_gaji'],
                     ],
@@ -128,7 +130,8 @@ class JurnalPenjualanTriplekService
                         'dp_penjualan' => $totalBayar,
                         'hpp' => $data['hpp'],
                         'ppn_keluaran' => $data['ppn_nominal'],
-                        'nilai_penjualan' => (float) $penjualan->sub_total,
+                        'nilai_penjualan' => $data['sub_total_dari_detail'],
+                        'pendapatan_lainnya' => $data['ongkir'],
                         'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
                         'hutang_gaji' => $data['hutang_gaji'],
                     ],
@@ -162,10 +165,11 @@ class JurnalPenjualanTriplekService
             $this->engine->buatJurnalDariKitab(
                 kodeKitab: $kodeKitab,
                 context: [
-                    'piutang_usaha' => (float) $penjualan->total,
+                    'piutang_usaha' => $data['total_piutang'],
                     'hpp' => $data['hpp'],
                     'ppn_keluaran' => $data['ppn_nominal'],
-                    'nilai_penjualan' => (float) $penjualan->sub_total,
+                    'nilai_penjualan' => $data['sub_total_dari_detail'],
+                    'pendapatan_lainnya' => $data['ongkir'],
                     'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
                     'hutang_gaji' => $data['hutang_gaji'],
                 ],
@@ -272,14 +276,16 @@ class JurnalPenjualanTriplekService
                 $namaAkun = '[!] Akun persediaan belum di-set: '.$detail->nama_barang;
             }
 
+            $namaBarangMaster = $detail->barang?->nama_barang ?: $detail->nama_barang;
+
             $breakdownPersediaan[] = [
                 'no_akun' => $kodeAkun,
                 'nama_akun' => $namaAkun,
                 'id_barang' => $detail->barang_id,
-                'nama_barang' => $detail->nama_barang,
+                'nama_barang' => $namaBarangMaster,
                 'banyak' => $qty,
                 'harga' => $hargaBeli,
-                'keterangan' => $detail->nama_barang,
+                'keterangan' => $namaBarangMaster,
             ] + $infoM3 + $infoMm;
 
             $kodeAkunHpp = $detail->barang?->akunHpp?->kode_sub_anak_akun;
@@ -288,7 +294,7 @@ class JurnalPenjualanTriplekService
             $breakdownHpp[] = [
                 'no_akun' => $kodeAkunHpp,
                 'nama_akun' => $namaAkunHpp,
-                'nama_barang' => $detail->nama_barang,
+                'nama_barang' => $namaBarangMaster,
                 'banyak' => $qty,
                 'harga' => $hargaBeli,
                 'keterangan' => '',
@@ -302,10 +308,11 @@ class JurnalPenjualanTriplekService
             $breakdownPenjualan[] = [
                 'no_akun' => $kodeAkunPendapatan,
                 'nama_akun' => $namaAkunPendapatan,
-                'nama_barang' => $detail->nama_barang,
+                'nama_barang' => $namaBarangMaster,
                 'banyak' => $qty,
                 'harga' => $hargaJualBersih,
-                'keterangan' => $detail->nama_barang,
+                'nominal' => $subtotalDetail,
+                'keterangan' => $namaBarangMaster,
             ] + $infoM3;
         }
 
@@ -318,6 +325,19 @@ class JurnalPenjualanTriplekService
             'keterangan' => 'Alokasi Hutang Gaji',
         ];
 
+        // Hitung sub_total dari sum exact item (DPP akurat, bukan kolom sub_total yg bisa dibulatkan ERP)
+        $subTotalDariDetail = array_sum(array_column($breakdownPenjualan, 'nominal'));
+
+        // PPN Keluaran: jika piutang bulat (mis. 133.000.000), selisih pembulatan sen diserap ke PPN
+        // agar: Piutang (133.000.000,00) = Penjualan (119.819.819,82) + PPN (13.180.180,18) + Ongkir
+        $totalPenjualan = (float) ($penjualan->total ?? 0);
+        $ongkir = (float) ($penjualan->ongkir ?? 0);
+        $ppnNominal = (float) $penjualan->ppn_nominal;
+
+        if ($totalPenjualan > 0 && $ppnNominal > 0) {
+            $ppnNominal = round($totalPenjualan - $subTotalDariDetail - $ongkir, 2);
+        }
+
         return [
             'breakdown_persediaan' => $breakdownPersediaan,
             'breakdown_hpp' => $breakdownHpp,
@@ -325,7 +345,10 @@ class JurnalPenjualanTriplekService
             'nilai_pokok_barang' => $nilaiPokokBarang,
             'hutang_gaji' => $hutangGaji,
             'hpp' => $nilaiPokokBarang + $hutangGaji,
-            'ppn_nominal' => (float) $penjualan->ppn_nominal,
+            'ppn_nominal' => $ppnNominal,
+            'ongkir' => $ongkir,
+            'sub_total_dari_detail' => $subTotalDariDetail,
+            'total_piutang' => $totalPenjualan > 0 ? $totalPenjualan : round($subTotalDariDetail + $ppnNominal + $ongkir, 2),
         ];
     }
 
