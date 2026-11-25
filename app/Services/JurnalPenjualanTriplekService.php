@@ -37,6 +37,7 @@ class JurnalPenjualanTriplekService
         'hutang_gaji',
         'nominal_kas',
         'dp_penjualan',
+        'pendapatan_lainnya',
     ];
 
     /** Keterangan baris HPP dikosongkan. */
@@ -91,6 +92,7 @@ class JurnalPenjualanTriplekService
                         'hpp' => $data['hpp'],
                         'ppn_keluaran' => $data['ppn_nominal'],
                         'nilai_penjualan' => $data['sub_total_dari_detail'],
+                        'pendapatan_lainnya' => $data['ongkir'],
                         'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
                         'hutang_gaji' => $data['hutang_gaji'],
                     ],
@@ -129,6 +131,7 @@ class JurnalPenjualanTriplekService
                         'hpp' => $data['hpp'],
                         'ppn_keluaran' => $data['ppn_nominal'],
                         'nilai_penjualan' => $data['sub_total_dari_detail'],
+                        'pendapatan_lainnya' => $data['ongkir'],
                         'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
                         'hutang_gaji' => $data['hutang_gaji'],
                     ],
@@ -166,6 +169,7 @@ class JurnalPenjualanTriplekService
                     'hpp' => $data['hpp'],
                     'ppn_keluaran' => $data['ppn_nominal'],
                     'nilai_penjualan' => $data['sub_total_dari_detail'],
+                    'pendapatan_lainnya' => $data['ongkir'],
                     'persediaan_barang_jadi' => $data['nilai_pokok_barang'],
                     'hutang_gaji' => $data['hutang_gaji'],
                 ],
@@ -342,6 +346,7 @@ class JurnalPenjualanTriplekService
             'hutang_gaji' => $hutangGaji,
             'hpp' => $nilaiPokokBarang + $hutangGaji,
             'ppn_nominal' => $ppnNominal,
+            'ongkir' => $ongkir,
             'sub_total_dari_detail' => $subTotalDariDetail,
             'total_piutang' => $totalPenjualan > 0 ? $totalPenjualan : round($subTotalDariDetail + $ppnNominal + $ongkir, 2),
         ];
