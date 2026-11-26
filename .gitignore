@@ -5,6 +5,8 @@
 .env.production
 .phpactor.json
 .phpunit.result.cache
+/.codex
+/.cursor/
 /.fleet
 /.idea
 /.nova
@@ -22,4 +24,27 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
-.env.local
+
+# Additional environment files & backups
+.env.*
+!.env.example
+!.env.docker.example
+!.env.local.example
+*.bak
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# Docker local / backup files
+docker-compose.local.yml.bak
+docker-compose.yml.backup
+docker-compose.yml.save
+docker/php/local.ini
+docker/certbot/cloudflare.ini
+
+# Database dumps
+*.sql
+*.sql.gz
+*.dump
