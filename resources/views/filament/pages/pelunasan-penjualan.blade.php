@@ -260,6 +260,17 @@
                                 <span
                                     class="font-black text-sm text-gray-900 dark:text-white">Rp{{ number_format($selectedNota->total) }}</span>
                             </div>
+                            @if ((float) ($selectedNota->ongkir ?? 0) > 0)
+                                <div class="flex justify-between items-center text-primary-600 dark:text-primary-400">
+                                    <span class="text-[10px] font-bold uppercase tracking-wide flex items-center gap-1">
+                                        <x-heroicon-m-truck class="w-3.5 h-3.5" />
+                                        Termasuk Ongkir
+                                    </span>
+                                    <span class="font-bold text-xs">
+                                        Rp{{ number_format($selectedNota->ongkir) }}
+                                    </span>
+                                </div>
+                            @endif
                             <div class="flex justify-between items-center">
                                 <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Sudah
                                     Dibayar</span>
