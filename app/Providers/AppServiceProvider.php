@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,6 +23,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (request()->header('X-Forwarded-Proto') === 'https' ||
+            request()->server('HTTP_X_FORWARDED_PROTO') === 'https' ||
+            str_starts_with(config('app.url'), 'https://')) {
+            URL::forceScheme('https');
+        }
+
         // Register Pusher
         if (! app()->runningInConsole()) {
             // Register Pusher & Vite Assets
