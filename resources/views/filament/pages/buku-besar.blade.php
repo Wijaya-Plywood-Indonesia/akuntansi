@@ -78,6 +78,13 @@
 .bb-period-lbl { font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--bb-text-3); white-space:nowrap; }
 .bb-period-input { font-family:'JetBrains Mono',monospace; font-size:.82rem; font-weight:500; color:var(--bb-text-1); background:transparent; border:none; outline:none; cursor:pointer; min-width:120px; }
 
+.bb-search-wrap { display:flex; align-items:center; gap:.5rem; padding:.45rem .85rem; background:var(--bb-surface-2); border:1.5px solid var(--bb-border); border-radius:var(--bb-r-md); transition:border-color .2s; }
+.bb-search-wrap:focus-within { border-color:var(--bb-accent); }
+.bb-search-input { font-family:'Plus Jakarta Sans',sans-serif; font-size:.82rem; font-weight:500; color:var(--bb-text-1); background:transparent; border:none; outline:none; min-width:180px; }
+.bb-search-input::placeholder { color:var(--bb-text-3); }
+.bb-search-clear { display:flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:var(--bb-border); color:var(--bb-text-2); font-size:.7rem; line-height:1; cursor:pointer; border:none; padding:0; }
+.bb-search-clear:hover { background:var(--bb-accent); color:var(--bb-surface); }
+
 .bb-toggle-wrap { display:flex; align-items:center; gap:.55rem; padding:.45rem .9rem; background:var(--bb-surface-2); border:1.5px solid var(--bb-border); border-radius:var(--bb-r-md); cursor:pointer; user-select:none; transition:border-color .2s; }
 .bb-toggle-wrap:hover { border-color:var(--bb-accent-mid); }
 .bb-toggle-lbl { font-size:.72rem; font-weight:700; color:var(--bb-text-2); white-space:nowrap; }
@@ -106,7 +113,7 @@
 .bb-induk:nth-child(5){animation-delay:.20s}
 </style>
 
-<div class="bb space-y-4">
+<div class="bb space-y-4" x-data="{ search: '' }">
 
     {{-- Loading saat ganti periode / toggle "Tampilkan Semua Akun" --}}
     <div class="bb-overlay" wire:loading.flex wire:target="filterBulan,tampilkanSemua">
@@ -146,6 +153,13 @@
             </div>
         </div>
         <div class="bb-topbar-right">
+            <div class="bb-search-wrap">
+                <svg style="width:14px;height:14px;color:var(--bb-text-3);flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+                </svg>
+                <input type="text" x-model.debounce.150ms="search" placeholder="Cari kode atau nama akun..." class="bb-search-input">
+                <button type="button" x-show="search !== ''" x-on:click="search = ''" class="bb-search-clear" title="Hapus pencarian">&times;</button>
+            </div>
             <div class="bb-toggle-wrap" wire:click="$toggle('tampilkanSemua')">
                 <span class="bb-toggle-lbl">Tampilkan Semua Akun</span>
                 <div class="bb-switch {{ $tampilkanSemua ? 'on' : '' }}">
@@ -188,7 +202,11 @@
     @endphp
 
     @if($tampilkanSemua || $adaMutasiInduk || $totalInduk != 0)
-    <div x-data="{ open: true }" class="bb-induk">
+    <div x-data="{ open: true }"
+        x-effect="if (search.trim()) open = true"
+        data-search="{{ strtolower($induk->kode_induk_akun . ' ' . $induk->nama_induk_akun) }}"
+        x-show="!search.trim() || $el.dataset.search.includes(search.trim().toLowerCase()) || Array.from($el.querySelectorAll('.bb-anak')).some(el => el.dataset.search.includes(search.trim().toLowerCase()))"
+        class="bb-induk">
 
         <div class="bb-induk-head" @click="open = !open">
             <div style="display:flex;align-items:center">

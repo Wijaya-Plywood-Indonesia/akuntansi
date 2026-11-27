@@ -41,7 +41,9 @@ $saldoClass = $saldoAkhir < 0 ? 'neg' : '';
 .bb-sub-wrap { padding:.5rem 0 .5rem 1.25rem; border-left:2.5px solid var(--bb-border); margin:.5rem .75rem; display:flex; flex-direction:column; gap:.5rem; }
 </style>
 
-<div class="bb-anak">
+<div class="bb-anak"
+    data-search="{{ strtolower($kodeAkun . ' ' . $namaAkun) }}"
+    x-show="!search.trim() || $el.dataset.search.includes(search.trim().toLowerCase()) || Array.from($el.querySelectorAll('.bb-anak')).some(el => el.dataset.search.includes(search.trim().toLowerCase())) || ($el.closest('.bb-induk')?.dataset.search.includes(search.trim().toLowerCase()) ?? false)">
 
     {{-- Header akun --}}
     <div class="bb-anak-head">
