@@ -586,6 +586,7 @@ JS;
         $logoHtml = '<div class="login-brand-logo"><img data-rgb="' . $logoRgb . '" src="' . $logoUrl . '" alt="Logo Wijaya"></div>';
 
         return $panel
+            ->globalSearch(false)
             ->sidebarCollapsibleOnDesktop()
             ->sidebarFullyCollapsibleOnDesktop()
             ->default()
