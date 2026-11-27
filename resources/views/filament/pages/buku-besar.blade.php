@@ -67,7 +67,8 @@
 /* Overlay loading saat pindah bulan / toggle akun (muncul selama request Livewire berjalan) */
 .bb-overlay { position:fixed; inset:0; z-index:50; flex-direction:column; align-items:center; justify-content:center; gap:1.25rem; background:color-mix(in srgb, var(--bb-bg) 78%, transparent); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
 
-.bb-topbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.875rem; padding:1rem 1.5rem; background:var(--bb-surface); border:1px solid var(--bb-border); border-radius:var(--bb-r-lg); box-shadow:var(--bb-shadow-sm); }
+.fi-main-ctn, .fi-main, .fi-page { overflow-x: clip !important; }
+.bb-topbar { position:sticky; top:4.5rem; z-index:30; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.875rem; padding:1rem 1.5rem; background:var(--bb-surface); border:1px solid var(--bb-border); border-radius:var(--bb-r-lg); box-shadow:var(--bb-shadow-md); }
 .bb-topbar-icon { width:40px; height:40px; background:var(--bb-accent-soft); border:1.5px solid var(--bb-accent-mid); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .bb-topbar-icon svg { width:20px; height:20px; color:var(--bb-accent); stroke-width:1.8; }
 .bb-topbar-title { font-size:1.1rem; font-weight:800; color:var(--bb-text-1); letter-spacing:-.01em; }
@@ -84,6 +85,15 @@
 .bb-search-input::placeholder { color:var(--bb-text-3); }
 .bb-search-clear { display:flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:var(--bb-border); color:var(--bb-text-2); font-size:.7rem; line-height:1; cursor:pointer; border:none; padding:0; }
 .bb-search-clear:hover { background:var(--bb-accent); color:var(--bb-surface); }
+@media (max-width: 767px) {
+    .bb-topbar.is-stuck { padding:.6rem .9rem; }
+    .bb-topbar.is-stuck .bb-topbar-left,
+    .bb-topbar.is-stuck .bb-toggle-wrap,
+    .bb-topbar.is-stuck .bb-period-wrap { display:none !important; }
+    .bb-topbar.is-stuck .bb-topbar-right,
+    .bb-topbar.is-stuck .bb-search-wrap { width:100%; }
+    .bb-topbar.is-stuck .bb-search-input { width:100%; min-width:0; }
+}
 
 .bb-toggle-wrap { display:flex; align-items:center; gap:.55rem; padding:.45rem .9rem; background:var(--bb-surface-2); border:1.5px solid var(--bb-border); border-radius:var(--bb-r-md); cursor:pointer; user-select:none; transition:border-color .2s; }
 .bb-toggle-wrap:hover { border-color:var(--bb-accent-mid); }
@@ -113,7 +123,7 @@
 .bb-induk:nth-child(5){animation-delay:.20s}
 </style>
 
-<div class="bb space-y-4" x-data="{ search: '' }">
+<div class="bb space-y-4" x-data="{ search: '', isStuck: false }" x-init="window.addEventListener('scroll', () => { isStuck = window.scrollY > 120 }, { passive: true })">
 
     {{-- Loading saat ganti periode / toggle "Tampilkan Semua Akun" --}}
     <div class="bb-overlay" wire:loading.flex wire:target="filterBulan,tampilkanSemua">
@@ -136,8 +146,8 @@
     @else
 
     {{-- TOPBAR --}}
-    <div class="bb-topbar">
-        <div style="display:flex;align-items:center;gap:.75rem">
+    <div class="bb-topbar" :class="{ 'is-stuck': isStuck }">
+        <div class="bb-topbar-left" style="display:flex;align-items:center;gap:.75rem">
             <div class="bb-topbar-icon">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round"
