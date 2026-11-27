@@ -82,7 +82,9 @@ class FormReturnPenjualan extends Page
     }
 
     /**
-     * Daftar nota penjualan yang valid untuk diretur (hanya yang sudah LUNAS dan tervalidasi).
+     * Daftar nota penjualan yang valid untuk diretur.
+     * Mencakup nota LUNAS (retur normal) maupun nota PIUTANG/COD yang sudah
+     * divalidasi (retur piutang — mengurangi tagihan saat pelunasan nanti).
      */
     #[Computed]
     public function notaResults(): Collection
@@ -92,6 +94,11 @@ class FormReturnPenjualan extends Page
                 $q->whereNotNull('validated_by')
                     ->orWhere('status_transaksi', 'LUNAS')
                     ->orWhereNotNull('status_transaksi');
+            })
+            // Hanya nota aktif (bukan DIBATALKAN)
+            ->where(function ($q) {
+                $q->whereNull('status_transaksi')
+                    ->orWhere('status_transaksi', '!=', 'DIBATALKAN');
             })
             ->with(['details'])
             ->when($this->searchNota, function ($q) {
@@ -161,11 +168,31 @@ class FormReturnPenjualan extends Page
             return;
         }
 
-        if ($nota->status_transaksi !== 'LUNAS') {
+        // Nota DIBATALKAN tidak bisa diretur — cek ini dulu sebelum cek lainnya
+        if ($nota->status_transaksi === 'DIBATALKAN') {
             if (! $silent) {
                 Notification::make()
-                    ->title('Nota Belum Lunas')
-                    ->body('Hanya nota penjualan dengan status LUNAS yang dapat diretur.')
+                    ->title('Nota Dibatalkan')
+                    ->body('Nota ini sudah dibatalkan, tidak dapat diretur.')
+                    ->danger()
+                    ->send();
+            }
+            $this->resetSelection();
+
+            return;
+        }
+
+        // Izinkan semua nota yang sudah divalidasi (validated_by terisi) ATAU
+        // yang statusnya dikenali (LUNAS/PIUTANG/COD/DP).
+        // Nota POS yang belum divalidasi sama sekali (validated_by null DAN status null) → ditolak.
+        $statusValid = $nota->validated_by !== null
+            || in_array($nota->status_transaksi, ['LUNAS', 'PIUTANG', 'COD', 'DP'], true);
+
+        if (! $statusValid) {
+            if (! $silent) {
+                Notification::make()
+                    ->title('Nota Belum Divalidasi')
+                    ->body('Nota ini belum divalidasi oleh admin. Hanya nota yang sudah divalidasi yang dapat diretur.')
                     ->danger()
                     ->send();
             }
@@ -535,10 +562,14 @@ class FormReturnPenjualan extends Page
             return;
         }
 
-        if ($this->selectedNota->status_transaksi !== 'LUNAS') {
+        // Tentukan apakah ini retur piutang (nota belum lunas = status bukan LUNAS)
+        // Semua nota non-LUNAS (PIUTANG, COD, DP, atau null+validated) → retur piutang
+        $isReturPiutang = $this->selectedNota->status_transaksi !== 'LUNAS';
+
+        if ($this->selectedNota->status_transaksi === 'DIBATALKAN') {
             Notification::make()
-                ->title('Nota Belum Lunas')
-                ->body('Hanya nota penjualan dengan status LUNAS yang dapat diretur.')
+                ->title('Nota Dibatalkan')
+                ->body('Nota yang sudah dibatalkan tidak dapat diretur.')
                 ->danger()
                 ->send();
 
@@ -572,62 +603,66 @@ class FormReturnPenjualan extends Page
 
         $calc = $this->kalkulasi;
 
+        // Tentukan apakah ini retur piutang (nota belum lunas)
+        $isReturPiutang = $this->selectedNota->status_transaksi !== 'LUNAS';
+
         try {
             $returnHeader = null;
 
-            DB::transaction(function () use ($itemsRetur, $calc, &$returnHeader) {
+            DB::transaction(function () use ($itemsRetur, $calc, $isReturPiutang, &$returnHeader) {
                 // Generate nomor retur unik
                 $todayPrefix = 'RET-'.date('Ymd');
                 $lastCount = ReturnPenjualan::where('no_retur', 'like', "{$todayPrefix}%")->count() + 1;
                 $noRetur = sprintf('%s-%04d', $todayPrefix, $lastCount);
 
                 $refundConfig = JurnalReturnPenjualanService::getAkunRefundConfig($this->akun_pengembalian);
-                $metode = $refundConfig['metode'];
+                $metode = $isReturPiutang ? 'PIUTANG' : $refundConfig['metode'];
                 $userId = auth()->id() ?: 1;
 
                 $returnHeader = ReturnPenjualan::create([
-                    'penjualan_id' => $this->selectedNota->id,
-                    'no_retur' => $noRetur,
-                    'no_nota' => $this->selectedNota->no_nota,
-                    'tanggal' => $this->tanggal ? date('Y-m-d H:i:s', strtotime($this->tanggal)) : now(),
-                    'nama_customer' => $this->selectedNota->nama_customer ?: 'Pelanggan',
-                    'is_member' => (bool) $this->selectedNota->is_member,
-                    'alamat' => $this->selectedNota->alamat,
+                    'penjualan_id'      => $this->selectedNota->id,
+                    'no_retur'          => $noRetur,
+                    'no_nota'           => $this->selectedNota->no_nota,
+                    'tanggal'           => $this->tanggal ? date('Y-m-d H:i:s', strtotime($this->tanggal)) : now(),
+                    'nama_customer'     => $this->selectedNota->nama_customer ?: 'Pelanggan',
+                    'is_member'         => (bool) $this->selectedNota->is_member,
+                    'alamat'            => $this->selectedNota->alamat,
                     'metode_pembayaran' => $metode,
-                    'bank' => $refundConfig['nama'],
-                    'no_rekening' => $this->akun_pengembalian,
-                    'kendaraan' => $this->selectedNota->kendaraan,
-                    'plat_kendaraan' => $this->selectedNota->plat_kendaraan,
-                    'nama_sopir' => $this->selectedNota->nama_sopir,
-                    'sub_total' => $calc['subtotal_retur'],
-                    'ppn_nominal' => $calc['ppn_nominal'],
-                    'total' => $calc['total_retur'],
-                    'bayar' => $calc['total_retur'],
-                    'kembalian' => 0,
-                    'keterangan' => $this->keterangan_retur ?: "Retur Penjualan Ref: {$this->selectedNota->no_nota}",
-                    'status_return' => 'DITERIMA',
-                    'jenis_retur' => $calc['jenis_retur'],
-                    'kode_kitab' => $calc['kode_kitab'],
-                    'akun_pengembalian' => $this->akun_pengembalian,
-                    'created_by' => $userId,
-                    'validate_by' => $userId,
-                    'toko_id' => $this->selectedNota->toko_id,
+                    'bank'              => $isReturPiutang ? 'PIUTANG USAHA' : $refundConfig['nama'],
+                    'no_rekening'       => $isReturPiutang ? null : $this->akun_pengembalian,
+                    'kendaraan'         => $this->selectedNota->kendaraan,
+                    'plat_kendaraan'    => $this->selectedNota->plat_kendaraan,
+                    'nama_sopir'        => $this->selectedNota->nama_sopir,
+                    'sub_total'         => $calc['subtotal_retur'],
+                    'ppn_nominal'       => $calc['ppn_nominal'],
+                    'total'             => $calc['total_retur'],
+                    'bayar'             => $calc['total_retur'],
+                    'kembalian'         => 0,
+                    'keterangan'        => $this->keterangan_retur ?: "Retur Penjualan Ref: {$this->selectedNota->no_nota}",
+                    'status_return'     => 'DITERIMA',
+                    'jenis_retur'       => $calc['jenis_retur'],
+                    'kode_kitab'        => $calc['kode_kitab'],
+                    'akun_pengembalian' => $isReturPiutang ? null : $this->akun_pengembalian,
+                    'is_retur_piutang'  => $isReturPiutang,
+                    'created_by'        => $userId,
+                    'validate_by'       => $userId,
+                    'toko_id'           => $this->selectedNota->toko_id,
                 ]);
 
                 foreach ($itemsRetur as $item) {
                     ReturnPenjualanDetail::create([
-                        'id_return' => $returnHeader->id,
-                        'id_barang' => $item['barang_id'],
+                        'id_return'          => $returnHeader->id,
+                        'id_barang'          => $item['barang_id'],
                         'penjualan_detail_id' => $item['detail_id'],
-                        'nama_barang' => $item['nama_barang'],
-                        'satuan' => $item['satuan'],
-                        'harga_awal' => $item['harga_jual'],
-                        'harga_beli' => $item['harga_beli'],
-                        'harga_jual' => $item['harga_jual'],
-                        'potongan' => $item['potongan'] ?? 0,
-                        'qty' => $item['qty_retur'],
-                        'subtotal' => $item['subtotal'],
-                        'keterangan' => $item['keterangan_item'] ?: $this->keterangan_retur,
+                        'nama_barang'        => $item['nama_barang'],
+                        'satuan'             => $item['satuan'],
+                        'harga_awal'         => $item['harga_jual'],
+                        'harga_beli'         => $item['harga_beli'],
+                        'harga_jual'         => $item['harga_jual'],
+                        'potongan'           => $item['potongan'] ?? 0,
+                        'qty'                => $item['qty_retur'],
+                        'subtotal'           => $item['subtotal'],
+                        'keterangan'         => $item['keterangan_item'] ?: $this->keterangan_retur,
                     ]);
                 }
 
@@ -637,10 +672,13 @@ class FormReturnPenjualan extends Page
 
             $noJurnal = $returnHeader?->no_jurnal;
             $infoJurnal = $noJurnal ? " dan masuk ke Jurnal Pembantu Header (No. Jurnal #{$noJurnal})" : '';
+            $infoTipe = $isReturPiutang
+                ? ' [RETUR PIUTANG — mengurangi tagihan nota]'
+                : " dengan template: [{$calc['nomor_kitab']}] {$calc['nama_kitab']}";
 
             Notification::make()
                 ->title('Retur Berhasil Disimpan & Masuk Jurnal')
-                ->body("Retur {$returnHeader->no_retur} untuk nota {$this->selectedNota->no_nota} berhasil dicatat{$infoJurnal} dengan template: [{$calc['nomor_kitab']}] {$calc['nama_kitab']}.")
+                ->body("Retur {$returnHeader->no_retur} untuk nota {$this->selectedNota->no_nota} berhasil dicatat{$infoJurnal}{$infoTipe}.")
                 ->success()
                 ->send();
 

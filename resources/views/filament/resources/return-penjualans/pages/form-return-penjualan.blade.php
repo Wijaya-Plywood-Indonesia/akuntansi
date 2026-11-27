@@ -64,10 +64,22 @@
                             @php
                                 $bayar = (float) $nota->bayar;
                                 $total = (float) $nota->total;
+                                $statusTx = $nota->status_transaksi;
                             @endphp
-                            <div
-                                class="text-[10px] font-bold {{ $bayar <= 0 ? 'text-red-500' : ($bayar < $total ? 'text-amber-500' : 'text-emerald-500') }}">
-                                {{ $bayar <= 0 ? 'Belum Bayar' : ($bayar < $total ? 'Lunas Sebagian' : 'Lunas') }}
+                            <div class="flex items-center gap-1 justify-end flex-wrap">
+                                <div
+                                    class="text-[10px] font-bold {{ $bayar <= 0 ? 'text-red-500' : ($bayar < $total ? 'text-amber-500' : 'text-emerald-500') }}">
+                                    {{ $bayar <= 0 ? 'Belum Bayar' : ($bayar < $total ? 'Lunas Sebagian' : 'Lunas') }}
+                                </div>
+                                @if (in_array($statusTx, ['PIUTANG', 'COD']))
+                                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400">
+                                        {{ $statusTx }}
+                                    </span>
+                                @elseif ($statusTx === 'LUNAS')
+                                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">
+                                        LUNAS
+                                    </span>
+                                @endif
                             </div>
                         </div>
                         @if (!$nota->is_retur_habis)
@@ -117,6 +129,26 @@
                     </div>
                 </div>
             </details>
+
+            {{-- ⚠️ Banner Retur Piutang: tampil ketika nota belum lunas --}}
+            @if ($selectedNota->status_transaksi !== 'LUNAS')
+                <div class="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 flex items-start gap-2.5">
+                    <x-heroicon-o-exclamation-triangle class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                        <p class="text-xs font-black text-amber-800 dark:text-amber-200">
+                            Retur Piutang — Nota Belum Lunas
+                        </p>
+                        <p class="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5 leading-snug">
+                            Nota ini berstatus <strong>{{ $selectedNota->status_transaksi ?? 'PIUTANG' }}</strong>.
+                            Retur akan <strong>mengurangi tagihan piutang</strong> customer, bukan mencatat kas masuk.
+                            Saat pelunasan nanti, nominal tagihan otomatis berkurang sebesar nilai retur ini.
+                        </p>
+                        <p class="text-[10px] text-amber-500 dark:text-amber-400 mt-1">
+                            Jurnal: D Retur Penjualan / D Persediaan — K Piutang Usaha / K HPP
+                        </p>
+                    </div>
+                </div>
+            @endif
 
             {{-- Aksi cepat --}}
             <div class="flex items-center justify-between px-1">
@@ -272,12 +304,22 @@
 
                 <div class="flex flex-col gap-1.5">
                     <label class="text-xs font-bold text-gray-700 dark:text-gray-300">Dikembalikan lewat</label>
+                    @if ($selectedNota && $selectedNota->status_transaksi !== 'LUNAS')
+                        {{-- Retur piutang: tidak ada kas/bank yang diterima --}}
+                        <div class="w-full bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-3 text-sm font-bold text-amber-700 dark:text-amber-300">
+                            — Retur Piutang (Kurangi Tagihan) —
+                        </div>
+                        <p class="text-[10px] text-amber-500 dark:text-amber-400">
+                            Tidak ada kas/bank yang dikembalikan. Piutang customer akan dikurangi.
+                        </p>
+                    @else
                     <select wire:model.live="akun_pengembalian"
                         class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-3 text-sm font-bold text-gray-900 dark:text-white">
                         @foreach (\App\Services\JurnalReturnPenjualanService::getAkunRefund() as $kodeAkun => $info)
                             <option value="{{ $kodeAkun }}">{{ $info['nama'] }} ({{ $info['metode'] }})</option>
                         @endforeach
                     </select>
+                    @endif
                 </div>
 
                 {{-- Alasan retur — WAJIB DIISI --}}

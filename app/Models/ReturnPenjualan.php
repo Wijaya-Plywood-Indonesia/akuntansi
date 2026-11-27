@@ -17,9 +17,20 @@ class ReturnPenjualan extends Model
         'bayar' => 'decimal:2',
         'kembalian' => 'decimal:2',
         'is_member' => 'boolean',
+        'is_retur_piutang' => 'boolean',
         'created_by' => 'integer',
         'validate_by' => 'integer',
     ];
+
+    /**
+     * Apakah retur ini terjadi pada nota yang belum lunas?
+     * Kalau true, saat validasi jurnal mengurangi Piutang Usaha (K),
+     * dan saat pelunasan nota, tagihan sudah otomatis berkurang.
+     */
+    public function isReturPiutang(): bool
+    {
+        return (bool) $this->is_retur_piutang;
+    }
 
     /*
     |--------------------------------------------------------------------------
