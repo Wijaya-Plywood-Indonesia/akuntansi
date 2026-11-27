@@ -69,6 +69,10 @@ class ReturnPenjualansTable
 
                 TextColumn::make('bank')
                     ->label('Akun Pengembalian')
+                    ->formatStateUsing(fn ($state, $record) => $record->is_retur_piutang
+                        ? '— Retur Piutang —'
+                        : ($state ?: '-'))
+                    ->color(fn ($record) => $record->is_retur_piutang ? 'warning' : null)
                     ->placeholder('-')
                     ->toggleable(),
 
@@ -212,10 +216,25 @@ class ReturnPenjualansTable
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
                     ->requiresConfirmation()
+                    ->modalHeading('Batalkan Validasi Retur')
+                    ->modalDescription(function ($record) {
+                        $header = $record->jurnalPembantuHeaders()->first();
+                        if ($header && $header->status === \App\Models\JurnalPembantuHeader::STATUS_DIPOSTING) {
+                            return "⚠️ Jurnal #{$header->jurnal} sudah DIPOSTING. Batalkan hanya jika jurnal masih DRAFT. Balik jurnal dulu via menu Jurnal Pembantu.";
+                        }
+
+                        return 'Validasi dan jurnal pembantu terkait akan dibatalkan. Tindakan ini tidak dapat diurungkan.';
+                    })
                     ->visible(
-                        fn($record) =>
+                        fn ($record) =>
                         ! empty($record->validate_by) || ! empty($record->no_jurnal)
                     )
+                    ->disabled(function ($record) {
+                        // Nonaktifkan tombol jika jurnal sudah diposting
+                        $header = $record->jurnalPembantuHeaders()->first();
+
+                        return $header && $header->status === \App\Models\JurnalPembantuHeader::STATUS_DIPOSTING;
+                    })
                     ->action(function ($record) {
                         try {
                             app(StokPenyesuaianService::class)->validasi_batal_dari_selesai($record->id);

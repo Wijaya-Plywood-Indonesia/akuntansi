@@ -54,7 +54,7 @@
                             </thead>
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                                 @forelse ($notaResults as $nota)
-                                    @php $sisaRow = max(0, (int) $nota->total - (int) $nota->bayar); @endphp
+                                    @php $sisaRow = app(\App\Services\PenjualanPelunasanService::class)->sisaTagihan($nota); @endphp
                                     <tr wire:key="nota-row-{{ $nota->id }}"
                                         class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors {{ $penjualan_id === $nota->id ? 'bg-primary-50/60 dark:bg-primary-900/10' : '' }} {{ $sisaRow <= 0 ? 'opacity-60' : '' }}">
                                         <td class="px-4 py-2.5">
@@ -117,7 +117,7 @@
                     {{-- Mobile cards --}}
                     <div class="md:hidden divide-y divide-gray-50 dark:divide-gray-800">
                         @forelse ($notaResults as $nota)
-                            @php $sisaRow = max(0, (int) $nota->total - (int) $nota->bayar); @endphp
+                            @php $sisaRow = app(\App\Services\PenjualanPelunasanService::class)->sisaTagihan($nota); @endphp
                             <div wire:key="nota-mobile-{{ $nota->id }}"
                                 class="p-4 space-y-2 {{ $penjualan_id === $nota->id ? 'bg-primary-50/60 dark:bg-primary-900/10' : '' }} {{ $sisaRow <= 0 ? 'opacity-60' : '' }}">
                                 <div class="flex justify-between items-start">

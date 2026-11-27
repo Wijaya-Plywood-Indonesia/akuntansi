@@ -50,7 +50,9 @@ class PenjualanPelunasanService
 
     public function sisaTagihan(Penjualan $penjualan): int
     {
-        return max(0, (int) $penjualan->total - (int) $penjualan->bayar);
+        $totalRetur = $penjualan->totalReturPiutangDivalidasi();
+
+        return max(0, (int) $penjualan->total - (int) $penjualan->bayar - $totalRetur);
     }
 
     public function bisaDilunasi(Penjualan $penjualan): bool

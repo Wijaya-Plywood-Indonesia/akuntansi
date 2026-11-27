@@ -374,6 +374,10 @@ class JurnalReturnPenjualanService
     /**
      * Buat jurnal pembantu otomatis untuk transaksi retur penjualan.
      * Sepenuhnya membaca akun & variabel dari template Buku Kitab.
+     *
+     * Dua skenario:
+     *  - Retur Normal (is_retur_piutang = false): Kas/Bank masuk (K) → akun pengembalian
+     *  - Retur Piutang (is_retur_piutang = true) : Piutang Usaha berkurang (K) → nilai_retur + piutang_usaha
      */
     public function buatJurnalReturn(ReturnPenjualan $return, int $userId): void
     {
@@ -417,9 +421,35 @@ class JurnalReturnPenjualanService
 
         $kodeKitab = $return->kode_kitab ?: $calc['kode_kitab'];
 
+        // === RETUR PIUTANG: nota belum lunas ===
+        // Jika is_retur_piutang = true, kita tidak memakai template Buku Kitab yang
+        // bergantung pada akun kas/bank, melainkan membuat jurnal sederhana:
+        //   D: Retur Penjualan (nilai_retur)
+        //   K: Piutang Usaha   (total_retur)
+        // Template yang dipakai adalah retur_piutang_non_ppn / retur_piutang_ppn
+        // (harus ada di Buku Kitab). Jika tidak ditemukan, fallback ke template
+        // non-piutang tapi context nominal_kas = 0 dan piutang_usaha = total_retur.
+        $isReturPiutang = (bool) $return->is_retur_piutang || ($penjualan->status_transaksi !== 'LUNAS');
+        if ($isReturPiutang && ! $return->is_retur_piutang) {
+            $return->update(['is_retur_piutang' => true]);
+        }
+
+        if ($isReturPiutang) {
+            $kodeKitabPiutang = $calc['is_ppn'] ? 'retur_piutang_ppn' : 'retur_piutang_non_ppn';
+            $kitabPiutang = BukuKitab::where('kode', $kodeKitabPiutang)->with('akunDetail')->first();
+
+            if ($kitabPiutang) {
+                $kitab = $kitabPiutang;
+                $kodeKitab = $kitabPiutang->kode;
+            }
+            // else: tetap pakai kitab yang sudah dipilih, context dimanipulasi di bawah
+        }
+
         // Cari atau validasi template Buku Kitab dari database
-        $kitab = BukuKitab::where('kode', $kodeKitab)->with('akunDetail')->first()
-            ?? self::cariBukuKitab($calc['is_ppn'], $return->akun_pengembalian);
+        if (! $isReturPiutang) {
+            $kitab = BukuKitab::where('kode', $kodeKitab)->with('akunDetail')->first()
+                ?? self::cariBukuKitab($calc['is_ppn'], $return->akun_pengembalian);
+        }
 
         if (! $kitab) {
             throw new RuntimeException("Template Buku Kitab '{$kodeKitab}' tidak ditemukan atau tidak aktif.");
@@ -432,8 +462,11 @@ class JurnalReturnPenjualanService
             'nilai_retur'     => $calc['subtotal_retur'],
             'ppn_keluaran'    => $calc['ppn_nominal'],
             'hpp'             => $calc['total_hpp'],
-            'nominal_kas'     => $calc['total_retur'],
-            'kewajiban_retur' => $calc['total_retur'],
+            // Untuk retur piutang: kas = 0, piutang_usaha = total_retur
+            // Untuk retur normal : kas = total_retur, piutang_usaha = 0 (tidak terpakai)
+            'nominal_kas'     => $isReturPiutang ? 0 : $calc['total_retur'],
+            'kewajiban_retur' => $isReturPiutang ? 0 : $calc['total_retur'],
+            'piutang_usaha'   => $isReturPiutang ? $calc['total_retur'] : 0,
         ];
 
         $itemBreakdown = [
@@ -453,8 +486,10 @@ class JurnalReturnPenjualanService
                 $context[$var] = $calc['total_hpp'];
                 $itemBreakdown[$var] = $calc['breakdown_persediaan'];
                 $splitHeaderPerBarang[] = $var;
-            } elseif (in_array($var, ['nominal_kas', 'kewajiban_retur', 'piutang_usaha', 'dp_penjualan'], true)) {
-                $context[$var] = $calc['total_retur'];
+            } elseif ($var === 'piutang_usaha') {
+                $context[$var] = $isReturPiutang ? $calc['total_retur'] : 0;
+            } elseif (in_array($var, ['nominal_kas', 'kewajiban_retur', 'dp_penjualan'], true)) {
+                $context[$var] = $isReturPiutang ? 0 : $calc['total_retur'];
             } elseif ($var === 'nilai_retur') {
                 $context[$var] = $calc['subtotal_retur'];
             } elseif ($var === 'ppn_keluaran') {
@@ -502,7 +537,11 @@ class JurnalReturnPenjualanService
     }
 
     /**
-     * Batalkan / Hapus jurnal retur yang masih berstatus draft jika validasi dibatalkan.
+     * Batalkan / Hapus jurnal retur.
+     *
+     * - Jika jurnal masih STATUS_DRAFT → langsung dihapus (aman, belum masuk Jurnal Umum)
+     * - Jika jurnal sudah DIPOSTING    → lempar RuntimeException (harus balik jurnal dulu
+     *   via menu Jurnal Pembantu sebelum batal validasi bisa dilanjutkan)
      */
     public function hapusJurnalReturn(ReturnPenjualan $return): void
     {
@@ -519,6 +558,11 @@ class JurnalReturnPenjualanService
             if ($h->status === JurnalPembantuHeader::STATUS_DRAFT) {
                 JurnalPembantuItem::where('jurnal_pembantu_header_id', $h->id)->delete();
                 $h->delete();
+            } elseif ($h->status === JurnalPembantuHeader::STATUS_DIPOSTING) {
+                throw new \RuntimeException(
+                    "Jurnal #{$h->jurnal} untuk retur {$return->no_retur} sudah diposting ke Jurnal Umum. ".
+                    'Balik jurnal terlebih dahulu via menu Jurnal Pembantu sebelum membatalkan validasi.'
+                );
             }
         }
     }

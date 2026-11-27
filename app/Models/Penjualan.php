@@ -132,4 +132,18 @@ class Penjualan extends Model
     {
         return $this->hasMany(ReturnPenjualan::class, 'no_nota', 'no_nota');
     }
+
+    /**
+     * Total nilai retur yang sudah divalidasi (status DITERIMA/SELESAI)
+     * DAN berjenis retur piutang (terjadi saat nota belum lunas).
+     * Dipakai di PenjualanPelunasanService::sisaTagihan() untuk
+     * mengurangi tagihan sehingga pelunasan tinggal membayar sisanya.
+     */
+    public function totalReturPiutangDivalidasi(): int
+    {
+        return (int) $this->returns()
+            ->whereIn('status_return', ['DITERIMA', 'SELESAI'])
+            ->where('is_retur_piutang', true)
+            ->sum('total');
+    }
 }
