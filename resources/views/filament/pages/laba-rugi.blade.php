@@ -9,48 +9,17 @@
             <h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                 Filter Periode Laba Rugi
             </h3>
-
-            {{-- Tombol Toggle Harian & Bulanan --}}
-            <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
-                <button type="button" wire:click="ubahJenisFilter('bulan')"
-                    class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all {{ $jenisFilter === 'bulan' ? 'bg-white dark:bg-gray-700 shadow-sm text-emerald-600 dark:text-white' : 'text-gray-500' }}">
-                    Bulanan
-                </button>
-                <button type="button" wire:click="ubahJenisFilter('hari')"
-                    class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all {{ $jenisFilter === 'hari' ? 'bg-white dark:bg-gray-700 shadow-sm text-emerald-600 dark:text-white' : 'text-gray-500' }}">
-                    Harian
-                </button>
-            </div>
         </div>
 
         <div class="flex flex-col sm:flex-row items-start sm:items-end gap-6">
 
-            <div class="flex-1 w-full">
+            <div class="flex-1 w-full sm:max-w-xs">
                 <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
-                    Dari {{ ucfirst($jenisFilter) }}
+                    Pilih Bulan
                 </label>
-                <input type="{{ $jenisFilter === 'hari' ? 'date' : 'month' }}" wire:model.live="periodeAwal"
-                    min="{{ $jenisFilter === 'hari' ? now()->subYears(5)->format('Y-m-d') : now()->subYears(5)->format('Y-m') }}"
-                    max="{{ $jenisFilter === 'hari' ? now()->addYear()->format('Y-m-d') : now()->addYear()->format('Y-m') }}"
-                    class="w-full rounded-lg border border-gray-300 dark:border-gray-700
-                       dark:bg-gray-800 dark:text-gray-200 text-sm px-4 py-2.5
-                       focus:border-emerald-500 dark:focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200
-                       transition-colors cursor-pointer" />
-            </div>
-
-            <div class="hidden sm:flex items-center pb-2.5 text-gray-300 dark:text-gray-600">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-            </div>
-
-            <div class="flex-1 w-full">
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
-                    Sampai {{ ucfirst($jenisFilter) }}
-                </label>
-                <input type="{{ $jenisFilter === 'hari' ? 'date' : 'month' }}" wire:model.live="periodeAkhir"
-                    min="{{ $jenisFilter === 'hari' ? now()->subYears(5)->format('Y-m-d') : now()->subYears(5)->format('Y-m') }}"
-                    max="{{ $jenisFilter === 'hari' ? now()->addYear()->format('Y-m-d') : now()->addYear()->format('Y-m') }}"
+                <input type="month" wire:model.live="periodeAwal"
+                    min="{{ now()->subYears(5)->format('Y-m') }}"
+                    max="{{ now()->addYear()->format('Y-m') }}"
                     class="w-full rounded-lg border border-gray-300 dark:border-gray-700
                        dark:bg-gray-800 dark:text-gray-200 text-sm px-4 py-2.5
                        focus:border-emerald-500 dark:focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200
@@ -58,39 +27,39 @@
             </div>
 
             <div class="flex-shrink-0 pb-0.5">
-                @if(!$this->periodeValid())
-                <div class="flex items-center gap-2 text-red-400 bg-red-50 dark:bg-red-950/30
-                            border border-red-100 dark:border-red-900/50 rounded-lg px-4 py-2.5 text-xs">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    "Dari" tidak boleh lebih akhir dari "Sampai"
-                </div>
-                @else
-                <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800
+                <div wire:loading.remove wire:target="periodeAwal"
+                    class="flex items-center gap-2 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800
                             border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-xs">
                     <svg class="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                             d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     <span>
-                        <strong class="text-gray-700 dark:text-gray-300">{{ $this->jumlahPeriode() }}</strong>
-                        data {{ $jenisFilter }}an ditampilkan
+                        Menampilkan data <strong class="text-gray-700 dark:text-gray-300">per bulan</strong>
                     </span>
                 </div>
-                @endif
+
+                <div wire:loading.flex wire:target="periodeAwal"
+                    class="items-center gap-2 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30
+                            border border-emerald-200 dark:border-emerald-800 rounded-lg px-4 py-2.5 text-xs font-medium">
+                    <svg class="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Memuat data...</span>
+                </div>
             </div>
         </div>
 
         <p class="mt-4 text-xs text-gray-400 dark:text-gray-600">
-            Maksimal 12 bulan (mode Bulanan) dan 31 hari berturut-turut (mode Harian).
+            Pilih bulan untuk menampilkan laporan laba rugi pada bulan tersebut.
         </p>
     </div>
 
     {{-- ══════════════════════════════════════════════════════════
      TABEL KONTEN
 ══════════════════════════════════════════════════════════ --}}
+    <div wire:loading.class="opacity-50 pointer-events-none transition-opacity" wire:target="periodeAwal">
     @if(!$this->periodeValid())
     <div class="text-center py-16 text-gray-400 dark:text-gray-600">
         <p class="text-sm">Perbaiki periode filter terlebih dahulu.</p>
@@ -346,5 +315,6 @@
         <p class="text-sm">Tidak ada data. Pastikan AkunGroup "Laba Rugi" sudah dibuat.</p>
     </div>
     @endif
+    </div>
 
 </x-filament-panels::page>

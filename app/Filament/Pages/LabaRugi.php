@@ -47,10 +47,12 @@ class LabaRugi extends Page
 
     public function updatedPeriodeAwal(): void
     {
+        $this->periodeAkhir = $this->periodeAwal;
         $this->generateLaporan();
     }
     public function updatedPeriodeAkhir(): void
     {
+        $this->periodeAwal = $this->periodeAkhir;
         $this->generateLaporan();
     }
     public function updatedTampilkanSaldoNol(): void {}
