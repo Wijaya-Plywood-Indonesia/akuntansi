@@ -59,7 +59,9 @@ class PenjualansTable
                     ->color(fn ($state) => $state ? 'success' : 'gray') // Warna hijau jika ada validator, abu-abu jika belum
                     ->toggleable(),
 
-                TextColumn::make('tanggal')->dateTime()->sortable(),
+                TextColumn::make('tanggal')
+                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->locale('id')->translatedFormat('l, j F Y') : null)
+                    ->sortable(),
 
                 TextColumn::make('keterangan')
                     ->placeholder('kosong')
