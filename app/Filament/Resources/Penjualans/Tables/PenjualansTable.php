@@ -29,7 +29,7 @@ class PenjualansTable
             ->modifyQueryUsing(fn (Builder $query) => $query->orderByRaw('validated_by IS NOT NULL ASC'))
             ->columns([
                 TextColumn::make('no_nota')
-                    ->label('No. SJ12')
+                    ->label('No. SJ')
                     ->searchable()
                     ->sortable(),
 
