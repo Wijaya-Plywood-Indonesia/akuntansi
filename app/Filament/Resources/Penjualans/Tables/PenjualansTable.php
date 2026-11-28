@@ -60,7 +60,7 @@ class PenjualansTable
                     ->toggleable(),
 
                 TextColumn::make('tanggal')
-                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->locale('id')->translatedFormat('l, j F Y') : null)
+                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->locale('id')->translatedFormat('j F Y') : null)
                     ->sortable(),
 
                 TextColumn::make('keterangan')
