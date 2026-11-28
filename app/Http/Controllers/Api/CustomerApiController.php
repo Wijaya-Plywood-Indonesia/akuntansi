@@ -105,7 +105,7 @@ class CustomerApiController extends Controller
             $query->where('nama', 'like', "%{$search}%");
         }
 
-        $customers = $query->orderBy('nama')->limit(500)->get();
+        $customers = $query->orderBy('nama')->get();
 
         return response()->json([
             'status' => 'success',
