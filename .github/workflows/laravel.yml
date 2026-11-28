@@ -1,364 +1,85 @@
-name: Akuntansi CI/CD
+name: Deploy Akuntansi
 
 on:
   push:
-    branches: ["main", "develop"]
-  create:
-    tags: ["v*"]
+    branches: [staging]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
-      deploy_target:
-        description: "Pilih job yang ingin dijalankan"
+      ref:
+        description: 'Branch atau tag yang di-deploy'
         required: true
-        default: "prarelease"
-        type: choice
-        options:
-          - testing_only
-          - prarelease
-          - production
+        default: staging
 
 concurrency:
-  group: cicd-akuntansi-${{ github.ref }}
-  cancel-in-progress: true
+  group: deploy-akuntansi
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
-  # ──────────────────────────────────────────────
-  # JOB 1: TESTING (CI) — tidak ada perubahan
-  # ──────────────────────────────────────────────
-  laravel-tests:
-    name: 🧪 Run Tests (CI)
+  deploy:
     runs-on: ubuntu-latest
-
-    services:
-      mariadb:
-        image: mariadb:11.4
-        env:
-          MARIADB_ROOT_PASSWORD: password
-          MARIADB_DATABASE: laravel_testing
-          MARIADB_ROOT_HOST: "%"
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-          --health-start-period=30s
-
-    env:
-      DB_CONNECTION: mysql
-      DB_HOST: 127.0.0.1
-      DB_PORT: 3306
-      DB_DATABASE: laravel_testing
-      DB_USERNAME: root
-      DB_PASSWORD: password
-
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 🐘 Setup PHP 8.4
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-          extensions: mbstring, dom, fileinfo, mysql, pdo_mysql, bcmath, curl, zip, gd, intl
-          coverage: none
-
-      - name: 📦 Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache
-          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
-
-      - name: 📋 Copy .env
-        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
-
-      - name: 🔧 Install Composer dependencies
-        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-
-      - name: 🔑 Generate App Key
-        run: php artisan key:generate
-
-      - name: 🔐 Set Permissions
-        run: chmod -R 777 storage bootstrap/cache
-
-      - name: ⏳ Wait for MariaDB to be fully ready
+      - name: Tentukan ref
+        id: r
         run: |
-          echo "Waiting for MariaDB to accept connections..."
-          for i in $(seq 1 30); do
-            if mysql -h 127.0.0.1 -P 3306 -u root -ppassword -e "SELECT 1;" laravel_testing > /dev/null 2>&1; then
-              echo "✅ MariaDB is ready and accepting queries! (attempt $i)"
-              exit 0
-            fi
-            echo "Attempt $i/30 - not ready yet, waiting 3s..."
-            sleep 3
-          done
-          echo "❌ MariaDB did not become ready in time!"
-          exit 1
-
-      - name: ✅ Run Fresh Migration
-        run: php artisan migrate:fresh --force --no-interaction
-
-      - name: ✅ Verify No Pending Migrations
-        run: |
-          STATUS=$(php artisan migrate:status --no-ansi 2>&1)
-          echo "$STATUS"
-          if echo "$STATUS" | grep -q "Pending"; then
-            echo "❌ Ada migration yang pending!"
-            exit 1
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ref=${{ inputs.ref }}" >> $GITHUB_OUTPUT
+          else
+            echo "ref=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           fi
-          echo "✅ Semua migration sudah berjalan."
 
-  # ──────────────────────────────────────────────
-  # JOB 2: DEPLOY PRARELEASE (BARU)
-  # ──────────────────────────────────────────────
-  deploy-prarelease:
-    name: 🚀 Deploy to prarelease-akuntansi.wijayaplywoods.com
-    needs: laravel-tests
-    if: |
-      (github.ref == 'refs/heads/develop' && github.event_name == 'push') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'prarelease')
-    runs-on: ubuntu-latest
-    environment: prarelease
-    concurrency:
-      group: deploy-prarelease-akuntansi
-      cancel-in-progress: false
-    env:
-      ZIP_NAME: deploy-prarelease-akuntansi.zip
-      TARGET_DOMAIN: prarelease-akuntansi.wijayaplywoods.com
- 
-    steps:
-      - uses: actions/checkout@v4
- 
-      - name: Setup PHP & Node
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
- 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
- 
-      - name: Install Composer Dependencies (Prod, no scripts yet)
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
- 
-      - name: Build Frontend
-        run: |
-          npm ci
-          npm run build
- 
-      - name: Regenerate autoload & run discovery
+      - name: Deploy ke server
+        uses: appleboy/ssh-action@v1.2.0
         env:
-          BROADCAST_CONNECTION: log
-        run: |
-          composer dump-autoload --optimize --no-dev
-          php artisan package:discover --ansi
- 
-      - name: Create Deployment Package
-        run: |
-          set -euo pipefail
-          BUILD_DIR=./build_deploy
-          rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
- 
-          rsync -a --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'node_modules/' \
-            --exclude 'tests/' \
-            --exclude '.env' \
-            --exclude 'storage/' \
-            --exclude 'build_deploy/' \
-            ./ "$BUILD_DIR/"
- 
-          (cd "$BUILD_DIR" && zip -r "../${{ env.ZIP_NAME }}" . -q)
-          echo "📦 ZIP size: $(du -sh "${{ env.ZIP_NAME }}")"
- 
-      - name: Upload to Server
-        uses: appleboy/scp-action@v0.1.7
+          APP_DIR: akuntansi
+          GIT_REF: ${{ steps.r.outputs.ref }}
+          APP_SERVICE: app
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "${{ env.ZIP_NAME }}"
-          target: "/home/${{ secrets.SSH_USERNAME }}"
- 
-      - name: Execute Server Commands
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: APP_DIR,GIT_REF,APP_SERVICE
+          script_stop: true
           script: |
             set -euo pipefail
- 
-            DOMAIN="prarelease-akuntansi.wijayaplywoods.com"
-            TARGET="/home/${{ secrets.SSH_USERNAME }}/$DOMAIN"
-            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
- 
-            if [ ! -d "$TARGET" ]; then
-              echo "❌ Folder $TARGET tidak ditemukan di server. Buat dulu foldernya (dan .env-nya) sebelum deploy pertama kali."
-              exit 1
-            fi
- 
-            cd "$TARGET"
- 
-            # 🛡️ Safety net: apapun hasil script ini, situs WAJIB balik online di akhir.
-            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
- 
-            [ -f "artisan" ] && php artisan down || true
- 
-            # Unzip ke folder staging dulu, jangan langsung timpa folder asli
-            rm -rf "$STAGING" && mkdir -p "$STAGING"
-            unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
-            echo "✅ Unzip ke staging selesai tanpa error"
- 
-            # 🗄️ database.sqlite di-gitignore, jadi tidak pernah ikut ke dalam ZIP.
-            # Selamatkan file sqlite yang sudah ada di server (atau buat baru kalau belum ada)
-            # supaya tidak ikut terhapus saat folder lama diganti.
-            mkdir -p "$STAGING/database"
-            if [ -f "$TARGET/database/database.sqlite" ]; then
-              cp "$TARGET/database/database.sqlite" "$STAGING/database/database.sqlite"
-              echo "✅ database.sqlite lama berhasil diselamatkan"
-            else
-              touch "$STAGING/database/database.sqlite"
-              echo "ℹ️ database.sqlite belum ada sebelumnya, membuat file baru (kosong)"
-            fi
- 
-            # Baru setelah yakin isi staging lengkap, timpa folder lama
-            find . -mindepth 1 -maxdepth 1 \
-              ! -name 'storage' \
-              ! -name '.env' \
-              -exec rm -rf {} +
- 
-            find "$STAGING" -mindepth 1 -maxdepth 1 \
-              ! -name 'storage' \
-              ! -name '.env' \
-              -exec cp -r {} "$TARGET/" \;
- 
-            php artisan optimize:clear
- 
-            cd "$TARGET/public"
-            if [ ! -e "storage" ]; then
-              ln -s "$TARGET/storage/app/public" storage
-            fi
-            cd "$TARGET"
- 
-            php artisan filament:assets
- 
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
- 
-            php artisan migrate --force
- 
-            php artisan shield:generate --all --panel=admin --no-interaction
- 
-            chmod -R 775 storage bootstrap/cache
- 
-            rm -rf "$STAGING"
-            rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
- 
-            echo "🚀 [prarelease-akuntansi] Deployment Sukses! [${{ github.sha }}]"
-  # ──────────────────────────────────────────────
-  # JOB 3: DEPLOY PRODUCTION — tidak ada perubahan logika,
-  # cuma ditambah opsi trigger manual via workflow_dispatch
-  # ──────────────────────────────────────────────
-  deploy-production:
-    name: Deploy to akuntansi.wijayaplywoods.com
-    needs: laravel-tests
-    if: |
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'production')
-    runs-on: ubuntu-latest
-    environment: production # Aktifkan Manual Approval di Settings > Environments
+            cd "$HOME/apps/$APP_DIR"
 
+            git fetch --all --tags --prune
+            if git show-ref --verify --quiet "refs/remotes/origin/$GIT_REF"; then
+              git checkout "$GIT_REF"
+              git reset --hard "origin/$GIT_REF"
+            else
+              git checkout "tags/$GIT_REF"
+            fi
+
+            run() { docker compose exec -T "$APP_SERVICE" "$@"; }
+
+            run composer install --no-dev --optimize-autoloader --no-interaction
+            run php artisan migrate --force
+            run php artisan route:clear
+
+            # shield:generate hanya dijalankan kalau paketnya ada
+            if run php artisan list --raw | grep -q '^shield:generate'; then
+              run php artisan shield:generate --all --panel=admin   # sesuaikan ID panel
+            fi
+
+            run php artisan optimize
+            run php artisan queue:restart
+
+            echo "Deploy $APP_DIR ($GIT_REF) selesai"
+
+  release:
+    needs: deploy
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup PHP & Node
-        uses: shivammathur/setup-php@v2
+      - name: Buat GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          php-version: "8.4"
-
-      - name: Install Composer Prod
-        run: composer install --no-dev --optimize-autoloader --no-interaction
-
-      - name: Build Frontend
-        run: |
-          npm ci
-          npm run build
-
-      - name: Create Deployment Package
-        run: |
-          set -euo pipefail
-          BUILD_DIR=./build_deploy
-          mkdir -p "$BUILD_DIR"
-
-          rsync -a --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'node_modules/' \
-            --exclude 'tests/' \
-            --exclude '.env' \
-            --exclude 'storage/' \
-            ./ "$BUILD_DIR/"
-
-          (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
-
-      - name: Upload to Server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "deploy.zip"
-          target: "/home/${{ secrets.SSH_USERNAME }}"
-
-      - name: Execute Server Commands
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -euo pipefail
-
-            TARGET_DIR="/home/${{ secrets.SSH_USERNAME }}/akuntansi.wijayaplywoods.com"
-            cd "$TARGET_DIR"
-
-            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — cek manual!"; fi' EXIT
-
-            php artisan down || true
-
-            find . -mindepth 1 -maxdepth 1 ! -name 'storage' ! -name '.env' -exec rm -rf {} \;
-
-            unzip -oq ../deploy.zip -d .
-            echo "✅ Unzip selesai tanpa error"
-
-            php artisan optimize:clear
-
-            cd "$TARGET_DIR/public"
-            if [ ! -e "storage" ]; then
-              ln -s "$TARGET_DIR/storage/app/public" storage
-            fi
-            cd "$TARGET_DIR"
-
-            php artisan filament:assets
-
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
-
-            php artisan migrate --force
-
-            php artisan shield:generate --all --panel=admin --no-interaction
-
-            chmod -R 775 storage bootstrap/cache
-
-            rm -f ../deploy.zip
-            echo "🚀 Deployment Akuntansi Sukses!"
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
