@@ -36,13 +36,13 @@ jobs:
         env:
           APP_DIR: akuntansi
           GIT_REF: ${{ steps.r.outputs.ref }}
-          APP_SERVICE: app
+          APP_CONTAINER: akuntansi-app-1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: APP_DIR,GIT_REF,APP_SERVICE
+          envs: APP_DIR,GIT_REF,APP_CONTAINER
           script_stop: true
           script: |
             set -euo pipefail
@@ -56,7 +56,7 @@ jobs:
               git checkout "tags/$GIT_REF"
             fi
 
-            run() { docker compose exec -T "$APP_SERVICE" "$@"; }
+            run() { docker exec "$APP_CONTAINER" "$@"; }
 
             run composer install --no-dev --optimize-autoloader --no-interaction
             run php artisan migrate --force
