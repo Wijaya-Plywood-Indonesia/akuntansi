@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Penjualans\Tables;
 
 use App\Exports\PenjualanExport;
 use App\Filament\Resources\Penjualans\Actions\BatalkanPenjualanAction;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -17,6 +18,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 class PenjualansTable
@@ -27,7 +29,7 @@ class PenjualansTable
             ->modifyQueryUsing(fn (Builder $query) => $query->orderByRaw('validated_by IS NOT NULL ASC'))
             ->columns([
                 TextColumn::make('no_nota')
-                    ->label('No. SJ')
+                    ->label('No. SJ1')
                     ->searchable()
                     ->sortable(),
 
@@ -60,7 +62,7 @@ class PenjualansTable
                     ->toggleable(),
 
                 TextColumn::make('tanggal')
-                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->locale('id')->translatedFormat('j F Y') : null)
+                    ->formatStateUsing(fn ($state) => $state ? Carbon::parse($state)->locale('id')->translatedFormat('j F Y') : null)
                     ->sortable(),
 
                 TextColumn::make('keterangan')
@@ -206,7 +208,7 @@ class PenjualansTable
                         }
 
                         // 2. Hapus detail barang & record penjualan dalam database transaction
-                        \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
+                        DB::transaction(function () use ($record) {
                             $record->details()->delete();
                             $record->delete();
                         });
@@ -243,7 +245,7 @@ class PenjualansTable
 
                         $fileName = 'penjualan_tervalidasi';
                         if ($tglDari || $tglSampai) {
-                            $fileName .= '_' . ($tglDari ?: 'awal') . '_sd_' . ($tglSampai ?: 'akhir');
+                            $fileName .= '_'.($tglDari ?: 'awal').'_sd_'.($tglSampai ?: 'akhir');
                         }
                         $fileName .= '.xlsx';
 
