@@ -215,7 +215,7 @@
     <div x-data="{ open: true }"
         x-effect="if (search.trim()) open = true"
         data-search="{{ strtolower($induk->kode_induk_akun . ' ' . $induk->nama_induk_akun) }}"
-        x-show="!search.trim() || $el.dataset.search.includes(search.trim().toLowerCase()) || Array.from($el.querySelectorAll('.bb-anak')).some(el => el.dataset.search.includes(search.trim().toLowerCase()))"
+        x-show="!search.trim() || ($el.dataset.search + ' ' + $el.textContent).toLowerCase().includes(search.trim().toLowerCase())"
         class="bb-induk">
 
         <div class="bb-induk-head" @click="open = !open">
